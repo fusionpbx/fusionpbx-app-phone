@@ -159,6 +159,9 @@ echo "	};\n";
 
 			//clear the answer time
 			answer_time = null;
+			
+			//end the call
+			hangup();
 		});
 
 		session.on('bye', function (s) {
@@ -301,6 +304,7 @@ echo "	};\n";
 	//function used to end the session
 	function hangup() {
 
+		//end the session
 		//session.bye();
 		session.terminate();
 
@@ -318,13 +322,16 @@ echo "	};\n";
 		document.getElementById('remote_video').style.display = "none";
 
 		document.getElementById('mute_audio').style.display = "none";
-		document.getElementById('mute_video').style.display = "none";
+		//document.getElementById('mute_video').style.display = "none";
 		document.getElementById('unmute_audio').style.display = "none";
-		document.getElementById('unmute_video').style.display = "none";
+		//document.getElementById('unmute_video').style.display = "none";
 
 		//clear the caller id
 		document.getElementById('ringing_caller_id').innerHTML = '';
 		document.getElementById('active_caller_id').innerHTML = '';
+
+		//mute the audio
+		session.mute({audio: true});
 	}
 
 	function hold() {
@@ -367,6 +374,9 @@ echo "	};\n";
 
 		var remote_video = document.getElementById("remote_video");
 		remote_video.setAttribute("controls","controls");
+
+		//unmute the audio
+		session.unmute({audio: true});
 
 		//start the answer time
 		answer_time = Date.now();
@@ -479,7 +489,6 @@ echo "	};\n";
 
 		<div id='mute_video' class="button_box" style='display: none;' onclick="mute_video()">&nbsp;</div>
 		<div id='umute_video' class="button_box" style='display: none;' onclick="unmute_video()">&nbsp;</div>
-
 	</div>
 </div>
 
