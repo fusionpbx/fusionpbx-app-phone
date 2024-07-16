@@ -84,7 +84,7 @@ echo "		<div style='position: absolute; display: none;'><video id='local_video' 
 //echo "	<input id='send' name='send' type='button' class='btn btn-success' onclick='send();' value='Send' />\n";
 echo "	</div>\n";
 
-echo "	<audio id='ringtone' preload='auto' style='display: none;'>\n";
+echo "	<audio id='ringtone' preload='auto''>\n";
 echo "		<source src='resources/ringtones/ringtone.mp3' type='audio/mpeg' loop='loop' />\n";
 echo "	</audio>\n";
 
@@ -114,16 +114,16 @@ echo "		</div>\n";
 echo "	</div>\n";
 
 echo "	<div class='dialpad' id='ringing' style='display: none;'>\n";
-echo "		<div id='ringing_caller_id' class='caller_id'></div>\n";
-echo "		<div class='dialpad_wrapper'>\n";
-echo "			<div class='dialpad_box' id='answer' onclick='answer();' style='min-height: 20px; background-color: #147e00;'><i class='fas fa-phone' title=\"".$text['label-answer']."\"></i></div>\n";
-echo "			<div class='dialpad_box' id='decline' onclick='hangup();' style='min-height: 20px; background-color: #ba0000;'><i class='fas fa-phone-slash' title=\"".$text['label-decline']."\"></i></div>\n";
+echo "		<div class='caller_id ringing' id='ringing_caller_id'></div>\n";
+echo "		<div class='dialpad_wrapper' style='grid-template-columns: 50% 50%;'>\n";
+echo "			<div class='dialpad_box' id='answer' onclick='answer();' style='background-color: #147e00;'><i class='fas fa-phone' title=\"".$text['label-answer']."\"></i><br><sup>".$text['label-answer']."</sup></div>\n";
+echo "			<div class='dialpad_box' id='decline' onclick='hangup();' style='background-color: #ba0000;'><i class='fas fa-phone-slash' title=\"".$text['label-decline']."\"></i><br><sup>".$text['label-decline']."</sup></div>\n";
 echo "		</div>\n";
 echo "	</div>\n";
 
 echo "	<div class='dialpad' id='active' style='display: none;'>\n";
 echo "		<div class='caller_id' id='active_caller_id'></div>\n";
-echo "		<div id='answer_time' style='margin-bottom: 8px; text-align: center; color: #ccc; font-family: monospace; font-size: 14px; text-transform: uppercase;'>00:00:00</div>\n";
+echo "		<div id='answer_time' class='answer_time'>00:00:00</div>\n";
 echo "		<div class='dialpad_wrapper'>\n";
 echo "			<div class='dialpad_box mute' id='mute_audio' onclick='mute_audio();'><i class='fas fa-microphone' title=\"".$text['label-mute']."\"></i><br><sup>".$text['label-mute']."</sup></div>\n";
 echo "			<div class='dialpad_box' id='unmute_audio' style='color: #ba0000; display: none;' onclick='unmute_audio();'><i class='fas fa-microphone-slash' title=\"".$text['label-unmute']."\"></i><br><sup>".$text['label-unmute']."</sup></div>\n";

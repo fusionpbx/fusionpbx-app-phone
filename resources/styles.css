@@ -115,3 +115,16 @@ sup {
 	margin-bottom: 8px;
 	min-height: 295px;
 	}
+
+.caller_id.ringing {
+	margin-bottom: 35px;
+	}
+
+.answer_time {
+	margin-bottom: 8px;
+	text-align: center;
+	color: #ccc;
+	font-family: monospace;
+	font-size: 14px;
+	text-transform: uppercase;
+	}
