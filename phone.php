@@ -84,7 +84,7 @@ echo "		<div style='position: absolute; display: none;'><video id='local_video' 
 //echo "	<input id='send' name='send' type='button' class='btn btn-success' onclick='send();' value='Send' />\n";
 echo "	</div>\n";
 
-echo "	<audio id='ringtone' preload='auto''>\n";
+echo "	<audio id='ringtone' preload='auto'>\n";
 echo "		<source src='resources/ringtones/ringtone.mp3' type='audio/mpeg' loop='loop' />\n";
 echo "	</audio>\n";
 
