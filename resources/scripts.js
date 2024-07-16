@@ -54,8 +54,8 @@ user_agent.on('invite', function (s) {
 	document.getElementById('ringtone').play();
 
 	//add the caller ID
-	document.getElementById('ringing_caller_id').innerHTML = sanitize_string(session.display_name) + "<br /><a href='https://<?php echo $_SESSION['domain_name']; ?>/app/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a>";
-	document.getElementById('active_caller_id').innerHTML = sanitize_string(session.display_name) + "<br /><a href='https://<?php echo $_SESSION['domain_name']; ?>/app/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a>";
+	document.getElementById('ringing_caller_id').innerHTML = "<div>" + sanitize_string(session.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/app/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>";
+	document.getElementById('active_caller_id').innerHTML = "<div>" + sanitize_string(session.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/app/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>";
 
 	//show or hide the panels
 	document.getElementById('dialpad').style.display = "none";
@@ -84,7 +84,7 @@ user_agent.on('invite', function (s) {
 
 		//clear the caller id
 		document.getElementById('ringing_caller_id').innerHTML = '';
-	document.getElementById('active_caller_id').innerHTML = '';
+		document.getElementById('active_caller_id').innerHTML = '';
 
 	//clear the answer time
 	answer_time = null;

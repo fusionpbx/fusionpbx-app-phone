@@ -102,10 +102,11 @@ sup {
 
 .caller_id {
 	display: flex;
+	flex-wrap: wrap;
 	justify-content: center;
 	align-items: center;
 	background-color: rgba(0, 0, 0, 0.7);
-	font-size: 45px;
+	font-size: 35px;
 	font-weight: bold;
 	font-family: sans-serif;
 	border: 3px solid #333;
@@ -117,6 +118,7 @@ sup {
 	}
 
 .caller_id.ringing {
+	font-size: 35px;
 	margin-bottom: 35px;
 	}
 
