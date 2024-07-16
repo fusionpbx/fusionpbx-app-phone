@@ -1,0 +1,117 @@
+.dialpad {
+	z-index: 999;
+	}
+
+body {
+	background-color: #333;
+	}
+
+.inner {
+	position: absolute;
+	}
+
+.buttons{
+	position: fixed;
+	bottom: 0;
+	right: 0;
+	border: 10px solid rgba(255, 255, 255, 0);
+	}
+
+.destination {
+	background-color: rgba(0, 0, 0, 0.8);
+	color: #fff;
+	border-radius: 6px;
+	padding: 10px;
+	width: 100%;
+	margin-bottom: 8px;
+	font-size: 45px;
+	font-weight: bold;
+	border: 3px solid #333;
+	text-align: center;
+	min-height: 10%;
+	display: inline-block;
+	}
+
+.dialpad_wrapper {
+	display: grid;
+	grid-template-columns: 33.33% 33.33% 33.33%;
+	grid-gap: 0;
+	color: #444;
+	}
+
+.dialpad_box {
+	background-color: rgba(0, 0, 0, 0.6);
+	color: #fff;
+	border-radius: 6px;
+	padding: 10px;
+	min-height: 42px;
+	text-align: center;
+	cursor: pointer;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+	border: 3px solid #333;
+	}
+
+.dialpad_box::selection {
+	background: transparent;
+	}
+
+.dialpad_box > strong {
+	font-size: 25px;
+	line-height: 27px;
+	}
+
+.dialpad_box > i.fas {
+	font-size: 20px;
+	line-height: 15px;
+	padding: 5px 0 5px 0;
+	}
+
+.dialpad_box.delete {
+	background-color: #333;
+	}
+
+.dialpad_box.clear {
+	background-color: #333;
+	}
+
+.dialpad_box.mute {
+	background-color: #333;
+	}
+
+.dialpad_box.hold {
+	background-color: #333;
+	}
+
+strong {
+	font-family: monospace;
+	padding: 5px 5px;
+	color: #fff;
+	font-size: 30px;
+	}
+
+sup {
+	font-family: monospace;
+	letter-spacing: 0;
+	padding: 3px 3px;
+	color: #fff;
+	font-size: 10px;
+	}
+
+.caller_id {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	background-color: rgba(0, 0, 0, 0.7);
+	font-size: 45px;
+	font-weight: bold;
+	font-family: sans-serif;
+	border: 3px solid #333;
+	border-radius: 5px;
+	color: #fff;
+	padding: 20px;
+	margin-bottom: 8px;
+	min-height: 295px;
+	}
