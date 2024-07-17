@@ -89,7 +89,7 @@ echo "		<source src='resources/ringtones/ringtone.mp3' type='audio/mpeg' loop='l
 echo "	</audio>\n";
 
 echo "	<div class='dialpad' id='dialpad'>\n";
-echo "		<input type='text' class='destination' id='destination' name='destination' />\n";
+echo "		<input type='text' class='destination' id='destination' name='destination' onkeypress=\"event.preventDefault();\"/>\n";
 echo "		<div class='dialpad_wrapper'>\n";
 echo "			<div class='dialpad_box' onclick=\"digit_add('1');\"><strong>1</strong><br><sup>&nbsp;</sup></div>\n";
 echo "			<div class='dialpad_box' onclick=\"digit_add('2');\"><strong>2</strong><br><sup>ABC</sup></div>\n";
