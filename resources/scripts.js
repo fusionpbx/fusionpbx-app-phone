@@ -376,13 +376,6 @@ function digit_clear() {
 	correct_alignment();
 }
 
-//function to check for Enter key press
-function send_enter_key(event) {
-	if (event.key === "Enter") {
-		send();
-	}
-}
-
 //function to detect numberpad keypresses
 document.addEventListener('keyup', function(e) {
 	if (document.getElementById('destination')) { //destination field is visible
@@ -409,6 +402,13 @@ document.addEventListener('keyup', function(e) {
 		}
 	}
 });
+
+//function to check for Enter key press
+function send_enter_key(event) {
+	if (event.key === "Enter") {
+		send();
+	}
+}
 
 //add event listener for keydown event on input field
 document.addEventListener("DOMContentLoaded", function() {
