@@ -73,7 +73,7 @@ echo "	<link rel='stylesheet' type='text/css' href='resources/styles.css'>\n";
 echo "	<script language='JavaScript' type='text/javascript'>window.FontAwesomeConfig = { autoReplaceSvg: false }</script>\n";
 echo "	<script language='JavaScript' type='text/javascript' src='resources/sip-0.7.8.js'></script>\n";
 echo "	<script language='JavaScript' type='text/javascript'>";
-require 'resources/scripts.js';
+require 'resources/phone.js';
 echo "	</script>\n";
 echo "</head>\n";
 
