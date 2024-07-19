@@ -25,40 +25,40 @@
 */
 
 //includes files
-	require_once dirname(__DIR__, 2) . "/resources/require.php";
-	require_once "resources/check_auth.php";
+require_once dirname(__DIR__, 2) . "/resources/require.php";
+require_once "resources/check_auth.php";
 
 //check permissions
-	if (!permission_exists('phone_view')) {
-		echo "access denied";
-		exit;
-	}
+if (!permission_exists('phone_view')) {
+	echo "access denied";
+	exit;
+}
 
 //add multi-lingual support
-	$language = new text;
-	$text = $language->get();
+$language = new text;
+$text = $language->get();
 
 //get the user ID
-	$sql = "SELECT d.domain_name,e.extension,e.password FROM ";
-	$sql .= "v_extension_users as t, v_extensions as e, v_users as u, v_domains as d ";
-	$sql .= "WHERE u.user_uuid = t.user_uuid ";
-	$sql .= "AND e.extension_uuid = t.extension_uuid ";
-	$sql .= "AND e.domain_uuid = d.domain_uuid ";
-	$sql .= "AND u.user_uuid = '" . $_SESSION['user_uuid'] . "' ";
-	$sql .= "AND e.domain_uuid = '" . $_SESSION["domain_uuid"] . "' LIMIT 1";
-	$prep_statement = $db->prepare($sql);
-	if ($prep_statement) {
-		$prep_statement->execute();
-		$row = $prep_statement->fetch(PDO::FETCH_ASSOC);
-		$domain_name = $row['domain_name'];
-		$user_extension = $row['extension'];
-		$user_password = $row['password'];
-	}
+$sql = "SELECT d.domain_name,e.extension,e.password FROM ";
+$sql .= "v_extension_users as t, v_extensions as e, v_users as u, v_domains as d ";
+$sql .= "WHERE u.user_uuid = t.user_uuid ";
+$sql .= "AND e.extension_uuid = t.extension_uuid ";
+$sql .= "AND e.domain_uuid = d.domain_uuid ";
+$sql .= "AND u.user_uuid = '" . $_SESSION['user_uuid'] . "' ";
+$sql .= "AND e.domain_uuid = '" . $_SESSION["domain_uuid"] . "' LIMIT 1";
+$prep_statement = $db->prepare($sql);
+if ($prep_statement) {
+	$prep_statement->execute();
+	$row = $prep_statement->fetch(PDO::FETCH_ASSOC);
+	$domain_name = $row['domain_name'];
+	$user_extension = $row['extension'];
+	$user_password = $row['password'];
+}
 
 //set the title
-	$document['title'] = $text['title-phone'];
+$document['title'] = $text['title-phone'];
 
-//output
+//send the content
 echo "<html>\n";
 
 echo "<head>\n";
