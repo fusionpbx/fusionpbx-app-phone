@@ -1,3 +1,4 @@
+
 function sanitize_string(str) {
 	let temp = document.createElement('div');
 	temp.textContent = str;
