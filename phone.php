@@ -80,7 +80,6 @@ echo "<body>\n";
 echo "	<div>\n";
 echo "		<div style='position: absolute;'><video id='remote_video' width='640' height='480' style='display: none;'></video></div>\n";
 echo "		<div style='position: absolute; display: none;'><video id='local_video' width='160' height='120' style='display: none;'></video></div>\n";
-//echo "	<input id='send' name='send' type='button' class='btn btn-success' onclick='send();' value='Send' />\n";
 echo "	</div>\n";
 
 //define the audio ringtone
