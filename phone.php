@@ -122,8 +122,8 @@ echo "	</div>\n";
 echo "	<div class='dialpad' id='ringing' style='display: none;'>\n";
 echo "		<div class='caller_id ringing' id='ringing_caller_id'></div>\n";
 echo "		<div class='dialpad_wrapper' style='grid-template-columns: 50% 50%;'>\n";
-echo "			<div class='dialpad_box' id='answer' onclick='answer();' style='background-color: #147e00;'><i class='fas fa-phone' title=\"".$text['label-answer']."\"></i><br><sup>".$text['label-answer']."</sup></div>\n";
 echo "			<div class='dialpad_box' id='decline' onclick='hangup();' style='background-color: #ba0000;'><i class='fas fa-phone-slash' title=\"".$text['label-decline']."\"></i><br><sup>".$text['label-decline']."</sup></div>\n";
+echo "			<div class='dialpad_box' id='answer' onclick='answer();' style='background-color: #147e00;'><i class='fas fa-phone' title=\"".$text['label-answer']."\"></i><br><sup>".$text['label-answer']."</sup></div>\n";
 echo "		</div>\n";
 echo "	</div>\n";
 
