@@ -72,22 +72,28 @@ echo "	<link rel='stylesheet' type='text/css' href='".PROJECT_PATH."/resources/f
 echo "	<link rel='stylesheet' type='text/css' href='resources/styles.css'>\n";
 echo "	<script language='JavaScript' type='text/javascript'>window.FontAwesomeConfig = { autoReplaceSvg: false }</script>\n";
 echo "	<script language='JavaScript' type='text/javascript' src='resources/sip-0.7.8.js'></script>\n";
-echo "	<script language='JavaScript' type='text/javascript'>";
-require 'resources/phone.js';
-echo "	</script>\n";
 echo "</head>\n";
 
 echo "<body>\n";
+
+//define the video tag
 echo "	<div>\n";
 echo "		<div style='position: absolute;'><video id='remote_video' width='640' height='480' style='display: none;'></video></div>\n";
 echo "		<div style='position: absolute; display: none;'><video id='local_video' width='160' height='120' style='display: none;'></video></div>\n";
 //echo "	<input id='send' name='send' type='button' class='btn btn-success' onclick='send();' value='Send' />\n";
 echo "	</div>\n";
 
+//define the audio ringtone
 echo "	<audio id='ringtone' preload='auto'>\n";
 echo "		<source src='resources/ringtones/ringtone.mp3' type='audio/mpeg' loop='loop' />\n";
 echo "	</audio>\n";
 
+//audio or video objects need to be initialized before phone.js
+echo "	<script language='JavaScript' type='text/javascript'>";
+require 'resources/phone.js';
+echo "	</script>\n";
+
+//define the dialpad control
 echo "	<div class='dialpad' id='dialpad'>\n";
 echo "		<input type='text' class='destination' id='destination' name='destination' onkeypress=\"event.preventDefault();\"/>\n";
 echo "		<div class='dialpad_wrapper'>\n";
@@ -113,6 +119,7 @@ echo "			<div class='dialpad_box delete' onclick='digit_delete();' title=\"".$te
 echo "		</div>\n";
 echo "	</div>\n";
 
+//define the ringing control
 echo "	<div class='dialpad' id='ringing' style='display: none;'>\n";
 echo "		<div class='caller_id ringing' id='ringing_caller_id'></div>\n";
 echo "		<div class='dialpad_wrapper' style='grid-template-columns: 50% 50%;'>\n";
@@ -121,6 +128,7 @@ echo "			<div class='dialpad_box' id='decline' onclick='hangup();' style='backgr
 echo "		</div>\n";
 echo "	</div>\n";
 
+//define the active call control
 echo "	<div class='dialpad' id='active' style='display: none;'>\n";
 echo "		<div class='caller_id' id='active_caller_id'></div>\n";
 echo "		<div id='answer_time' class='answer_time'>00:00:00</div>\n";
@@ -140,3 +148,4 @@ echo "	</div>\n";
 echo "</body>\n";
 
 echo "</html>\n";
+
