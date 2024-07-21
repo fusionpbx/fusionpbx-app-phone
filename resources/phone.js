@@ -54,6 +54,24 @@ user_agent.on('invite', function (s) {
 	//play the ringtone
 	document.getElementById('ringtone').play();
 
+<?php
+
+//open the window to search for the caller id
+if (!empty($search_enabled) && $search_enabled == 'true') {
+	echo "	//open a window when the call is answer\n";
+	echo "	dashboard_url = 'https://".$search_domain."/".$search_path."?".$search_parameter."=' + sanitize_string(session.uri_user);\n";
+	echo "	dashboard_target = '".$search_target."';\n";
+	if (!empty($search_width) && !empty($search_height)) {
+		echo "	window_parameters = 'width=".$search_width.",height=".$search_height."';\n";
+	}
+	else {
+		echo "	window_parameters = '';\n";
+	}
+	echo "	window.open(dashboard_url, dashboard_target, window_parameters);\n";
+}
+
+?>
+
 	//add the caller ID
 	document.getElementById('ringing_caller_id').innerHTML = "<div>" + sanitize_string(session.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/app/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>";
 	document.getElementById('active_caller_id').innerHTML = "<div>" + sanitize_string(session.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/app/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>";

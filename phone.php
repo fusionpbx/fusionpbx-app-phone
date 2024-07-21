@@ -38,14 +38,29 @@ if (!permission_exists('phone_view')) {
 $language = new text;
 $text = $language->get();
 
+//get user_uuid and domain_uuid
+$user_uuid = $_SESSION['user_uuid'];
+$domain_uuid = $_SESSION["domain_uuid"];
+
+//add the settings object
+$settings = new settings(["domain_uuid" => $domain_uuid, "user_uuid" => $user_uuid]);
+$theme_title = $settings->get('theme', 'title', '');
+$search_enabled = $settings->get('phone', 'search_enabled', 'true');
+$search_domain = $settings->get('phone', 'search_domain', $_SESSION['domain_name']);
+$search_path = $settings->get('phone', 'search_path', '/app/contacts/contacts.php');
+$search_parameter = $settings->get('phone', 'search_parameter', 'search');
+$search_target = $settings->get('phone', 'search_target', '');
+$search_width = $settings->get('phone', 'search_width', '');
+$search_height = $settings->get('phone', 'search_height', '');
+
 //get the user ID
 $sql = "SELECT d.domain_name,e.extension,e.password FROM ";
 $sql .= "v_extension_users as t, v_extensions as e, v_users as u, v_domains as d ";
 $sql .= "WHERE u.user_uuid = t.user_uuid ";
 $sql .= "AND e.extension_uuid = t.extension_uuid ";
 $sql .= "AND e.domain_uuid = d.domain_uuid ";
-$sql .= "AND u.user_uuid = '" . $_SESSION['user_uuid'] . "' ";
-$sql .= "AND e.domain_uuid = '" . $_SESSION["domain_uuid"] . "' LIMIT 1";
+$sql .= "AND u.user_uuid = '" . $user_uuid . "' ";
+$sql .= "AND e.domain_uuid = '" . $domain_uuid . "' LIMIT 1";
 $prep_statement = $db->prepare($sql);
 if ($prep_statement) {
 	$prep_statement->execute();
@@ -62,7 +77,7 @@ $document['title'] = $text['title-phone'];
 echo "<html>\n";
 
 echo "<head>\n";
-echo "	<title>".$text['title-phone'].(!empty($_SESSION['theme']['title']['text']) ? ' - '.$_SESSION['theme']['title']['text'] : null)."</title>\n";
+echo "	<title>".$text['title-phone']." - ".escape($theme_title)."</title>\n";
 echo "	<meta charset='utf-8'>\n";
 echo "	<meta http-equiv='Content-Type' content='text/html; charset=UTF-8'>\n";
 echo "	<meta http-equiv='X-UA-Compatible' content='IE=edge'>\n";
@@ -148,3 +163,4 @@ echo "</body>\n";
 
 echo "</html>\n";
 
+?>
