@@ -3,7 +3,7 @@
 $array['dashboard'][$x]['dashboard_uuid'] = '2f0ef341-724e-4578-84bb-803e0fc0b14c';
 $array['dashboard'][$x]['dashboard_name'] = 'Phone';
 $array['dashboard'][$x]['dashboard_path'] = 'core/dashboard/resources/dashboard/icon.php';
-$array['dashboard'][$x]['dashboard_icon'] = 'fa-phone';
+$array['dashboard'][$x]['dashboard_icon'] = 'fa-phone-alt';
 $array['dashboard'][$x]['dashboard_url'] = '/app/phone/phone.php';
 $array['dashboard'][$x]['dashboard_target'] = 'new';
 $array['dashboard'][$x]['dashboard_width'] = '320';
@@ -25,7 +25,7 @@ $array['dashboard'][$x]['dashboard_detail_background_color'] = '';
 $array['dashboard'][$x]['dashboard_column_span'] = '1';
 $array['dashboard'][$x]['dashboard_row_span'] = '1';
 $array['dashboard'][$x]['dashboard_details_state'] = 'disabled';
-$array['dashboard'][$x]['dashboard_order'] = '20';
+$array['dashboard'][$x]['dashboard_order'] = '50';
 $array['dashboard'][$x]['dashboard_enabled'] = 'true';
 $array['dashboard'][$x]['dashboard_description'] = 'Browser based phone.';
 $y = 0;
