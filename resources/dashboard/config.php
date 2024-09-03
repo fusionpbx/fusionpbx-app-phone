@@ -3,7 +3,7 @@
 $array['dashboard'][$x]['dashboard_uuid'] = '2f0ef341-724e-4578-84bb-803e0fc0b14c';
 $array['dashboard'][$x]['dashboard_name'] = 'Phone';
 $array['dashboard'][$x]['dashboard_path'] = 'core/dashboard/resources/dashboard/icon.php';
-$array['dashboard'][$x]['dashboard_icon'] = 'fa-phone-alt';
+$array['dashboard'][$x]['dashboard_icon'] = 'fa-solid fa-phone';
 $array['dashboard'][$x]['dashboard_url'] = '/app/phone/phone.php';
 $array['dashboard'][$x]['dashboard_target'] = 'new';
 $array['dashboard'][$x]['dashboard_width'] = '320';

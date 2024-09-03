@@ -128,7 +128,7 @@ echo "			<div class='dialpad_box' onclick=\"digit_add('0');\" style='margin-bott
 echo "			<div class='dialpad_box' onclick=\"digit_add('#');\" style='margin-bottom: 8px; padding-top: 15px; padding-bottom: 5px;'><strong>#</strong></div>\n";
 
 echo "			<div class='dialpad_box clear' onclick='digit_clear();' title=\"".$text['label-clear']."\"><i class='fas fa-times'></i><br><sup>".$text['label-clear']."</sup></div>\n";
-echo "			<div class='dialpad_box' onclick='send();' style='background-color: #147e00;' title=\"".$text['label-call']."\"><i class='fas fa-phone-alt'></i><br><sup>".$text['label-call']."</sup></div>\n";
+echo "			<div class='dialpad_box call' onclick='send();' title=\"".$text['label-call']."\"><i class='fa-solid fa-phone'></i><br><sup>".$text['label-call']."</sup></div>\n";
 echo "			<div class='dialpad_box delete' onclick='digit_delete();' title=\"".$text['label-delete']."\"><i class='fas fa-chevron-left'></i><br><sup>".$text['label-delete']."</sup></div>\n";
 echo "		</div>\n";
 echo "	</div>\n";

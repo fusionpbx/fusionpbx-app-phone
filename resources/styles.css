@@ -3,7 +3,7 @@
 	}
 
 body {
-	background-color: #333;
+	background: #333;
 	}
 
 .inner {
@@ -18,7 +18,7 @@ body {
 	}
 
 .destination {
-	background-color: rgba(0, 0, 0, 0.8);
+	background: rgba(0, 0, 0, 0.8);
 	color: #fff;
 	border-radius: 6px;
 	padding: 10px;
@@ -40,7 +40,7 @@ body {
 	}
 
 .dialpad_box {
-	background-color: rgba(0, 0, 0, 0.6);
+	background: rgba(0, 0, 0, 0.6);
 	color: #fff;
 	border-radius: 6px;
 	padding: 10px;
@@ -52,6 +52,11 @@ body {
 	-ms-user-select: none;
 	user-select: none;
 	border: 3px solid #333;
+	transition: .2s;
+	}
+
+.dialpad_box:hover {
+	background: rgba(0, 0, 0, 0.3);
 	}
 
 .dialpad_box::selection {
@@ -63,26 +68,29 @@ body {
 	line-height: 27px;
 	}
 
-.dialpad_box > i.fas {
+.dialpad_box > i.fas,
+.dialpad_box > i.fa-solid {
 	font-size: 20px;
 	line-height: 15px;
 	padding: 5px 0 5px 0;
 	}
 
-.dialpad_box.delete {
-	background-color: #333;
+.dialpad_box.call {
+	background: #147e00;
 	}
 
-.dialpad_box.clear {
-	background-color: #333;
-	}
-
-.dialpad_box.mute {
-	background-color: #333;
-	}
-
+.dialpad_box.delete,
+.dialpad_box.clear,
+.dialpad_box.mute,
 .dialpad_box.hold {
-	background-color: #333;
+	background: #333;
+	}
+
+.dialpad_box.delete:hover,
+.dialpad_box.clear:hover,
+.dialpad_box.mute:hover,
+.dialpad_box.hold:hover {
+	background: rgba(0, 0, 0, 0.3);
 	}
 
 strong {
@@ -105,7 +113,7 @@ sup {
 	flex-wrap: wrap;
 	justify-content: center;
 	align-items: center;
-	background-color: rgba(0, 0, 0, 0.7);
+	background: rgba(0, 0, 0, 0.7);
 	font-size: 35px;
 	font-weight: bold;
 	font-family: sans-serif;
