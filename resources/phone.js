@@ -8,6 +8,8 @@ function sanitize_string(str) {
 let user_agent;
 let session;
 let answer_time;
+let session_hungup = false;
+
 var config = {
 	uri: '<?php echo $user_extension.'@'.$domain_name; ?>',
 	ws_servers: 'wss://<?php echo $domain_name; ?>:7443',
@@ -129,8 +131,13 @@ if (!empty($search_enabled) && $search_enabled == 'true') {
 		//clear the answer time
 		answer_time = null;
 
+		//reset the media
+		reset_media();
+
 		//end the call
-		hangup();
+		if (!session || !session_hungup) {
+			hangup();
+		}
 	});
 
 	session.on('failed', function (s) {
@@ -151,7 +158,9 @@ if (!empty($search_enabled) && $search_enabled == 'true') {
 		answer_time = null;
 
 		//end the call
-		hangup();
+		if (!session || !session_hungup) {
+			hangup();
+		}
 	});
 
 	session.on('rejected', function (s) {
@@ -251,12 +260,27 @@ function get_session_time() {
 //update elapsed time every second
 setInterval(get_session_time, 1000);
 
+//function to reset media after a call ends
+function reset_media() {
+	const videoElements = [document.getElementById('remote_video'), document.getElementById('local_video')];
+	videoElements.forEach(video => {
+		video.srcObject = null;
+		video.pause();
+	});
+}
+
 //function used to end the session
 function hangup() {
+
+	if (!session || session_hungup) { return; }
+	session_hungup = true;
 
 	//end the session
 	//session.bye();
 	session.terminate();
+
+	//reset the media
+	reset_media();
 
 	//show or hide the panels
 	document.getElementById('dialpad').style.display = "grid";
