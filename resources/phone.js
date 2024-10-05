@@ -1,4 +1,4 @@
-
+=
 function sanitize_string(str) {
 	let temp = document.createElement('div');
 	temp.textContent = str;
@@ -107,11 +107,11 @@ if (!empty($search_enabled) && $search_enabled == 'true') {
 		document.getElementById('ringing_caller_id').innerHTML = '';
 		document.getElementById('active_caller_id').innerHTML = '';
 
-	//clear the answer time
-	answer_time = null;
+		//clear the answer time
+		answer_time = null;
 
-	//end the call
-	hangup();
+		//end the call
+		hangup();
 	});
 
 	session.on('bye', function (s) {
@@ -187,6 +187,9 @@ if (!empty($search_enabled) && $search_enabled == 'true') {
 });
 
 function answer() {
+
+	//set the session state
+	session_hungup = false;
 
 	//continue if the session exists
 	if (!session) {
@@ -272,12 +275,20 @@ function reset_media() {
 //function used to end the session
 function hangup() {
 
-	if (!session || session_hungup) { return; }
+	//return immediately if the session is already hungup
+	if (!session || session_hungup || session.status === SIP.Session.C.STATUS_TERMINATED) {
+		return;
+	}
+
+	//set the session state as hungup
 	session_hungup = true;
 
-	//end the session
-	//session.bye();
-	session.terminate();
+	//end the session if active
+	if (session.status === SIP.Session.C.STATUS_CONFIRMED || session.status === SIP.Session.C.STATUS_ANSWERED) {
+		session.bye();
+	} else {
+		session.terminate();
+	}
 
 	//reset the media
 	reset_media();
@@ -303,28 +314,39 @@ function hangup() {
 	document.getElementById('unhold').style.display = "none";
 	document.getElementById('hold').style.display = "inline";
 
-	//clear the caller id and timer
+	//clear the caller ID and timer
 	document.getElementById('ringing_caller_id').innerHTML = '';
 	document.getElementById('active_caller_id').innerHTML = '';
 	document.getElementById('answer_time').innerHTML = '00:00:00';
 
 	//mute the audio
-	session.mute({audio: true});
+	//session.mute({audio: true});
 }
 
 function hold() {
+	if (!session) { return; }
 	document.getElementById('hold').style.display = "none";
 	document.getElementById('unhold').style.display = "inline";
 	session.hold();
+	//session.hold({
+	//	useUpdate: true
+	//});
 }
 
 function unhold() {
+	if (!session) { return; }
 	document.getElementById('hold').style.display = "inline";
 	document.getElementById('unhold').style.display = "none";
 	session.unhold();
+	//session.unhold({
+	//	useUpdate: true
+	//});
 }
 
 function send() {
+
+	//set the session state
+	session_hungup = false;
 
 	//get the destination number
 	destination = document.getElementById('destination').value;
@@ -366,12 +388,14 @@ function send() {
 }
 
 function mute_audio(destination) {
+	if (!session) { return; }
 	session.mute({audio: true});
 	document.getElementById('mute_audio').style.display = "none";
 	document.getElementById('unmute_audio').style.display = "inline";
 }
 
 function mute_video(destination) {
+	if (!session) { return; }
 	session.mute({video: true});
 	document.getElementById('local_video').style.display = "none";
 	document.getElementById('mute_video').style.display = "none";
@@ -379,12 +403,14 @@ function mute_video(destination) {
 }
 
 function unmute_audio(destination) {
+	if (!session) { return; }
 	session.unmute({audio: true});
 	document.getElementById('mute_audio').style.display = "inline";
 	document.getElementById('unmute_audio').style.display = "none";
 }
 
 function unmute_video(destination) {
+	if (!session) { return; }
 	session.unmute({video: true});
 	document.getElementById('local_video').style.display = "inline";
 	document.getElementById('mute_video').style.display = "inline";
