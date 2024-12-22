@@ -47,7 +47,7 @@ $settings = new settings(["domain_uuid" => $domain_uuid, "user_uuid" => $user_uu
 $theme_title = $settings->get('theme', 'title', '');
 $search_enabled = $settings->get('phone', 'search_enabled', 'true');
 $search_domain = $settings->get('phone', 'search_domain', $_SESSION['domain_name']);
-$search_path = $settings->get('phone', 'search_path', '/app/contacts/contacts.php');
+$search_path = $settings->get('phone', 'search_path', '/core/contacts/contacts.php');
 $search_parameter = $settings->get('phone', 'search_parameter', 'search');
 $search_target = $settings->get('phone', 'search_target', '');
 $search_width = $settings->get('phone', 'search_width', '');

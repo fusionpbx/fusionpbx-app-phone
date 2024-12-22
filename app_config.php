@@ -52,7 +52,7 @@ $apps[$x]['default_settings'][$y]['default_setting_uuid'] = "2ce8d190-8063-4e8a-
 $apps[$x]['default_settings'][$y]['default_setting_category'] = "phone";
 $apps[$x]['default_settings'][$y]['default_setting_subcategory'] = "search_path";
 $apps[$x]['default_settings'][$y]['default_setting_name'] = "text";
-$apps[$x]['default_settings'][$y]['default_setting_value'] = "/app/contacts/contacts.php";
+$apps[$x]['default_settings'][$y]['default_setting_value'] = "/core/contacts/contacts.php";
 $apps[$x]['default_settings'][$y]['default_setting_enabled'] = "false";
 $apps[$x]['default_settings'][$y]['default_setting_description'] = "";
 $y++;
