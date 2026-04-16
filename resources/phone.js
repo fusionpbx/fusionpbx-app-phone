@@ -159,7 +159,11 @@ function get_media_options() {
 	return {
 		media: {
 			constraints: {
-				audio: true,
+				audio: {
+					echoCancellation: true,
+					noiseSuppression: true,
+					autoGainControl: true
+				},
 				video: video_enabled
 			},
 			render: {
@@ -366,12 +370,17 @@ function answer() {
 
 	//pause the ringtone
 	document.getElementById('ringtone').pause();
+	document.getElementById('ringtone').currentTime = 0;
 
 	//answer the call with current video settings
 	var answer_media = {
 		media: {
 			constraints: {
-				audio: true,
+				audio: {
+					echoCancellation: true,
+					noiseSuppression: true,
+					autoGainControl: true
+				},
 				video: video_enabled
 			},
 			render: {
@@ -807,6 +816,10 @@ function correct_alignment() {
 function digit_add($digit) {
 	document.getElementById('destination').value = document.getElementById('destination').value + $digit;
 	correct_alignment();
+	// Send DTMF if in an active call
+	if (session && !session_hungup && (session.status === SIP.Session.C.STATUS_CONFIRMED || session.status === SIP.Session.C.STATUS_ANSWERED)) {
+		session.sendDTMF($digit);
+	}
 }
 
 function digit_delete() {

@@ -95,7 +95,7 @@ echo "<body>\n";
 //define the video tag
 echo "	<div id='video_container' style='display: none; position: absolute; top: 50px; left: 0; right: 0; bottom: 70px; background: #000;'>\n";
 echo "		<div style='position: relative; width: 100%; height: 100%;'><video id='remote_video' width='100%' height='100%' style='position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;'></video></div>\n";
-echo "		<div style='position: absolute; bottom: 10px; right: 10px; z-index: 10;'><video id='local_video' width='160' height='120' style='border-radius: 8px; border: 2px solid #333;'></video></div>\n";
+echo "		<div style='position: absolute; bottom: 10px; right: 10px; z-index: 10;'><video id='local_video' muted playsinline width='160' height='120' style='border-radius: 8px; border: 2px solid #333;'></video></div>\n";
 echo "	</div>\n";
 
 //define the audio ringtone
@@ -201,6 +201,9 @@ echo "			<span class='action_label'>Contacts</span>\n";
 echo "		</div>\n";
 echo "		<div class='action_item' onclick='show_history();' id='action_history'><i class='fas fa-history'></i>\n";
 echo "			<span class='action_label'>History</span>\n";
+echo "		</div>\n";
+echo "		<div class='action_item' onclick='show_keypad();' id='action_keypad_during_call' style='display: none;'><i class='fas fa-keyboard'></i>\n";
+echo "			<span class='action_label'>Keypad</span>\n";
 echo "		</div>\n";
 echo "	</div>\n";
 
