@@ -17,7 +17,7 @@
 
 	The Initial Developer of the Original Code is
 	Mark J Crane <markjcrane@fusionpbx.com>
-	Portions created by the Initial Developer are Copyright (C) 2024
+	Portions created by the Initial Developer are Copyright (C) 2024-2026
 	the Initial Developer. All Rights Reserved.
 
 	Contributor(s):
@@ -93,9 +93,9 @@ echo "</head>\n";
 echo "<body>\n";
 
 //define the video tag
-echo "	<div>\n";
-echo "		<div style='position: absolute;'><video id='remote_video' width='640' height='480' style='display: none;'></video></div>\n";
-echo "		<div style='position: absolute; display: none;'><video id='local_video' width='160' height='120' style='display: none;'></video></div>\n";
+echo "	<div id='video_container' style='display: none; position: absolute; top: 50px; left: 0; right: 0; bottom: 70px; background: #000;'>\n";
+echo "		<div style='position: relative; width: 100%; height: 100%;'><video id='remote_video' width='100%' height='100%' style='position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;'></video></div>\n";
+echo "		<div style='position: absolute; bottom: 10px; right: 10px; z-index: 10;'><video id='local_video' width='160' height='120' style='border-radius: 8px; border: 2px solid #333;'></video></div>\n";
 echo "	</div>\n";
 
 //define the audio ringtone
@@ -140,6 +140,7 @@ echo "				<div class='dialpad_box' onclick=\"digit_add('*');\" style='margin-bot
 echo "				<div class='dialpad_box' onclick=\"digit_add('0');\" style='margin-bottom: 8px; padding-top: 15px; padding-bottom: 5px;'><strong>0</strong></div>\n";
 echo "				<div class='dialpad_box' onclick=\"digit_add('#');\" style='margin-bottom: 8px; padding-top: 15px; padding-bottom: 5px;'><strong>#</strong></div>\n";
 
+echo "				<div class='dialpad_box toggle_video' onclick='toggle_video();' id='toggle_video' title='Toggle Video Call'><i class='fas fa-video-slash'></i><br><sup>Video</sup></div>\n";
 echo "				<div class='dialpad_box clear' onclick='digit_clear();' title=\"".$text['label-clear']."\"><i class='fas fa-times'></i><br><sup>".$text['label-clear']."</sup></div>\n";
 echo "				<div class='dialpad_box call' onclick='send();' title=\"".$text['label-call']."\"><i class='fa-solid fa-phone'></i><br><sup>".$text['label-call']."</sup></div>\n";
 echo "				<div class='dialpad_box delete' onclick='digit_delete();' title=\"".$text['label-delete']."\"><i class='fas fa-chevron-left'></i><br><sup>".$text['label-delete']."</sup></div>\n";

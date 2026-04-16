@@ -34,9 +34,15 @@ body {
 
 .dialpad_wrapper {
 	display: grid;
-	grid-template-columns: 33.33% 33.33% 33.33%;
+	/*grid-template-columns: 33.33% 33.33% 33.33%;*/
+	grid-template-columns: repeat(3, 1fr);
+	
 	grid-gap: 0;
 	color: #444;
+}
+
+.dialpad_wrapper.keypad_4col {
+	grid-template-columns: repeat(4, 1fr);
 }
 
 .dialpad_box {
@@ -82,8 +88,13 @@ body {
 .dialpad_box.delete,
 .dialpad_box.clear,
 .dialpad_box.mute,
-.dialpad_box.hold {
+.dialpad_box.hold,
+.dialpad_box.toggle_video {
 	background: #333;
+}
+
+.dialpad_box.toggle_video.active {
+	background: #1eba00;
 }
 
 .dialpad_box.delete:hover,
@@ -177,11 +188,14 @@ sup {
 	bottom: 0;
 	left: 0;
 	right: 0;
-	height: 70px;
+	min-height: 70px;
 	background: rgba(0, 0, 0, 0.9);
-	display: flex;
-	justify-content: space-around;
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+	gap: 10px;
 	align-items: center;
+	justify-items: center;
+	padding: 10px 20px;
 	z-index: 1000;
 }
 
@@ -190,13 +204,14 @@ sup {
 	flex-direction: column;
 	align-items: center;
 	gap: 4px;
-	padding: 10px 20px;
+	padding: 10px;
 	cursor: pointer;
 	-webkit-user-select: none;
 	-moz-user-select: none;
 	-ms-user-select: none;
 	user-select: none;
 	transition: background 0.2s;
+	text-align: center;
 }
 
 .action_item:hover {
