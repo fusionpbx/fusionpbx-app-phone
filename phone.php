@@ -104,33 +104,62 @@ echo "		<source src='resources/ringtones/ringtone.mp3' type='audio/mpeg' loop='l
 echo "	</audio>\n";
 
 //audio or video objects need to be initialized before phone.js
-echo "	<script language='JavaScript' type='text/javascript'>";
+echo "	<script language='JavaScript' type='text/javascript'>\n";
+echo "	const time_zone = '".$settings->get('domain', 'time_zone')."';\n";
+echo "\n";
 require 'resources/phone.js';
+echo "\n";
 echo "	</script>\n";
 
+//define the status bar
+echo "	<div class='status_bar' id='status_bar'>\n";
+echo "		<span class='status_icon'><i class='fas fa-circle'></i></span>\n";
+echo "		<span class='status_text' id='status_text'>Ready</span>\n";
+echo "	</div>\n";
+
+//start the body_content
+echo "	<div class='body_content'>\n";
+
 //define the dialpad control
-echo "	<div class='dialpad' id='dialpad'>\n";
-echo "		<input type='text' class='destination' id='destination' name='destination' onkeypress=\"event.preventDefault();\"/>\n";
-echo "		<div class='dialpad_wrapper'>\n";
-echo "			<div class='dialpad_box' onclick=\"digit_add('1');\"><strong>1</strong><br><sup>&nbsp;</sup></div>\n";
-echo "			<div class='dialpad_box' onclick=\"digit_add('2');\"><strong>2</strong><br><sup>ABC</sup></div>\n";
-echo "			<div class='dialpad_box' onclick=\"digit_add('3');\"><strong>3</strong><br><sup>DEF</sup></div>\n";
+echo "		<div class='dialpad' id='dialpad'>\n";
+echo "			<input type='text' class='destination' id='destination' name='destination' onkeypress=\"event.preventDefault();\"/>\n";
+echo "			<div class='dialpad_wrapper'>\n";
+echo "				<div class='dialpad_box' onclick=\"digit_add('1');\"><strong>1</strong><br><sup>&nbsp;</sup></div>\n";
+echo "				<div class='dialpad_box' onclick=\"digit_add('2');\"><strong>2</strong><br><sup>ABC</sup></div>\n";
+echo "				<div class='dialpad_box' onclick=\"digit_add('3');\"><strong>3</strong><br><sup>DEF</sup></div>\n";
 
-echo "			<div class='dialpad_box' onclick=\"digit_add('4');\"><strong>4</strong><br><sup>GHI</sup></div>\n";
-echo "			<div class='dialpad_box' onclick=\"digit_add('5');\"><strong>5</strong><br><sup>JKL</sup></div>\n";
-echo "			<div class='dialpad_box' onclick=\"digit_add('6');\"><strong>6</strong><br><sup>MNO</sup></div>\n";
+echo "				<div class='dialpad_box' onclick=\"digit_add('4');\"><strong>4</strong><br><sup>GHI</sup></div>\n";
+echo "				<div class='dialpad_box' onclick=\"digit_add('5');\"><strong>5</strong><br><sup>JKL</sup></div>\n";
+echo "				<div class='dialpad_box' onclick=\"digit_add('6');\"><strong>6</strong><br><sup>MNO</sup></div>\n";
 
-echo "			<div class='dialpad_box' onclick=\"digit_add('7');\"><strong>7</strong><br><sup>PQRS</sup></div>\n";
-echo "			<div class='dialpad_box' onclick=\"digit_add('8');\"><strong>8</strong><br><sup>TUV</sup></div>\n";
-echo "			<div class='dialpad_box' onclick=\"digit_add('9');\"><strong>9</strong><br><sup>WXYZ</sup></div>\n";
+echo "				<div class='dialpad_box' onclick=\"digit_add('7');\"><strong>7</strong><br><sup>PQRS</sup></div>\n";
+echo "				<div class='dialpad_box' onclick=\"digit_add('8');\"><strong>8</strong><br><sup>TUV</sup></div>\n";
+echo "				<div class='dialpad_box' onclick=\"digit_add('9');\"><strong>9</strong><br><sup>WXYZ</sup></div>\n";
 
-echo "			<div class='dialpad_box' onclick=\"digit_add('*');\" style='margin-bottom: 8px; padding-top: 20px; padding-bottom: 0;'><strong>*</strong></div>\n";
-echo "			<div class='dialpad_box' onclick=\"digit_add('0');\" style='margin-bottom: 8px; padding-top: 15px; padding-bottom: 5px;'><strong>0</strong></div>\n";
-echo "			<div class='dialpad_box' onclick=\"digit_add('#');\" style='margin-bottom: 8px; padding-top: 15px; padding-bottom: 5px;'><strong>#</strong></div>\n";
+echo "				<div class='dialpad_box' onclick=\"digit_add('*');\" style='margin-bottom: 8px; padding-top: 20px; padding-bottom: 0;'><strong>*</strong></div>\n";
+echo "				<div class='dialpad_box' onclick=\"digit_add('0');\" style='margin-bottom: 8px; padding-top: 15px; padding-bottom: 5px;'><strong>0</strong></div>\n";
+echo "				<div class='dialpad_box' onclick=\"digit_add('#');\" style='margin-bottom: 8px; padding-top: 15px; padding-bottom: 5px;'><strong>#</strong></div>\n";
 
-echo "			<div class='dialpad_box clear' onclick='digit_clear();' title=\"".$text['label-clear']."\"><i class='fas fa-times'></i><br><sup>".$text['label-clear']."</sup></div>\n";
-echo "			<div class='dialpad_box call' onclick='send();' title=\"".$text['label-call']."\"><i class='fa-solid fa-phone'></i><br><sup>".$text['label-call']."</sup></div>\n";
-echo "			<div class='dialpad_box delete' onclick='digit_delete();' title=\"".$text['label-delete']."\"><i class='fas fa-chevron-left'></i><br><sup>".$text['label-delete']."</sup></div>\n";
+echo "				<div class='dialpad_box clear' onclick='digit_clear();' title=\"".$text['label-clear']."\"><i class='fas fa-times'></i><br><sup>".$text['label-clear']."</sup></div>\n";
+echo "				<div class='dialpad_box call' onclick='send();' title=\"".$text['label-call']."\"><i class='fa-solid fa-phone'></i><br><sup>".$text['label-call']."</sup></div>\n";
+echo "				<div class='dialpad_box delete' onclick='digit_delete();' title=\"".$text['label-delete']."\"><i class='fas fa-chevron-left'></i><br><sup>".$text['label-delete']."</sup></div>\n";
+echo "			</div>\n";
+echo "		</div>\n";
+
+//close the body_content
+echo "	<div>\n";
+
+//define the contacts panel
+echo "	<div class='dialpad' id='contacts' style='display: none;'>\n";
+echo "		<div class='keypad_header'><i class='fas fa-address-book'></i> Contacts</div>\n";
+echo "		<div class='contacts_list' id='contacts_list'>\n";
+echo "		</div>\n";
+echo "	</div>\n";
+
+//define the history panel
+echo "	<div class='dialpad' id='history' style='display: none;'>\n";
+echo "		<div class='keypad_header'><i class='fas fa-history'></i> Call History</div>\n";
+echo "		<div class='history_list' id='history_list'>\n";
 echo "		</div>\n";
 echo "	</div>\n";
 
@@ -138,7 +167,7 @@ echo "	</div>\n";
 echo "	<div class='dialpad' id='ringing' style='display: none;'>\n";
 echo "		<div class='caller_id ringing' id='ringing_caller_id'></div>\n";
 echo "		<div class='dialpad_wrapper' style='grid-template-columns: 50% 50%;'>\n";
-echo "			<div class='dialpad_box' id='decline' onclick='hangup();' style='background-color: #ba0000;'><i class='fas fa-phone-slash' title=\"".$text['label-decline']."\"></i><br><sup>".$text['label-decline']."</sup></div>\n";
+echo "			<div class='dialpad_box' id='decline' onclick='decline();' style='background-color: #ba0000;'><i class='fas fa-phone-slash' title=\"".$text['label-decline']."\"></i><br><sup>".$text['label-decline']."</sup></div>\n";
 echo "			<div class='dialpad_box' id='answer' onclick='answer();' style='background-color: #147e00;'><i class='fas fa-phone' title=\"".$text['label-answer']."\"></i><br><sup>".$text['label-answer']."</sup></div>\n";
 echo "		</div>\n";
 echo "	</div>\n";
@@ -160,6 +189,20 @@ echo "			<div class='dialpad_box' id='mute_video' style='display: none;' onclick
 echo "			<div class='dialpad_box' id='umute_video' style='display: none;' onclick='unmute_video();'>&nbsp;</div>\n";
 echo "		</div>\n";
 echo "	</div>\n";
+
+//define the action bar
+echo "	<div class='action_bar' id='action_bar'>\n";
+echo "		<div class='action_item' onclick='show_dialpad();' id='action_keypad'><i class='fas fa-phone-alt'></i>\n";
+echo "			<span class='action_label'>Dialpad</span>\n";
+echo "		</div>\n";
+echo "		<div class='action_item' onclick='show_contacts();' id='action_contacts'><i class='fas fa-address-book'></i>\n";
+echo "			<span class='action_label'>Contacts</span>\n";
+echo "		</div>\n";
+echo "		<div class='action_item' onclick='show_history();' id='action_history'><i class='fas fa-history'></i>\n";
+echo "			<span class='action_label'>History</span>\n";
+echo "		</div>\n";
+echo "	</div>\n";
+
 echo "</body>\n";
 
 echo "</html>\n";

@@ -21,6 +21,66 @@ var config = {
 
 user_agent = new SIP.UA(config);
 
+// Connection status handling
+user_agent.on('connected', function() {
+	document.getElementById('status_text').textContent = 'Ready';
+	document.querySelector('#status_bar .status_icon i').className = 'fas fa-circle';
+});
+
+user_agent.on('disconnected', function() {
+	document.getElementById('status_text').textContent = 'Disconnected';
+	document.querySelector('#status_bar .status_icon i').className = 'fas fa-circle';
+});
+
+user_agent.on('failed', function() {
+	document.getElementById('status_text').textContent = 'Failed';
+	document.querySelector('#status_bar .status_icon i').className = 'fas fa-exclamation-triangle';
+});
+
+// Contacts data (extension 1001-1005)
+var contacts = [
+	{ extension: '1003', name: 'John' },
+	{ extension: '1004', name: 'Jane' },
+	{ extension: '1005', name: 'Bob' }
+];
+
+// Call history storage
+function get_call_history() {
+	try {
+		var stored = localStorage.getItem('call_history');
+		return stored ? JSON.parse(stored) : [];
+	} catch(e) {
+		return [];
+	}
+}
+
+function save_call_history(history) {
+	try {
+		localStorage.setItem('call_history', JSON.stringify(history));
+	} catch(e) {
+		console.log('Could not save call history');
+	}
+}
+
+function add_to_history(number, call_type, timestamp) {
+	var history = get_call_history();
+	var entry = {
+		id: Date.now(),
+		number: number,
+		call_type: call_type,  // 'outgoing', 'incoming', 'missed'
+		timestamp: timestamp,
+		duration: 0
+	};
+	history.unshift(entry);  // Add to beginning
+
+	// Keep only last 100 entries
+	if (history.length > 100) {
+		history = history.slice(0, 100);
+	}
+	save_call_history(history);
+	return entry;
+}
+
 //here you determine whether the call has video and audio
 var options = {
 	media: {
@@ -49,9 +109,14 @@ user_agent.on('invite', function (s) {
 	session = s;
 	session.display_name = session.remoteIdentity.displayName;
 	session.uri_user = session.remoteIdentity.uri.user;
+	session.incoming_number = session.remoteIdentity.uri.user || session.remoteIdentity.displayName;
 
 	//send the object to the browser console
 	//console.log(session);
+
+	// Update status bar for incoming call
+	document.getElementById('status_text').textContent = 'Incoming Call';
+	document.querySelector('#status_bar .status_icon i').className = 'fas fa-phone-volume';
 
 	//play the ringtone
 	document.getElementById('ringtone').play();
@@ -64,10 +129,10 @@ if (!empty($search_enabled) && $search_enabled == 'true') {
 	echo "	dashboard_url = 'https://".$search_domain."/".$search_path."?".$search_parameter."=' + sanitize_string(session.uri_user);\n";
 	echo "	dashboard_target = '".$search_target."';\n";
 	if (!empty($search_width) && !empty($search_height)) {
-		echo "	window_parameters = 'width=".$search_width.",height=".$search_height."';\n";
+		echo "		window_parameters = 'width=".$search_width.",height=".$search_height."';\n";
 	}
 	else {
-		echo "	window_parameters = '';\n";
+		echo "		window_parameters = '';\n";
 	}
 	echo "	window.open(dashboard_url, dashboard_target, window_parameters);\n";
 }
@@ -90,6 +155,11 @@ if (!empty($search_enabled) && $search_enabled == 'true') {
 	document.getElementById('mute_video').style.display = "none";
 
 	session.on('cancel', function (s) {
+		// Record missed call
+		if (session.incoming_number) {
+			add_to_history(session.incoming_number, 'missed', Date.now());
+		}
+
 		//play the ringtone
 		document.getElementById('ringtone').pause();
 
@@ -109,6 +179,10 @@ if (!empty($search_enabled) && $search_enabled == 'true') {
 
 		//clear the answer time
 		answer_time = null;
+
+		// Reset status
+		document.getElementById('status_text').textContent = 'Ready';
+		document.querySelector('#status_bar .status_icon i').className = 'fas fa-circle';
 
 		//end the call
 		hangup();
@@ -164,6 +238,11 @@ if (!empty($search_enabled) && $search_enabled == 'true') {
 	});
 
 	session.on('rejected', function (s) {
+		// Record missed call
+		if (session.incoming_number) {
+			add_to_history(session.incoming_number, 'missed', Date.now());
+		}
+
 		//play the ringtone
 		document.getElementById('ringtone').pause();
 
@@ -194,6 +273,11 @@ function answer() {
 	//continue if the session exists
 	if (!session) {
 		return false;
+	}
+
+	// Record incoming call to history
+	if (session.incoming_number) {
+		add_to_history(session.incoming_number, 'incoming', Date.now());
 	}
 
 	//start the answer time
@@ -230,11 +314,168 @@ function answer() {
 	document.getElementById('decline').style.display = "none";
 	document.getElementById('unhold').style.display = "none";
 	document.getElementById('hangup').style.display = "inline";
+
+	// Update status bar for active call
+	if (session.incoming_number) {
+		document.getElementById('status_text').textContent = 'Call in progress';
+	}
+	document.querySelector('#status_bar .status_icon i').className = 'fas fa-phone';
 }
 
 // Function to pad numbers with leading zeros
 function pad(number, length) {
 	return (number < 10 ? '0' : '') + number;
+}
+
+// Navigation functions to show different panels
+function hide_all_panels() {
+	document.getElementById('dialpad').style.display = 'none';
+	//document.getElementById('keypad').style.display = 'none';
+	document.getElementById('contacts').style.display = 'none';
+	document.getElementById('history').style.display = 'none';
+	document.getElementById('ringing').style.display = 'none';
+	document.getElementById('active').style.display = 'none';
+}
+
+function show_dialpad() {
+	hide_all_panels();
+	document.getElementById('dialpad').style.display = 'grid';
+	update_action_bar_state('dialpad');
+}
+
+function show_contacts() {
+	hide_all_panels();
+	render_contacts();
+	document.getElementById('contacts').style.display = 'flex';
+	update_action_bar_state('contacts');
+}
+
+function show_history() {
+	hide_all_panels();
+	render_history();
+	document.getElementById('history').style.display = 'flex';
+	update_action_bar_state('history');
+}
+
+function update_action_bar_state(active_panel) {
+	// Remove active class from all action items
+	document.querySelectorAll('.action_item').forEach(function(item) {
+		item.classList.remove('active');
+	});
+
+	// Add active class based on current panel
+	if (active_panel === 'dialpad' || active_panel === 'keypad') {
+		document.getElementById('action_keypad').classList.add('active');
+	} else if (active_panel === 'contacts') {
+		document.getElementById('action_contacts').classList.add('active');
+	} else if (active_panel === 'history') {
+		document.getElementById('action_history').classList.add('active');
+	}
+}
+
+// Render contacts list
+function render_contacts() {
+	var container = document.getElementById('contacts_list');
+	container.innerHTML = '';
+
+	contacts.forEach(function(contact) {
+		var contactDiv = document.createElement('div');
+		contactDiv.className = 'contact_item';
+		contactDiv.onclick = function() { call_contact(contact.extension); };
+		contact_html = '	<div class="contact_icon">';
+		contact_html += '	<i class="fas fa-user"></i>';
+		contact_html += '	</div>';
+		contact_html += '	<div class="contact_info">';
+		contact_html += '		<div class="contact_extension">' + sanitize_string(contact.extension) + '</div>';
+		contact_html += '		<div class="contact_name">' + sanitize_string(contact.name) + '</div>';
+		contact_html += '	</div>';
+		contactDiv.innerHTML = contact_html;
+		container.appendChild(contactDiv);
+	});
+}
+
+// Render call history
+function render_history() {
+	var container = document.getElementById('history_list');
+	container.innerHTML = '';
+
+	var history = get_call_history();
+
+	if (history.length === 0) {
+		container.innerHTML = '<div style="text-align: center; color: #ccc; padding: 40px; font-size: 16px;">No call history</div>';
+		return;
+	}
+
+	history.forEach(function(entry) {
+		var historyDiv = document.createElement('div');
+		historyDiv.className = 'history_item';
+		historyDiv.onclick = function() { call_number(entry.number); };
+
+		var icon_class = 'fa-phone';
+		if (entry.call_type === 'outgoing') {
+			icon_class = 'fa-phone';
+		} else if (entry.call_type === 'incoming') {
+			icon_class = 'fa-phone';
+		} else if (entry.call_type === 'missed') {
+			icon_class = 'fa-phone-slash';
+		}
+
+		var date = new Date(entry.timestamp);
+		var time_str = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+		var ago_str = time_ago_string(entry.timestamp);
+
+		// Get time in local timezone
+		var time_str = date.toLocaleTimeString([], {
+			timeZone: time_zone,
+			hour: '2-digit',
+			minute: '2-digit',
+			hour12: true  // true = 12-hour format, false = 24-hour
+		});
+
+		history_html = '	<div class="history_icon ' + entry.call_type + '">';
+		history_html += '	<i class="fas ' + icon_class + '"></i>';
+		history_html += '	</div>';
+		history_html += '	<div class="history_details">';
+		history_html += '		<div class="history_number">' + sanitize_string(entry.number) + '</div>';
+		history_html += '		<div class="history_meta">' + call_type_name(entry.call_type) + ' • ' + ago_str + '</div>';
+		history_html += '	</div>';
+		history_html += '	<div class="history_time">';
+		history_html += '		' + time_str;
+		history_html += '	</div>'
+		historyDiv.innerHTML = history_html;
+		container.appendChild(historyDiv);
+	});
+}
+
+// Helper functions
+function time_ago_string(timestamp) {
+	var seconds = Math.floor((Date.now() - timestamp) / 1000);
+	if (seconds < 60) return 'Just now';
+	if (seconds < 3600) return Math.floor(seconds / 60) + ' minutes ago';
+	if (seconds < 86400) return Math.floor(seconds / 3600) + ' hours ago';
+	return Math.floor(seconds / 86400) + ' days ago';
+}
+
+function call_type_name(type) {
+	switch(type) {
+		case 'outgoing': return 'Outgoing';
+		case 'incoming': return 'Incoming';
+		case 'missed': return 'Missed';
+		default: return type;
+	}
+}
+
+// Call functions
+function call_contact(extension) {
+	document.getElementById('destination').value = extension;
+	correct_alignment();
+	send();
+}
+
+function call_number(number) {
+	document.getElementById('destination').value = number;
+	correct_alignment();
+	send();
 }
 
 //function to get the current time in seconds
@@ -321,6 +562,10 @@ function hangup() {
 
 	//mute the audio
 	//session.mute({audio: true});
+
+	// Reset status bar
+	document.getElementById('status_text').textContent = 'Ready';
+	document.querySelector('#status_bar .status_icon i').className = 'fas fa-circle';
 }
 
 function hold() {
@@ -356,13 +601,18 @@ function send() {
 		return;
 	}
 
+	// Add to call history as outgoing
+	add_to_history(destination, 'outgoing', Date.now());
+
 	//show or hide the panels
-	document.getElementById('dialpad').style.display = "none";
-	document.getElementById('ringing').style.display = "none";
+	hide_all_panels();
+
 	document.getElementById('active').style.display = "grid";
 
-	document.getElementById('answer').style.display = "none";
-	document.getElementById('decline').style.display = "none";
+	// Update status bar
+	document.getElementById('status_text').textContent = 'Calling ' + destination;
+	document.querySelector('#status_bar .status_icon i').className = 'fas fa-phone';
+
 	document.getElementById('hangup').style.display = "inline";
 	//document.getElementById('local_video').style.display = "inline";
 	//document.getElementById('remote_video').style.display = "inline";
@@ -415,6 +665,31 @@ function unmute_video(destination) {
 	document.getElementById('local_video').style.display = "inline";
 	document.getElementById('mute_video').style.display = "inline";
 	document.getElementById('unmute_video').style.display = "none";
+}
+
+function decline() {
+	// Record missed call
+	if (session && session.incoming_number) {
+		add_to_history(session.incoming_number, 'missed', Date.now());
+	}
+
+	// Hang up to decline the call
+	hangup();
+
+	// Reset status
+	document.getElementById('status_text').textContent = 'Ready';
+	document.querySelector('#status_bar .status_icon i').className = 'fas fa-circle';
+
+	// Show dialpad
+	document.getElementById('dialpad').style.display = 'grid';
+	document.getElementById('ringing').style.display = 'none';
+	document.getElementById('active').style.display = 'none';
+
+	// Clear all buttons
+	document.getElementById('answer').style.display = 'none';
+	document.getElementById('decline').style.display = 'none';
+	document.getElementById('hangup').style.display = 'none';
+	document.getElementById('mute_audio').style.display = 'none';
 }
 
 //function to center entered digits until full, then right-align and change text direction so last entered digits are always visible
@@ -481,5 +756,39 @@ function send_enter_key(event) {
 
 //add event listener for keydown event on input field
 document.addEventListener("DOMContentLoaded", function() {
-	document.getElementById("destination").addEventListener("keydown", send_enter_key);
+	var destinationInput = document.getElementById("destination");
+	if (destinationInput) {
+		destinationInput.addEventListener("keydown", function(event) {
+			if (event.key === "Enter") {
+				send();
+			}
+		});
+	}
+});
+
+//keyboard event handler for keypad panel
+document.addEventListener('keyup', function(e) {
+	if (document.getElementById('destination')) {
+		if (
+			(e.which >= 48 && e.which <= 57) ||
+			(e.which >= 96 && e.which <= 105) ||
+			(e.which == 56 || e.which == 106) ||
+			(e.which == 51)
+			) {
+			e.preventDefault();
+			digit_add(e.key);
+		}
+		if (e.which == 8 || e.which == 46) {
+			e.preventDefault();
+			digit_delete();
+		}
+		if (e.which == 27) {
+			e.preventDefault();
+			digit_clear();
+		}
+		if (e.which == 13) {
+			e.preventDefault();
+			send();
+		}
+	}
 });

@@ -1,21 +1,21 @@
 .dialpad {
 	z-index: 999;
-	}
+}
 
 body {
 	background: #333;
-	}
+}
 
 .inner {
 	position: absolute;
-	}
+}
 
 .buttons{
 	position: fixed;
 	bottom: 0;
 	right: 0;
 	border: 10px solid rgba(255, 255, 255, 0);
-	}
+}
 
 .destination {
 	background: rgba(0, 0, 0, 0.8);
@@ -30,14 +30,14 @@ body {
 	text-align: center;
 	min-height: 10%;
 	display: inline-block;
-	}
+}
 
 .dialpad_wrapper {
 	display: grid;
 	grid-template-columns: 33.33% 33.33% 33.33%;
 	grid-gap: 0;
 	color: #444;
-	}
+}
 
 .dialpad_box {
 	background: rgba(0, 0, 0, 0.6);
@@ -53,52 +53,52 @@ body {
 	user-select: none;
 	border: 3px solid #333;
 	transition: .2s;
-	}
+}
 
 .dialpad_box:hover {
 	background: rgba(0, 0, 0, 0.3);
-	}
+}
 
 .dialpad_box::selection {
 	background: transparent;
-	}
+}
 
 .dialpad_box > strong {
 	font-size: 25px;
 	line-height: 27px;
-	}
+}
 
 .dialpad_box > i.fas,
 .dialpad_box > i.fa-solid {
 	font-size: 20px;
 	line-height: 15px;
 	padding: 5px 0 5px 0;
-	}
+}
 
 .dialpad_box.call {
 	background: #147e00;
-	}
+}
 
 .dialpad_box.delete,
 .dialpad_box.clear,
 .dialpad_box.mute,
 .dialpad_box.hold {
 	background: #333;
-	}
+}
 
 .dialpad_box.delete:hover,
 .dialpad_box.clear:hover,
 .dialpad_box.mute:hover,
 .dialpad_box.hold:hover {
 	background: rgba(0, 0, 0, 0.3);
-	}
+}
 
 strong {
 	font-family: monospace;
 	padding: 5px 5px;
 	color: #fff;
 	font-size: 30px;
-	}
+}
 
 sup {
 	font-family: monospace;
@@ -106,7 +106,7 @@ sup {
 	padding: 3px 3px;
 	color: #fff;
 	font-size: 10px;
-	}
+}
 
 .caller_id {
 	display: flex;
@@ -123,12 +123,12 @@ sup {
 	padding: 20px;
 	margin-bottom: 8px;
 	min-height: 295px;
-	}
+}
 
 .caller_id.ringing {
 	font-size: 35px;
 	margin-bottom: 35px;
-	}
+}
 
 .answer_time {
 	margin-bottom: 8px;
@@ -137,4 +137,249 @@ sup {
 	font-family: monospace;
 	font-size: 14px;
 	text-transform: uppercase;
-	}
+}
+
+/* Status Bar Styles */
+.status_bar {
+	/*position: fixed;*/
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 50px;
+	background: rgba(0, 0, 0, 0.85);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 15px;
+	/*z-index: 1000;*/
+	padding: 0 20px;
+	font-size: 18px;
+	color: #fff;
+	font-family: sans-serif;
+	box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.status_icon {
+	font-size: 14px;
+}
+
+.status_icon i {
+	color: #1eba00;
+}
+
+.status_text {
+	font-weight: 600;
+}
+
+/* Action Bar Styles */
+.action_bar {
+	position: fixed;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	height: 70px;
+	background: rgba(0, 0, 0, 0.9);
+	display: flex;
+	justify-content: space-around;
+	align-items: center;
+	z-index: 1000;
+}
+
+.action_item {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	padding: 10px 20px;
+	cursor: pointer;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+	transition: background 0.2s;
+}
+
+.action_item:hover {
+	background: rgba(255, 255, 255, 0.1);
+}
+
+.action_item i {
+	font-size: 24px;
+	color: #fff;
+}
+
+.action_label {
+	font-size: 12px;
+	color: #ccc;
+	font-family: sans-serif;
+}
+
+.action_item.active {
+	background: rgba(255, 255, 255, 0.15);
+}
+
+.action_item.active i {
+	color: #1eba00;
+}
+
+/* Keypad, Contacts, History Panels */
+#keypad,
+#contacts,
+#history {
+	position: fixed;
+	top: 50px;
+	bottom: 70px;
+	left: 0;
+	right: 0;
+	background: rgba(0, 0, 0, 0.7);
+	padding: 20px;
+	overflow-y: auto;
+	display: none;
+	flex-direction: column;
+	align-items: center;
+}
+
+.keypad_header {
+	text-align: center;
+	font-size: 28px;
+	font-weight: bold;
+	color: #fff;
+	margin-bottom: 20px;
+	font-family: sans-serif;
+}
+
+.keypad_header i {
+	margin-right: 10px;
+	color: #1eba00;
+}
+
+/* Contacts List Styles */
+.contacts_list {
+	max-width: 600px;
+	margin: 0 auto;
+}
+
+.contact_item {
+	background: rgba(50, 50, 50, 0.8);
+	color: #fff;
+	padding: 18px 15px;
+	margin-bottom: 10px;
+	border-radius: 8px;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	gap: 15px;
+	transition: background 0.2s;
+}
+
+.contact_item:hover {
+	background: rgba(70, 70, 70, 0.9);
+}
+
+.contact_icon {
+	width: 50px;
+	height: 50px;
+	background: #1eba00;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+}
+
+.contact_icon i {
+	font-size: 22px;
+	color: #fff;
+}
+
+.contact_info {
+	flex: 1;
+	min-width: 0;
+}
+
+.contact_extension {
+	font-size: 22px;
+	font-weight: bold;
+	margin-bottom: 3px;
+}
+
+.contact_name {
+	font-size: 14px;
+	color: #ccc;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* History List Styles */
+.history_list {
+	max-width: 600px;
+	margin: 0 auto;
+}
+
+.history_item {
+	background: rgba(50, 50, 50, 0.8);
+	color: #fff;
+	padding: 18px 15px;
+	margin-bottom: 10px;
+	border-radius: 8px;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	gap: 15px;
+	transition: background 0.2s;
+}
+
+.history_item:hover {
+	background: rgba(70, 70, 70, 0.9);
+}
+
+.history_icon {
+	width: 50px;
+	height: 50px;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+}
+
+.history_icon i {
+	font-size: 20px;
+}
+
+.history_icon.outgoing {
+	background: #1eba00;
+}
+
+.history_icon.incoming {
+	background: #1e90ff;
+}
+
+.history_icon.missed {
+	background: #ff4444;
+}
+
+.history_details {
+	flex: 1;
+	min-width: 0;
+}
+
+.history_number {
+	font-size: 20px;
+	font-weight: bold;
+	margin-bottom: 4px;
+}
+
+.history_meta {
+	font-size: 13px;
+	color: #ccc;
+}
+
+.history_time {
+	font-size: 20px;
+	font-family: monospace;
+	color: #aaa;
+	min-width: 80px;
+	text-align: right;
+}
