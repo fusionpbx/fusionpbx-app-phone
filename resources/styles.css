@@ -53,6 +53,7 @@ body {
 
 /* Caller info overlay - shown when hovering remote video */
 .video_stream_info {
+	display: none;
 	position: absolute;
 	top: 16px;
 	left: 16px;
@@ -74,9 +75,6 @@ body {
 	z-index: 100;
 }
 
-.remote_video_wrapper:hover .video_stream_info {
-	opacity: 1;
-}
 
 /* Local video wrapper - positioned bottom-right */
 .local_video_wrapper {

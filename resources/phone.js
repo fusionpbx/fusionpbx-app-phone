@@ -93,10 +93,16 @@ function send_call(use_video) {
 		active_call_is_video = use_video;
 		set_hangup_visibility(true);
 		document.getElementById('mute_audio').style.display = "inline";
+		document.getElementById('unmute_audio').style.display = "none";
 		document.getElementById('hold').style.display = "inline";
+		document.getElementById('unhold').style.display = "none";
+		document.getElementById('mute_video').style.display = use_video ? "inline" : "none";
+		document.getElementById('unmute_video').style.display = "none";
 		set_audio_call_mode(!use_video);
 		var remote_display_name = session.display_name || (session.remoteIdentity && session.remoteIdentity.displayName) || destination;
 		var remote_number = session.uri_user || (session.remoteIdentity && session.remoteIdentity.uri && session.remoteIdentity.uri.user) || destination;
+		active_call_display_name = remote_display_name;
+		active_call_number = remote_number;
 		update_video_stream_info(remote_display_name, remote_number, use_video);
 		update_active_call_status(use_video, remote_display_name, remote_number);
 	});
@@ -190,6 +196,8 @@ let active_call_tone_mode = null;
 let registration_state = 'connecting';
 let transient_status_timeout;
 let active_call_is_video = false;
+let active_call_display_name = '';
+let active_call_number = '';
 
 function stop_call_tone() {
 	const ringtone = document.getElementById('ringtone');
@@ -298,9 +306,13 @@ function format_caller_id_for_status(display_name, number) {
 	return safe_name || safe_number || 'Unknown';
 }
 
-function update_active_call_status(use_video, display_name, number) {
+function update_active_call_status(use_video, display_name, number, duration_text) {
 	if (use_video) {
-		show_status('Video Call - ' + format_caller_id_for_status(display_name, number), 'fas fa-video');
+		var status_text = 'Video Call - ' + format_caller_id_for_status(display_name, number);
+		if (duration_text) {
+			status_text += ' - ' + duration_text;
+		}
+		show_status(status_text, 'fas fa-video');
 		return;
 	}
 
@@ -532,6 +544,8 @@ function reset_call_ui_state(show_dialpad) {
 	document.getElementById('answer_time').innerHTML = '00:00:00';
 	set_audio_call_mode(false);
 	active_call_is_video = false;
+	active_call_display_name = '';
+	active_call_number = '';
 
 	answer_time = null;
 	session_hungup = false;
@@ -778,11 +792,16 @@ function answer_call(use_video) {
 	document.getElementById('answer_video').style.display = "none";
 	document.getElementById('decline').style.display = "none";
 	document.getElementById('mute_audio').style.display = "inline";
+	document.getElementById('unmute_audio').style.display = "none";
+	document.getElementById('mute_video').style.display = use_video ? "inline" : "none";
+	document.getElementById('unmute_video').style.display = "none";
 	document.getElementById('hold').style.display = "inline";
 	document.getElementById('unhold').style.display = "none";
 	active_call_is_video = use_video;
 	set_audio_call_mode(!use_video);
 	set_hangup_visibility(true);
+	active_call_display_name = session.display_name || session.incoming_number || '';
+	active_call_number = session.uri_user || session.incoming_number || '';
 	update_video_stream_info(session.display_name, session.uri_user, use_video);
 
 	// Show video if enabled
@@ -973,7 +992,10 @@ function get_session_time() {
 
 		// Update the element with id="elapsed-time" to display the formatted elapsed time
 		document.getElementById("answer_time").textContent = formatted_time;
-		if (!active_call_is_video) {
+		if (active_call_is_video) {
+			update_active_call_status(true, active_call_display_name, active_call_number, formatted_time);
+		}
+		else {
 			show_status('Call in progress ' + formatted_time, 'fas fa-phone');
 		}
 	}
