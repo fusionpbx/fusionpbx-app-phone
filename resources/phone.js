@@ -354,14 +354,15 @@ function sync_call_action_controls() {
 	action_hold.classList.toggle('action_item_toggle_active', on_hold);
 
 	if (action_video_mute) {
-		var video_muted = document.getElementById('unmute_video').style.display === 'inline';
+		var local_video_wrapper = document.getElementById('local_video_wrapper');
+		var local_video_hidden = !!(local_video_wrapper && local_video_wrapper.style.display === 'none');
 		if (action_video_mute_icon) {
-			action_video_mute_icon.className = video_muted ? 'fas fa-video-slash' : 'fas fa-video';
+			action_video_mute_icon.className = local_video_hidden ? 'fas fa-video-slash' : 'fas fa-video';
 		}
 		if (action_video_mute_label) {
-			action_video_mute_label.textContent = video_muted ? 'Unmute Video' : 'Mute Video';
+			action_video_mute_label.textContent = 'Local';
 		}
-		action_video_mute.classList.toggle('action_item_toggle_active', video_muted);
+		action_video_mute.classList.toggle('action_item_toggle_active', local_video_hidden);
 	}
 }
 
@@ -408,12 +409,13 @@ function toggle_audio_hold_action() {
 
 function toggle_video_mute_action() {
 	if (!session || !active_call_is_video) { return; }
-	if (document.getElementById('unmute_video').style.display === 'inline') {
-		unmute_video();
+	var local_video_wrapper = document.getElementById('local_video_wrapper');
+	if (!local_video_wrapper) {
+		return;
 	}
-	else {
-		mute_video();
-	}
+
+	local_video_wrapper.style.display = local_video_wrapper.style.display === 'none' ? 'block' : 'none';
+	sync_call_action_controls();
 }
 
 function update_video_stream_info(display_name, number, show_info) {
@@ -555,6 +557,7 @@ function reset_call_ui_state(show_dialpad) {
 	set_hangup_visibility(false);
 
 	document.getElementById('video_container').style.display = "none";
+	document.getElementById('local_video_wrapper').style.display = "block";
 	document.getElementById('local_video').style.display = "inline";
 	document.getElementById('remote_video').style.display = "inline";
 
@@ -835,6 +838,7 @@ function answer_call(use_video) {
 	// Show video if enabled
 	if (use_video) {
 		document.getElementById('video_container').style.display = "block";
+		document.getElementById('local_video_wrapper').style.display = "block";
 		document.getElementById('local_video').style.display = "inline";
 		document.getElementById('remote_video').style.display = "inline";
 	}
