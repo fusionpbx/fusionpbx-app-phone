@@ -383,6 +383,20 @@ sup {
 	color: #fff;
 }
 
+.action_item.action_item_toggle_active {
+	background: rgba(30, 186, 0, 0.22);
+}
+
+.action_item.action_item_toggle_active i,
+.action_item.action_item_toggle_active .action_label {
+	color: #9dff90;
+}
+
+body.audio_call_mode #active #answer_time,
+body.audio_call_mode #active .dialpad_wrapper {
+	display: none !important;
+}
+
 /* Keypad, Contacts, History Panels */
 #keypad,
 #contacts,

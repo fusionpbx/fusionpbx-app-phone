@@ -90,12 +90,15 @@ function send_call(use_video) {
 	current_session.on('accepted', function() {
 		stop_call_tone();
 		answer_time = Date.now();
+		active_call_is_video = use_video;
 		set_hangup_visibility(true);
 		document.getElementById('mute_audio').style.display = "inline";
 		document.getElementById('hold').style.display = "inline";
-		update_video_stream_info(session.display_name || destination, session.uri_user || destination, use_video);
-		document.getElementById('status_text').textContent = use_video ? 'Video Call' : 'Call in progress';
-		document.querySelector('#status_bar .status_icon i').className = use_video ? 'fas fa-video' : 'fas fa-phone';
+		set_audio_call_mode(!use_video);
+		var remote_display_name = session.display_name || (session.remoteIdentity && session.remoteIdentity.displayName) || destination;
+		var remote_number = session.uri_user || (session.remoteIdentity && session.remoteIdentity.uri && session.remoteIdentity.uri.user) || destination;
+		update_video_stream_info(remote_display_name, remote_number, use_video);
+		update_active_call_status(use_video, remote_display_name, remote_number);
 	});
 
 	current_session.on('bye', function() {
@@ -186,6 +189,7 @@ let call_tone_timeout;
 let active_call_tone_mode = null;
 let registration_state = 'connecting';
 let transient_status_timeout;
+let active_call_is_video = false;
 
 function stop_call_tone() {
 	const ringtone = document.getElementById('ringtone');
@@ -281,6 +285,95 @@ function start_call_tone(mode) {
 function show_status(text, icon_class) {
 	document.getElementById('status_text').textContent = text;
 	document.querySelector('#status_bar .status_icon i').className = icon_class;
+}
+
+function format_caller_id_for_status(display_name, number) {
+	var safe_name = display_name ? sanitize_string(display_name) : '';
+	var safe_number = number ? sanitize_string(number) : '';
+
+	if (safe_name && safe_number && safe_name !== safe_number) {
+		return safe_name + ' (' + safe_number + ')';
+	}
+
+	return safe_name || safe_number || 'Unknown';
+}
+
+function update_active_call_status(use_video, display_name, number) {
+	if (use_video) {
+		show_status('Video Call - ' + format_caller_id_for_status(display_name, number), 'fas fa-video');
+		return;
+	}
+
+	show_status('Call in progress', 'fas fa-phone');
+}
+
+function sync_audio_action_controls() {
+	var action_mute = document.getElementById('action_mute');
+	var action_hold = document.getElementById('action_hold');
+	if (!action_mute || !action_hold) {
+		return;
+	}
+
+	var action_mute_icon = document.getElementById('action_mute_icon');
+	var action_mute_label = document.getElementById('action_mute_label');
+	var action_hold_icon = document.getElementById('action_hold_icon');
+	var action_hold_label = document.getElementById('action_hold_label');
+
+	var muted = document.getElementById('unmute_audio').style.display === 'inline';
+	var on_hold = document.getElementById('unhold').style.display === 'inline';
+
+	if (action_mute_icon) {
+		action_mute_icon.className = muted ? 'fas fa-microphone-slash' : 'fas fa-microphone';
+	}
+	if (action_mute_label) {
+		action_mute_label.textContent = muted ? 'Unmute' : 'Mute';
+	}
+	action_mute.classList.toggle('action_item_toggle_active', muted);
+
+	if (action_hold_icon) {
+		action_hold_icon.className = on_hold ? 'fas fa-play' : 'fas fa-pause';
+	}
+	if (action_hold_label) {
+		action_hold_label.textContent = on_hold ? 'Resume' : 'Hold';
+	}
+	action_hold.classList.toggle('action_item_toggle_active', on_hold);
+}
+
+function set_audio_call_mode(enabled) {
+	document.body.classList.toggle('audio_call_mode', enabled);
+
+	var action_mute = document.getElementById('action_mute');
+	var action_hold = document.getElementById('action_hold');
+	if (action_mute) {
+		action_mute.style.display = enabled ? 'flex' : 'none';
+	}
+	if (action_hold) {
+		action_hold.style.display = enabled ? 'flex' : 'none';
+	}
+
+	if (enabled) {
+		sync_audio_action_controls();
+	}
+}
+
+function toggle_audio_mute_action() {
+	if (!session) { return; }
+	if (document.getElementById('unmute_audio').style.display === 'inline') {
+		unmute_audio();
+	}
+	else {
+		mute_audio();
+	}
+}
+
+function toggle_audio_hold_action() {
+	if (!session) { return; }
+	if (document.getElementById('unhold').style.display === 'inline') {
+		unhold();
+	}
+	else {
+		hold();
+	}
 }
 
 function update_video_stream_info(display_name, number, show_info) {
@@ -437,6 +530,8 @@ function reset_call_ui_state(show_dialpad) {
 	document.getElementById('active_caller_id').innerHTML = '';
 	update_video_stream_info('', '', false);
 	document.getElementById('answer_time').innerHTML = '00:00:00';
+	set_audio_call_mode(false);
+	active_call_is_video = false;
 
 	answer_time = null;
 	session_hungup = false;
@@ -685,6 +780,8 @@ function answer_call(use_video) {
 	document.getElementById('mute_audio').style.display = "inline";
 	document.getElementById('hold').style.display = "inline";
 	document.getElementById('unhold').style.display = "none";
+	active_call_is_video = use_video;
+	set_audio_call_mode(!use_video);
 	set_hangup_visibility(true);
 	update_video_stream_info(session.display_name, session.uri_user, use_video);
 
@@ -697,9 +794,11 @@ function answer_call(use_video) {
 
 	// Update status bar for active call
 	if (session.incoming_number) {
-		document.getElementById('status_text').textContent = use_video ? 'Video Call' : 'Call in progress';
+		update_active_call_status(use_video, session.display_name || session.incoming_number, session.uri_user || session.incoming_number);
 	}
-	document.querySelector('#status_bar .status_icon i').className = use_video ? 'fas fa-video' : 'fas fa-phone';
+	else {
+		update_active_call_status(use_video, session.display_name, session.uri_user);
+	}
 }
 
 // Function to pad numbers with leading zeros
@@ -874,6 +973,9 @@ function get_session_time() {
 
 		// Update the element with id="elapsed-time" to display the formatted elapsed time
 		document.getElementById("answer_time").textContent = formatted_time;
+		if (!active_call_is_video) {
+			show_status('Call in progress ' + formatted_time, 'fas fa-phone');
+		}
 	}
 	else {
 		console.log('Call has not been answered yet');
@@ -913,6 +1015,7 @@ function hold() {
 	if (!session) { return; }
 	document.getElementById('hold').style.display = "none";
 	document.getElementById('unhold').style.display = "inline";
+	sync_audio_action_controls();
 	session.hold();
 	//session.hold({
 	//	useUpdate: true
@@ -923,6 +1026,7 @@ function unhold() {
 	if (!session) { return; }
 	document.getElementById('hold').style.display = "inline";
 	document.getElementById('unhold').style.display = "none";
+	sync_audio_action_controls();
 	session.unhold();
 	//session.unhold({
 	//	useUpdate: true
@@ -944,6 +1048,7 @@ function mute_audio(destination) {
 	session.mute({audio: true});
 	document.getElementById('mute_audio').style.display = "none";
 	document.getElementById('unmute_audio').style.display = "inline";
+	sync_audio_action_controls();
 }
 
 function mute_video(destination) {
@@ -959,6 +1064,7 @@ function unmute_audio(destination) {
 	session.unmute({audio: true});
 	document.getElementById('mute_audio').style.display = "inline";
 	document.getElementById('unmute_audio').style.display = "none";
+	sync_audio_action_controls();
 }
 
 function unmute_video(destination) {
