@@ -94,8 +94,8 @@ echo "<body>\n";
 
 //define the video tag
 echo "	<div id='video_container' style='display: none; position: absolute; top: 50px; left: 0; right: 0; bottom: 70px; background: #000;'>\n";
-echo "		<div style='position: relative; width: 100%; height: 100%;'><video id='remote_video' width='100%' height='100%' style='position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;'></video></div>\n";
-echo "		<div style='position: absolute; bottom: 10px; right: 10px; z-index: 10;'><video id='local_video' muted playsinline width='160' height='120' style='border-radius: 8px; border: 2px solid #333;'></video></div>\n";
+echo "		<div style='position: relative; width: 100%; height: 100%;' z-index: 0;><video id='remote_video' autoplay playsinline width='90%' height='100%' style='position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;'></video></div>\n";
+echo "		<div style='position: absolute; bottom: 10px; right: 10px; z-index: 10;'><video id='local_video' autoplay playsinline width='160' height='120' style='border-radius: 8px; border: 2px solid #333;'></video></div>\n";
 echo "	</div>\n";
 
 //define the audio ringtone
@@ -123,7 +123,7 @@ echo "	<div class='body_content'>\n";
 //define the dialpad control
 echo "		<div class='dialpad' id='dialpad'>\n";
 echo "			<input type='text' class='destination' id='destination' name='destination' onkeypress=\"event.preventDefault();\"/>\n";
-echo "			<div class='dialpad_wrapper'>\n";
+echo "			<div class='dialpad_wrapper keypad_3col'>\n";
 echo "				<div class='dialpad_box' onclick=\"digit_add('1');\"><strong>1</strong><br><sup>&nbsp;</sup></div>\n";
 echo "				<div class='dialpad_box' onclick=\"digit_add('2');\"><strong>2</strong><br><sup>ABC</sup></div>\n";
 echo "				<div class='dialpad_box' onclick=\"digit_add('3');\"><strong>3</strong><br><sup>DEF</sup></div>\n";
@@ -140,9 +140,8 @@ echo "				<div class='dialpad_box' onclick=\"digit_add('*');\" style='margin-bot
 echo "				<div class='dialpad_box' onclick=\"digit_add('0');\" style='margin-bottom: 8px; padding-top: 15px; padding-bottom: 5px;'><strong>0</strong></div>\n";
 echo "				<div class='dialpad_box' onclick=\"digit_add('#');\" style='margin-bottom: 8px; padding-top: 15px; padding-bottom: 5px;'><strong>#</strong></div>\n";
 
-echo "				<div class='dialpad_box toggle_video' onclick='toggle_video();' id='toggle_video' title='Toggle Video Call'><i class='fas fa-video-slash'></i><br><sup>Video</sup></div>\n";
-echo "				<div class='dialpad_box clear' onclick='digit_clear();' title=\"".$text['label-clear']."\"><i class='fas fa-times'></i><br><sup>".$text['label-clear']."</sup></div>\n";
-echo "				<div class='dialpad_box call' onclick='send();' title=\"".$text['label-call']."\"><i class='fa-solid fa-phone'></i><br><sup>".$text['label-call']."</sup></div>\n";
+echo "				<div class='dialpad_box video_call' onclick='call_video();' title='Video Call'><i class='fas fa-video'></i><br><sup>Video Call</sup></div>\n";
+echo "				<div class='dialpad_box audio_call' onclick='call_audio();' title='Audio Call'><i class='fa-solid fa-phone'></i><br><sup>Audio Call</sup></div>\n";
 echo "				<div class='dialpad_box delete' onclick='digit_delete();' title=\"".$text['label-delete']."\"><i class='fas fa-chevron-left'></i><br><sup>".$text['label-delete']."</sup></div>\n";
 echo "			</div>\n";
 echo "		</div>\n";
@@ -167,9 +166,10 @@ echo "	</div>\n";
 //define the ringing control
 echo "	<div class='dialpad' id='ringing' style='display: none;'>\n";
 echo "		<div class='caller_id ringing' id='ringing_caller_id'></div>\n";
-echo "		<div class='dialpad_wrapper' style='grid-template-columns: 50% 50%;'>\n";
+echo "		<div class='dialpad_wrapper' style='grid-template-columns: repeat(3, 1fr);'>\n";
 echo "			<div class='dialpad_box' id='decline' onclick='decline();' style='background-color: #ba0000;'><i class='fas fa-phone-slash' title=\"".$text['label-decline']."\"></i><br><sup>".$text['label-decline']."</sup></div>\n";
-echo "			<div class='dialpad_box' id='answer' onclick='answer();' style='background-color: #147e00;'><i class='fas fa-phone' title=\"".$text['label-answer']."\"></i><br><sup>".$text['label-answer']."</sup></div>\n";
+echo "			<div class='dialpad_box' id='answer_audio' onclick='answer_audio();' style='background-color: #147e00;'><i class='fas fa-phone' title='Answer Audio'></i><br><sup>Answer Audio</sup></div>\n";
+echo "			<div class='dialpad_box' id='answer_video' onclick='answer_video();' style='background-color: #00b7c3;'><i class='fas fa-video' title='Answer Video'></i><br><sup>Answer Video</sup></div>\n";
 echo "		</div>\n";
 echo "	</div>\n";
 

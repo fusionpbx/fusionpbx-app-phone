@@ -5,32 +5,101 @@ function sanitize_string(str) {
 	return temp.innerHTML;
 }
 
-// Toggle video call option
-async function toggle_video() {
-	// First, check if camera is available on the first enable attempt
-	if (!video_enabled) {
-		var hasCamera = await check_camera_permissions(false);
-		if (!hasCamera) {
-			alert('Camera access is required for video calls.\n\nThis phone app requires HTTPS to access your camera.\n\nMake sure:\n1. You are accessing this page via HTTPS\n2. Your browser has granted camera permissions');
-			return false;
-		}
+// Audio call - initiates an audio-only outgoing call
+function call_audio() {
+	// Disable video for audio call
+	video_enabled = false;
+	last_call_type = 'audio';
+
+	// Get destination
+	var destination = document.getElementById('destination').value;
+	if (destination.length == 0) {
+		return;
 	}
-	
-	video_enabled = !video_enabled;
-	var toggleBtn = document.getElementById('toggle_video');
-	var videoContainer = document.getElementById('video_container');
+
+	// Call with audio only
+	send_call(false);
+}
+
+// Video call - initiates a video outgoing call (checks camera first)
+async function call_video() {
+	// Check camera permissions first
+	var has_camera = await check_camera_permissions();
+	if (!has_camera) {
+		alert('Camera access is not available.\n\nFalling back to audio call.\n\nThis phone app requires HTTPS to access your camera.\n\nMake sure:\n1. You are accessing this page via HTTPS\n2. Your browser has granted camera permissions');
+		// Fall back to audio call
+		call_audio();
+		return;
+	}
+
+	// Enable video for video call
+	video_enabled = true;
+	last_call_type = 'video';
+
+	// Get destination
+	var destination = document.getElementById('destination').value;
+	if (destination.length == 0) {
+		return;
+	}
+
+	// Call with video
+	send_call(true);
+}
+
+// Unified call function used by both call_audio() and call_video()
+function send_call(use_video) {
+	video_enabled = use_video;
+
+	// Set the session state
+	session_hungup = false;
+
+	// Get the destination number
+	destination = document.getElementById('destination').value;
+
+	// Return immediately if there is no destination
+	if (destination.length == 0) {
+		return;
+	}
+
+	// Add to call history as outgoing
+	add_to_history(destination, 'outgoing', Date.now(), video_enabled);
+
+	// Show or hide the panels
+	hide_all_panels();
+
+	document.getElementById('active').style.display = "grid";
+
+	// Update status bar
+	var call_type = video_enabled ? 'Calling Video ' : 'Calling ';
+	document.getElementById('status_text').textContent = call_type + destination;
+	document.querySelector('#status_bar .status_icon i').className = video_enabled ? 'fas fa-video' : 'fas fa-phone';
+
+	document.getElementById('hangup').style.display = "inline";
 	if (video_enabled) {
-		toggleBtn.querySelector('i').className = 'fas fa-video';
-		toggleBtn.classList.add('active');
-		if (session) {
-			videoContainer.style.display = 'block';
-		}
-	} else {
-		toggleBtn.querySelector('i').className = 'fas fa-video-slash';
-		toggleBtn.classList.remove('active');
-		videoContainer.style.display = 'none';
+		document.getElementById('video_container').style.display = "block";
 	}
-	return video_enabled;
+	document.getElementById('mute_audio').style.display = "inline";
+
+	// Refresh options to get current video_enabled state
+	var call_options = get_media_options();
+	//make a call using a sip invite
+	session = user_agent.invite('sip:'+destination+'@<?php echo $domain_name; ?>', call_options);
+
+	var remote_video = document.getElementById("remote_video");
+	remote_video.setAttribute("controls","controls");
+
+	// Unmute the audio
+	session.unmute({audio: true});
+
+	// Start the answer time
+	answer_time = Date.now();
+
+	// Set the caller ID to the destination
+	document.getElementById('ringing_caller_id').innerHTML = destination;
+	document.getElementById('active_caller_id').innerHTML = destination;
+
+	// Clear destination field
+	document.getElementById('destination').value = '';
 }
 
 // Check if an incoming SIP INVITE contains video capability
@@ -49,31 +118,22 @@ async function check_camera_permissions() {
 		// Release the stream immediately after checking
 		var tracks = stream.getTracks();
 		tracks.forEach(track => track.stop());
+		camera_available = true;
 		return true;
 	} catch (err) {
 		console.warn('Camera access not available:', err.name, err.message);
+		camera_available = false;
 		return false;
 	}
 }
-
-// Initialize camera permission check on page load
-window.addEventListener('DOMContentLoaded', async function() {
-	var hasCamera = await check_camera_permissions();
-	var toggleBtn = document.getElementById('toggle_video');
-	if (!hasCamera) {
-		// Disable video toggle if camera is not accessible
-		toggleBtn.style.opacity = '0.5';
-		toggleBtn.style.cursor = 'not-allowed';
-		toggleBtn.title = 'Camera not available - using audio only';
-		document.getElementById('status_text').textContent = 'Camera unavailable - Audio only';
-	}
-});
 
 let user_agent;
 let session;
 let answer_time;
 let session_hungup = false;
 let video_enabled = false;  // Video call toggle state
+let last_call_type = 'audio';  // Remember last call type for Enter key
+let camera_available = true;  // Camera availability status
 
 var config = {
 	uri: '<?php echo $user_extension.'@'.$domain_name; ?>',
@@ -134,7 +194,7 @@ function save_call_history(history) {
 	}
 }
 
-function add_to_history(number, call_type, timestamp) {
+function add_to_history(number, call_type, timestamp, is_video) {
 	var history = get_call_history();
 	var entry = {
 		id: Date.now(),
@@ -142,7 +202,7 @@ function add_to_history(number, call_type, timestamp) {
 		call_type: call_type,  // 'outgoing', 'incoming', 'missed'
 		timestamp: timestamp,
 		duration: 0,
-		is_video: false  // Default to audio-only
+		is_video: is_video || false  // Track if this was a video call
 	};
 	history.unshift(entry);  // Add to beginning
 
@@ -177,24 +237,24 @@ function get_media_options() {
 	};
 }
 
-//here you determine whether the call has video and audio
+// Determine whether the call has video and audio
 var options = get_media_options();
 
-//answer
+// Answer
 user_agent.on('invite', function (s) {
 
 	if (typeof session !== "undefined" && session.display_name != s.remoteIdentity.displayName) {
 		return;
 	}
 
-	//save the session to the global session
+	// Save the session to the global session
 	session = s;
 	session.display_name = session.remoteIdentity.displayName;
 	session.uri_user = session.remoteIdentity.uri.user;
 	session.incoming_number = session.remoteIdentity.uri.user || session.remoteIdentity.displayName;
 	session.has_video = detect_video_invite(s);
 
-	//send the object to the browser console
+	// Send the object to the browser console
 	//console.log(session);
 
 	// Update status bar for incoming call
@@ -202,7 +262,7 @@ user_agent.on('invite', function (s) {
 	document.getElementById('status_text').textContent = incoming_type;
 	document.querySelector('#status_bar .status_icon i').className = session.has_video ? 'fas fa-video' : 'fas fa-phone-volume';
 
-	//play the ringtone
+	// Play the ringtone
 	document.getElementById('ringtone').play();
 
 <?php
@@ -223,100 +283,104 @@ if (!empty($search_enabled) && $search_enabled == 'true') {
 
 ?>
 
-	//add the caller ID with video indicator if applicable
+	// Add the caller ID with video indicator if applicable
 	var video_indicator = session.has_video ? "<div style='color: #1eba00; font-size: 0.7em;'><i class='fas fa-video'></i> Video Call</div>" : "";
 	document.getElementById('ringing_caller_id').innerHTML = "<div>" + sanitize_string(session.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>" + video_indicator;
 	document.getElementById('active_caller_id').innerHTML = "<div>" + sanitize_string(session.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>" + video_indicator;
 
-	//show or hide the panels
+	// Show or hide the panels
 	document.getElementById('dialpad').style.display = "none";
 	document.getElementById('ringing').style.display = "inline";
 
-	//show or hide the buttons
-	document.getElementById('answer').style.display = "inline";
+	// Show or hide the buttons
+	document.getElementById('answer_audio').style.display = "inline";
+	document.getElementById('answer_video').style.display = "inline";
 	document.getElementById('decline').style.display = "inline";
 	document.getElementById('hangup').style.display = "none";
-	document.getElementById('mute_audio').style.display = "inline";
+	document.getElementById('mute_audio').style.display = "none";
 	document.getElementById('mute_video').style.display = "none";
 
-	session.on('cancel', function (s) {
+		session.on('cancel', function (s) {
 		// Record missed call
 		if (session.incoming_number) {
 			add_to_history(session.incoming_number, 'missed', Date.now());
 		}
 
-		//play the ringtone
+		// Play the ringtone
 		document.getElementById('ringtone').pause();
 
-		//show or hide the panels
+		// Show or hide the panels
 		document.getElementById('dialpad').style.display = "grid";
 		document.getElementById('ringing').style.display = "none";
-		document.getElementById('active').style.display = "none";
+		document.getElementById('active').style.display = "grid";
 
-		//show or hide the buttons
-		document.getElementById('answer').style.display = "none";
+		// Show or hide the buttons
+		document.getElementById('answer_audio').style.display = "none";
+		document.getElementById('answer_video').style.display = "none";
 		document.getElementById('decline').style.display = "none";
 		document.getElementById('hangup').style.display = "none";
 
-		//clear the caller id
+		// Clear the caller id
 		document.getElementById('ringing_caller_id').innerHTML = '';
 		document.getElementById('active_caller_id').innerHTML = '';
 
-		//clear the answer time
+		// Clear the answer time
 		answer_time = null;
 
 		// Reset status
 		document.getElementById('status_text').textContent = 'Ready';
 		document.querySelector('#status_bar .status_icon i').className = 'fas fa-circle';
 
-		//end the call
+		// End the call
 		hangup();
 	});
 
 	session.on('bye', function (s) {
-		//play the ringtone
+		// Play the ringtone
 		document.getElementById('ringtone').pause();
 
-		//show or hide the panels
+		// Show or hide the panels
 		document.getElementById('dialpad').style.display = "grid";
 		document.getElementById('ringing').style.display = "none";
 		document.getElementById('active').style.display = "none";
 
-		//show or hide the buttons
-		document.getElementById('answer').style.display = "none";
+		// Show or hide the buttons
+		document.getElementById('answer_audio').style.display = "none";
+		document.getElementById('answer_video').style.display = "none";
 		document.getElementById('decline').style.display = "none";
 		document.getElementById('hangup').style.display = "none";
 
-		//clear the answer time
+		// Clear the answer time
 		answer_time = null;
 
-		//reset the media
+		// Reset the media
 		reset_media();
 
-		//end the call
+		// End the call
 		if (!session || !session_hungup) {
 			hangup();
 		}
 	});
 
 	session.on('failed', function (s) {
-		//play the ringtone
+		// Play the ringtone
 		document.getElementById('ringtone').pause();
 
-		//show or hide the panels
+		// Show or hide the panels
 		document.getElementById('dialpad').style.display = "grid";
 		document.getElementById('ringing').style.display = "none";
 		document.getElementById('active').style.display = "none";
 
-		//show or hide the buttons
-		document.getElementById('answer').style.display = "none";
+		// Show or hide the buttons
+		document.getElementById('answer_audio').style.display = "none";
+		document.getElementById('answer_video').style.display = "none";
 		document.getElementById('decline').style.display = "none";
 		document.getElementById('hangup').style.display = "none";
 
-		//clear the answer time
+		// Clear the answer time
 		answer_time = null;
 
-		//end the call
+		// End the call
 		if (!session || !session_hungup) {
 			hangup();
 		}
@@ -328,51 +392,81 @@ if (!empty($search_enabled) && $search_enabled == 'true') {
 			add_to_history(session.incoming_number, 'missed', Date.now());
 		}
 
-		//play the ringtone
+		// Play the ringtone
 		document.getElementById('ringtone').pause();
 
-		//show or hide the panels
+		// Show or hide the panels
 		document.getElementById('dialpad').style.display = "grid";
 		document.getElementById('ringing').style.display = "none";
 		document.getElementById('active').style.display = "none";
 
-		//show or hide the buttons
-		document.getElementById('answer').style.display = "none";
+		// Show or hide the buttons
+		document.getElementById('answer_audio').style.display = "none";
+		document.getElementById('answer_video').style.display = "none";
 		document.getElementById('decline').style.display = "none";
 		document.getElementById('hangup').style.display = "none";
 
-		//clear the answer time
+		// Clear the answer time
 		answer_time = null;
 
-		//end the call
+		// End the call
 		hangup();
 	});
 
 });
 
-function answer() {
+// Answer incoming call with audio only
+function answer_audio() {
+	// Disable video for audio answer
+	video_enabled = false;
+	last_call_type = 'audio';
 
-	//set the session state
+	// Answer the call
+	answer_call();
+}
+
+// Answer incoming call with video (checks camera first)
+async function answer_video() {
+	// Check camera permissions first
+	var has_camera = await check_camera_permissions();
+	if (!has_camera) {
+		alert('Camera access is not available.\n\nFalling back to audio call.\n\nThis phone app requires HTTPS to access your camera.');
+		// Fall back to audio answer
+		answer_audio();
+		return;
+	}
+
+	// Enable video for video answer
+	video_enabled = true;
+	last_call_type = 'video';
+
+	// Answer the call
+	answer_call();
+}
+
+// Unified answer function used by both answer_audio() and answer_video()
+function answer_call() {
+	// Set the session state
 	session_hungup = false;
 
-	//continue if the session exists
+	// Continue if the session exists
 	if (!session) {
 		return false;
 	}
 
 	// Record incoming call to history
 	if (session.incoming_number) {
-		add_to_history(session.incoming_number, 'incoming', Date.now());
+		add_to_history(session.incoming_number, 'incoming', Date.now(), video_enabled);
 	}
 
-	//start the answer time
+	// Start the answer time
 	answer_time = Date.now();
 
-	//pause the ringtone
+	// Pause the ringtone
 	document.getElementById('ringtone').pause();
 	document.getElementById('ringtone').currentTime = 0;
 
-	//answer the call with current video settings
+	// Answer the call with current video settings
 	var answer_media = {
 		media: {
 			constraints: {
@@ -394,31 +488,29 @@ function answer() {
 	};
 	session.accept(answer_media);
 
-	//show the or hide the panels
+	// Show the or hide the panels
 	document.getElementById('dialpad').style.display = "none";
 	document.getElementById('ringing').style.display = "none";
 	document.getElementById('active').style.display = "grid";
 	document.getElementById('destination').value = '';
 
-	//show or hide the buttons
-	document.getElementById('answer').style.display = "none";
+	// Show or hide the buttons
+	document.getElementById('answer_audio').style.display = "none";
+	document.getElementById('answer_video').style.display = "none";
 	document.getElementById('decline').style.display = "none";
 	document.getElementById('unhold').style.display = "none";
 	document.getElementById('hangup').style.display = "inline";
 
-	//show video if enabled or incoming call has video
-	if (video_enabled || session.has_video) {
+	// Show video if enabled
+	if (video_enabled) {
 		document.getElementById('video_container').style.display = "block";
-		document.getElementById('toggle_video').querySelector('i').className = 'fas fa-video';
-		document.getElementById('toggle_video').classList.add('active');
-		video_enabled = true;
 	}
 
 	// Update status bar for active call
 	if (session.incoming_number) {
-		document.getElementById('status_text').textContent = 'Call in progress';
+		document.getElementById('status_text').textContent = video_enabled ? 'Video Call' : 'Call in progress';
 	}
-	document.querySelector('#status_bar .status_icon i').className = (video_enabled || session.has_video) ? 'fas fa-video' : 'fas fa-phone';
+	document.querySelector('#status_bar .status_icon i').className = video_enabled ? 'fas fa-video' : 'fas fa-phone';
 }
 
 // Function to pad numbers with leading zeros
@@ -577,7 +669,7 @@ function call_number(number) {
 	send();
 }
 
-//function to get the current time in seconds
+// Function to get the current time in seconds
 function get_session_time() {
 	if (answer_time) {
 		// get the elapsed time using the answer time
@@ -600,10 +692,10 @@ function get_session_time() {
 	}
 }
 
-//update elapsed time every second
+// Update elapsed time every second
 setInterval(get_session_time, 1000);
 
-//function to reset media after a call ends
+// Function to reset media after a call ends
 function reset_media() {
 	const videoElements = [document.getElementById('remote_video'), document.getElementById('local_video')];
 	videoElements.forEach(video => {
@@ -612,34 +704,35 @@ function reset_media() {
 	});
 }
 
-//function used to end the session
+// Function used to end the session
 function hangup() {
 
-	//return immediately if the session is already hungup
+	// Return immediately if the session is already hungup
 	if (!session || session_hungup || session.status === SIP.Session.C.STATUS_TERMINATED) {
 		return;
 	}
 
-	//set the session state as hungup
+	// Set the session state as hungup
 	session_hungup = true;
 
-	//end the session if active
+	// End the session if active
 	if (session.status === SIP.Session.C.STATUS_CONFIRMED || session.status === SIP.Session.C.STATUS_ANSWERED) {
 		session.bye();
 	} else {
 		session.terminate();
 	}
 
-	//reset the media
+	// Reset the media
 	reset_media();
 
-	//show or hide the panels
+	// Show or hide the panels
 	document.getElementById('dialpad').style.display = "grid";
 	document.getElementById('ringing').style.display = "none";
 	document.getElementById('active').style.display = "none";
 
-	//show or hide the buttons
-	document.getElementById('answer').style.display = "none";
+	// Show or hide the buttons
+	document.getElementById('answer_audio').style.display = "none";
+	document.getElementById('answer_video').style.display = "none";
 	document.getElementById('decline').style.display = "none";
 	document.getElementById('hangup').style.display = "none";
 
@@ -647,10 +740,7 @@ function hangup() {
 	document.getElementById('local_video').style.display = "none";
 	document.getElementById('remote_video').style.display = "none";
 
-	//reset video toggle button
-	var toggleBtn = document.getElementById('toggle_video');
-	toggleBtn.querySelector('i').className = 'fas fa-video-slash';
-	toggleBtn.classList.remove('active');
+	// Reset video state
 	video_enabled = false;
 
 	document.getElementById('mute_audio').style.display = "none";
@@ -661,12 +751,12 @@ function hangup() {
 	document.getElementById('unhold').style.display = "none";
 	document.getElementById('hold').style.display = "inline";
 
-	//clear the caller ID and timer
+	// Clear the caller ID and timer
 	document.getElementById('ringing_caller_id').innerHTML = '';
 	document.getElementById('active_caller_id').innerHTML = '';
 	document.getElementById('answer_time').innerHTML = '00:00:00';
 
-	//mute the audio
+	// Mute the audio
 	//session.mute({audio: true});
 
 	// Reset status bar
@@ -696,13 +786,13 @@ function unhold() {
 
 function send() {
 
-	//set the session state
+	// Set the session state
 	session_hungup = false;
 
-	//get the destination number
+	// Get the destination number
 	destination = document.getElementById('destination').value;
 
-	//return immediately if there is no destination
+	// Return immediately if there is no destination
 	if (destination.length == 0) {
 		return;
 	}
@@ -710,7 +800,7 @@ function send() {
 	// Add to call history as outgoing
 	add_to_history(destination, 'outgoing', Date.now());
 
-	//show or hide the panels
+	// Show or hide the panels
 	hide_all_panels();
 
 	document.getElementById('active').style.display = "grid";
@@ -734,13 +824,13 @@ function send() {
 	var remote_video = document.getElementById("remote_video");
 	remote_video.setAttribute("controls","controls");
 
-	//unmute the audio
+	// Unmute the audio
 	session.unmute({audio: true});
 
-	//start the answer time
+	// Start the answer time
 	answer_time = Date.now();
 
-	//set the caller ID to the destination
+	// Set the caller ID to the destination
 	document.getElementById('ringing_caller_id').innerHTML = destination;
 	document.getElementById('active_caller_id').innerHTML = destination;
 
@@ -795,13 +885,14 @@ function decline() {
 	document.getElementById('active').style.display = 'none';
 
 	// Clear all buttons
-	document.getElementById('answer').style.display = 'none';
+	document.getElementById('answer_audio').style.display = 'none';
+	document.getElementById('answer_video').style.display = 'none';
 	document.getElementById('decline').style.display = 'none';
 	document.getElementById('hangup').style.display = 'none';
 	document.getElementById('mute_audio').style.display = 'none';
 }
 
-//function to center entered digits until full, then right-align and change text direction so last entered digits are always visible
+// Function to center entered digits until full, then right-align and change text direction so last entered digits are always visible
 function correct_alignment() {
 	if (document.getElementById('destination').scrollWidth > document.getElementById('destination').clientWidth) {
 		document.getElementById('destination').style.textAlign = 'right';
@@ -833,7 +924,7 @@ function digit_clear() {
 	correct_alignment();
 }
 
-//function to detect numberpad keypresses
+// Function to detect numberpad keypresses
 document.addEventListener('keyup', function(e) {
 	if (document.getElementById('destination')) { //destination field is visible
 		if (
@@ -853,33 +944,47 @@ document.addEventListener('keyup', function(e) {
 			e.preventDefault();
 			digit_clear();
 		}
-		if (e.which == 13) { //enter
+		if (e.which == 13) { //enter - use last call type
 			e.preventDefault();
-			send();
+			if (last_call_type === 'video') {
+				call_video();
+			} else {
+				call_audio();
+			}
 		}
 	}
 });
 
-//function to check for Enter key press
+// Function to check for Enter key press
 function send_enter_key(event) {
 	if (event.key === "Enter") {
-		send();
+		// Use last_call_type for Enter key (defaults to audio)
+		if (last_call_type === 'video') {
+			call_video();
+		} else {
+			call_audio();
+		}
 	}
 }
 
-//add event listener for keydown event on input field
+// Add event listener for keydown event on input field
 document.addEventListener("DOMContentLoaded", function() {
 	var destinationInput = document.getElementById("destination");
 	if (destinationInput) {
 		destinationInput.addEventListener("keydown", function(event) {
 			if (event.key === "Enter") {
-				send();
+				// Use last call type for Enter key (defaults to audio)
+				if (last_call_type === 'video') {
+					call_video();
+				} else {
+					call_audio();
+				}
 			}
 		});
 	}
 });
 
-//keyboard event handler for keypad panel
+// Keyboard event handler for keypad panel
 document.addEventListener('keyup', function(e) {
 	if (document.getElementById('destination')) {
 		if (
@@ -899,9 +1004,13 @@ document.addEventListener('keyup', function(e) {
 			e.preventDefault();
 			digit_clear();
 		}
-		if (e.which == 13) {
+		if (e.which == 13) { //enter - use last call type
 			e.preventDefault();
-			send();
+			if (last_call_type === 'video') {
+				call_video();
+			} else {
+				call_audio();
+			}
 		}
 	}
 });

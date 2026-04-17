@@ -17,6 +17,19 @@ body {
 	border: 10px solid rgba(255, 255, 255, 0);
 }
 
+video {
+	pointer-events: none; /* Prevents right-click and interaction */
+}
+
+/* Specific Webkit hacks for Chrome/Safari/iOS */
+video::-webkit-media-controls {
+	display: none !important;
+}
+
+video::-webkit-media-controls-start-playback-button {
+	display: none !important;
+}
+
 .destination {
 	background: rgba(0, 0, 0, 0.8);
 	color: #fff;
@@ -36,13 +49,13 @@ body {
 	display: grid;
 	/*grid-template-columns: 33.33% 33.33% 33.33%;*/
 	grid-template-columns: repeat(3, 1fr);
-	
+
 	grid-gap: 0;
 	color: #444;
 }
 
-.dialpad_wrapper.keypad_4col {
-	grid-template-columns: repeat(4, 1fr);
+.dialpad_wrapper.keypad_3col {
+	grid-template-columns: repeat(3, 1fr);
 }
 
 .dialpad_box {
@@ -81,8 +94,16 @@ body {
 	padding: 5px 0 5px 0;
 }
 
-.dialpad_box.call {
+.dialpad_box.audio_call {
 	background: #147e00;
+}
+
+.dialpad_box.video_call {
+	/*background: #00b7c3;*/ /* Teal/turquoise for video call */
+}
+
+.dialpad_box.video_call:hover {
+	background: rgba(0, 183, 195, 0.8);
 }
 
 .dialpad_box.delete,
