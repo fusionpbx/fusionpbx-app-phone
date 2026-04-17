@@ -52,9 +52,9 @@ body {
 /* Hangup button - appears only on hover over remote video */
 .hangup_on_video {
 	position: absolute;
-	top: 50%;
+	bottom: 20px;
 	left: 50%;
-	transform: translate(-50%, -50%);
+	transform: translateX(-50%);
 	width: 50px;
 	height: 50px;
 	border-radius: 50%;
@@ -75,7 +75,7 @@ body {
 }
 
 .hangup_on_video:hover {
-	transform: translate(-50%, -50%) scale(1.1);
+	transform: translateX(-50%) scale(1.1);
 	background: #d40000; /* Slightly lighter red on hover */
 }
 
@@ -87,9 +87,38 @@ body {
 /* Local video wrapper - positioned bottom-right */
 .local_video_wrapper {
 	position: absolute;
-	bottom: 20px;
+	top: 20px;
 	right: 20px;
 	z-index: 10;
+	cursor: pointer;
+}
+
+.local_video_wrapper.corner-top-right {
+	top: 20px;
+	right: 20px;
+	left: auto;
+	bottom: auto;
+}
+
+.local_video_wrapper.corner-top-left {
+	top: 20px;
+	left: 20px;
+	right: auto;
+	bottom: auto;
+}
+
+.local_video_wrapper.corner-bottom-right {
+	bottom: 20px;
+	right: 20px;
+	left: auto;
+	top: auto;
+}
+
+.local_video_wrapper.corner-bottom-left {
+	bottom: 20px;
+	left: 20px;
+	right: auto;
+	top: auto;
 }
 
 /* Local video - small preview window */
@@ -203,6 +232,15 @@ video::-webkit-media-controls-start-playback-button {
 
 .dialpad_box.toggle_video.active {
 	background: #1eba00;
+}
+
+.dialpad_box.phone_hangup_floating {
+	position: fixed;
+	left: 50%;
+	bottom: 82px;
+	transform: translateX(-50%);
+	width: 110px;
+	z-index: 1200;
 }
 
 .dialpad_box.delete:hover,
