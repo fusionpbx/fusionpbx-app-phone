@@ -96,11 +96,9 @@ echo "<body>\n";
 echo "	<div id='video_container' class='video_container'>\n";
 echo "		<div class='remote_video_wrapper'>\n";
 echo "			<video id='remote_video' class='remote_video' autoplay playsinline></video>\n";
-echo "			<button id='hangup_on_video' class='hangup_on_video' onclick='hangup()' title='End Call'>\n";
-echo "				<i class='fas fa-phone'></i>\n";
-echo "			</button>\n";
+echo "			<div id='video_stream_info' class='video_stream_info'></div>\n";
 echo "		</div>\n";
-echo "		<div class='local_video_wrapper'>\n";
+echo "		<div id='local_video_wrapper' class='local_video_wrapper corner-top-right' title='Click to move preview'>\n";
 echo "			<video id='local_video' class='local_video' autoplay playsinline muted></video>\n";
 echo "		</div>\n";
 echo "	</div>\n";
@@ -113,6 +111,16 @@ echo "	</audio>\n";
 //audio or video objects need to be initialized before phone.js
 echo "	<script language='JavaScript' type='text/javascript'>\n";
 echo "	const time_zone = '".$settings->get('domain', 'time_zone')."';\n";
+echo "\n";
+// Dashboard search configuration
+echo "	const dashboard_enabled = " . (!empty($search_enabled) && $search_enabled == 'true' ? 'true' : 'false') . ";\n";
+echo "	const dashboard_url_base = 'https://" . $search_domain . "/" . $search_path . "?" . $search_parameter . "=';\n";
+echo "	const dashboard_target = '" . $search_target . "';\n";
+if (!empty($search_width) && !empty($search_height)) {
+	echo "	const window_parameters = 'width=" . $search_width . ",height=" . $search_height . "';\n";
+} else {
+	echo "	const window_parameters = '';\n";
+}
 echo "\n";
 require 'resources/phone.js';
 echo "\n";
@@ -187,14 +195,11 @@ echo "		<div id='answer_time' class='answer_time'>00:00:00</div>\n";
 echo "		<div class='dialpad_wrapper'>\n";
 echo "			<div class='dialpad_box mute' id='mute_audio' onclick='mute_audio();'><i class='fas fa-microphone' title=\"".$text['label-mute']."\"></i><br><sup>".$text['label-mute']."</sup></div>\n";
 echo "			<div class='dialpad_box' id='unmute_audio' style='color: #ba0000; display: none;' onclick='unmute_audio();'><i class='fas fa-microphone-slash' title=\"".$text['label-unmute']."\"></i><br><sup>".$text['label-unmute']."</sup></div>\n";
-
-echo "			<div class='dialpad_box' id='hangup' onclick='hangup();' style='background-color: #ba0000;'><i class='fas fa-phone-slash' title=\"".$text['label-end']."\"></i><br><sup>".$text['label-end']."</sup></div>\n";
-
 echo "			<div class='dialpad_box hold' id='hold' onclick='hold();'><i class='fas fa-pause' title=\"".$text['label-hold']."\"></i><br><sup>".$text['label-hold']."</sup></div>\n";
 echo "			<div class='dialpad_box' id='unhold' style='color: #1ba800; display: none;' onclick='unhold();'><i class='fas fa-play' title=\"".$text['label-resume']."\"></i><br><sup>".$text['label-resume']."</sup></div>\n";
 
 echo "			<div class='dialpad_box' id='mute_video' style='display: none;' onclick='mute_video();'>&nbsp;</div>\n";
-echo "			<div class='dialpad_box' id='umute_video' style='display: none;' onclick='unmute_video();'>&nbsp;</div>\n";
+echo "			<div class='dialpad_box' id='unmute_video' style='display: none;' onclick='unmute_video();'>&nbsp;</div>\n";
 echo "		</div>\n";
 echo "	</div>\n";
 
@@ -208,6 +213,18 @@ echo "			<span class='action_label'>Contacts</span>\n";
 echo "		</div>\n";
 echo "		<div class='action_item' onclick='show_history();' id='action_history'><i class='fas fa-history'></i>\n";
 echo "			<span class='action_label'>History</span>\n";
+echo "		</div>\n";
+echo "		<div class='action_item' id='action_mute' onclick='toggle_audio_mute_action();' style='display: none;'><i id='action_mute_icon' class='fas fa-microphone'></i>\n";
+echo "			<span class='action_label' id='action_mute_label'>".$text['label-mute']."</span>\n";
+echo "		</div>\n";
+echo "		<div class='action_item' id='action_hold' onclick='toggle_audio_hold_action();' style='display: none;'><i id='action_hold_icon' class='fas fa-pause'></i>\n";
+echo "			<span class='action_label' id='action_hold_label'>".$text['label-hold']."</span>\n";
+echo "		</div>\n";
+echo "		<div class='action_item' id='action_video_mute' onclick='toggle_video_mute_action();' style='display: none;'><i id='action_video_mute_icon' class='fas fa-video'></i>\n";
+echo "			<span class='action_label' id='action_video_mute_label'>Local</span>\n";
+echo "		</div>\n";
+echo "		<div class='action_item action_item_hangup' id='hangup' onclick='hangup();' style='display: none;'><i class='fas fa-phone-slash' title=\"".$text['label-end']."\"></i>\n";
+echo "			<span class='action_label'>".$text['label-end']."</span>\n";
 echo "		</div>\n";
 echo "		<div class='action_item' onclick='show_keypad();' id='action_keypad_during_call' style='display: none;'><i class='fas fa-keyboard'></i>\n";
 echo "			<span class='action_label'>Keypad</span>\n";

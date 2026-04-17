@@ -64,44 +64,92 @@ function send_call(use_video) {
 	document.getElementById('status_text').textContent = call_type + destination;
 	document.querySelector('#status_bar .status_icon i').className = use_video ? 'fas fa-video' : 'fas fa-phone';
 
-	document.getElementById('hangup').style.display = "inline";
+	set_hangup_visibility(true);
 	if (use_video) {
 		document.getElementById('video_container').style.display = "block";
+		document.getElementById('local_video').style.display = "inline";
+		document.getElementById('remote_video').style.display = "inline";
 	}
-	document.getElementById('mute_audio').style.display = "inline";
+	document.getElementById('mute_audio').style.display = "none";
+	document.getElementById('unmute_audio').style.display = "none";
+	document.getElementById('hold').style.display = "none";
+	document.getElementById('unhold').style.display = "none";
 
 	// Refresh options to get current video_enabled state
 	var call_options = get_media_options(use_video);
 	//make a call using a sip invite
 	session = user_agent.invite('sip:'+destination+'@<?php echo $domain_name; ?>', call_options);
+	var current_session = session;
+	current_session.local_ended = false;
+	start_call_tone('outgoing');
 
-	var remote_video = document.getElementById("remote_video");
-	remote_video.setAttribute("controls","controls");
+	current_session.on('progress', function() {
+		start_call_tone('outgoing');
+	});
+
+	current_session.on('accepted', function() {
+		stop_call_tone();
+		answer_time = Date.now();
+		active_call_is_video = use_video;
+		set_hangup_visibility(true);
+		document.getElementById('mute_audio').style.display = "inline";
+		document.getElementById('unmute_audio').style.display = "none";
+		document.getElementById('hold').style.display = "inline";
+		document.getElementById('unhold').style.display = "none";
+		document.getElementById('mute_video').style.display = use_video ? "inline" : "none";
+		document.getElementById('unmute_video').style.display = "none";
+		set_call_action_mode(true, use_video);
+		var remote_display_name = session.display_name || (session.remoteIdentity && session.remoteIdentity.displayName) || destination;
+		var remote_number = session.uri_user || (session.remoteIdentity && session.remoteIdentity.uri && session.remoteIdentity.uri.user) || destination;
+		active_call_display_name = remote_display_name;
+		active_call_number = remote_number;
+		update_video_stream_info(remote_display_name, remote_number, use_video);
+		update_active_call_status(use_video, remote_display_name, remote_number);
+	});
+
+	current_session.on('bye', function() {
+		stop_call_tone();
+		if (!current_session.local_ended) {
+			reset_call_ui_state(true);
+		}
+	});
+
+	current_session.on('failed', function() {
+		handle_outgoing_session_failure(current_session, 'Call failed');
+	});
+
+	current_session.on('rejected', function() {
+		handle_outgoing_session_failure(current_session, 'Call rejected');
+	});
+
+	current_session.on('cancel', function() {
+		handle_outgoing_session_failure(current_session, 'Call canceled');
+	});
 
 	// Unmute the audio
 	session.unmute({audio: true});
 
-	// Start the answer time
-	answer_time = Date.now();
+	// Wait until the call is answered before starting the timer
+	answer_time = null;
 
 	// Set the caller ID to the destination
 	document.getElementById('ringing_caller_id').innerHTML = destination;
 	document.getElementById('active_caller_id').innerHTML = destination;
 
 	// Add the caller ID with video indicator if applicable
-	var video_indicator = session.has_video ? "<div style='color: #1eba00; font-size: 0.7em;'><i class='fas fa-video'></i> Video Call</div>" : "";
+	var video_indicator = use_video ? "<div style='color: #1eba00; font-size: 0.7em;'><i class='fas fa-video'></i> Video Call</div>" : "";
 	document.getElementById('ringing_caller_id').innerHTML = "<div>" + sanitize_string(session.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>" + video_indicator;
 	document.getElementById('active_caller_id').innerHTML = "<div>" + sanitize_string(session.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>" + video_indicator;
 
 	// Show or hide the panels
 	document.getElementById('dialpad').style.display = "none";
-	document.getElementById('ringing').style.display = "inline";
+	document.getElementById('ringing').style.display = "none";
+	document.getElementById('active').style.display = "grid";
 
 	// Show or hide the buttons
-	document.getElementById('answer_audio').style.display = "inline";
-	document.getElementById('answer_video').style.display = "inline";
-	document.getElementById('decline').style.display = "inline";
-	document.getElementById('hangup').style.display = "none";
+	document.getElementById('answer_audio').style.display = "none";
+	document.getElementById('answer_video').style.display = "none";
+	document.getElementById('decline').style.display = "none";
 	document.getElementById('mute_audio').style.display = "none";
 	document.getElementById('mute_video').style.display = "none";
 
@@ -140,9 +188,317 @@ let answer_time;
 let session_hungup = false;
 let last_call_type = 'audio';  // Remember last call type for Enter key
 let camera_available = true;  // Camera availability status
+let local_video_corner = 'top-right';
+let call_tone_context;
+let call_tone_interval;
+let call_tone_timeout;
+let active_call_tone_mode = null;
+let registration_state = 'connecting';
+let transient_status_timeout;
+let active_call_is_video = false;
+let active_call_display_name = '';
+let active_call_number = '';
+
+function stop_call_tone() {
+	const ringtone = document.getElementById('ringtone');
+	if (ringtone) {
+		ringtone.pause();
+		ringtone.currentTime = 0;
+	}
+
+	if (call_tone_timeout) {
+		clearTimeout(call_tone_timeout);
+		call_tone_timeout = null;
+	}
+
+	if (call_tone_interval) {
+		clearInterval(call_tone_interval);
+		call_tone_interval = null;
+	}
+
+	active_call_tone_mode = null;
+}
+
+function play_generated_tone(mode) {
+	const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+	if (!AudioContextClass) {
+		return false;
+	}
+
+	if (!call_tone_context) {
+		call_tone_context = new AudioContextClass();
+	}
+
+	if (call_tone_context.state === 'suspended') {
+		call_tone_context.resume().catch(function() {});
+	}
+
+	const play_burst = function(frequencies, duration_ms) {
+		const end_time = call_tone_context.currentTime + (duration_ms / 1000);
+		frequencies.forEach(function(frequency) {
+			const oscillator = call_tone_context.createOscillator();
+			const gain = call_tone_context.createGain();
+			oscillator.type = 'sine';
+			oscillator.frequency.value = frequency;
+			gain.gain.setValueAtTime(0.0001, call_tone_context.currentTime);
+			gain.gain.exponentialRampToValueAtTime(0.03, call_tone_context.currentTime + 0.02);
+			gain.gain.exponentialRampToValueAtTime(0.0001, end_time);
+			oscillator.connect(gain);
+			gain.connect(call_tone_context.destination);
+			oscillator.start();
+			oscillator.stop(end_time);
+		});
+	};
+
+	const cadence = mode === 'outgoing'
+		? { frequencies: [440, 480], burst_ms: 2000, cycle_ms: 6000 }
+		: { frequencies: [425], burst_ms: 1000, cycle_ms: 3000 };
+
+	play_burst(cadence.frequencies, cadence.burst_ms);
+	call_tone_timeout = setTimeout(function() {
+		call_tone_timeout = null;
+	}, cadence.burst_ms);
+	call_tone_interval = setInterval(function() {
+		play_burst(cadence.frequencies, cadence.burst_ms);
+	}, cadence.cycle_ms);
+
+	return true;
+}
+
+function start_call_tone(mode) {
+	if (active_call_tone_mode === mode) {
+		return;
+	}
+
+	stop_call_tone();
+	active_call_tone_mode = mode;
+
+	const ringtone = document.getElementById('ringtone');
+	if (ringtone && ringtone.querySelector('source')) {
+		ringtone.loop = true;
+		const play_promise = ringtone.play();
+		if (play_promise && typeof play_promise.catch === 'function') {
+			play_promise.catch(function() {
+				stop_call_tone();
+				active_call_tone_mode = mode;
+				play_generated_tone(mode);
+			});
+		}
+		return;
+	}
+
+	play_generated_tone(mode);
+}
+
+function show_status(text, icon_class) {
+	document.getElementById('status_text').textContent = text;
+	document.querySelector('#status_bar .status_icon i').className = icon_class;
+}
+
+function format_caller_id_for_status(display_name, number) {
+	var safe_name = display_name ? sanitize_string(display_name) : '';
+	var safe_number = number ? sanitize_string(number) : '';
+
+	if (safe_name && safe_number && safe_name !== safe_number) {
+		return safe_name + ' (' + safe_number + ')';
+	}
+
+	return safe_name || safe_number || 'Unknown';
+}
+
+function update_active_call_status(use_video, display_name, number, duration_text) {
+	if (use_video) {
+		var status_text = 'Video Call - ' + format_caller_id_for_status(display_name, number);
+		if (duration_text) {
+			status_text += ' - ' + duration_text;
+		}
+		show_status(status_text, 'fas fa-video');
+		return;
+	}
+
+	show_status('Call in progress', 'fas fa-phone');
+}
+
+function sync_call_action_controls() {
+	var action_mute = document.getElementById('action_mute');
+	var action_hold = document.getElementById('action_hold');
+	var action_video_mute = document.getElementById('action_video_mute');
+	if (!action_mute || !action_hold) {
+		return;
+	}
+
+	var action_mute_icon = document.getElementById('action_mute_icon');
+	var action_mute_label = document.getElementById('action_mute_label');
+	var action_hold_icon = document.getElementById('action_hold_icon');
+	var action_hold_label = document.getElementById('action_hold_label');
+	var action_video_mute_icon = document.getElementById('action_video_mute_icon');
+	var action_video_mute_label = document.getElementById('action_video_mute_label');
+
+	var muted = document.getElementById('unmute_audio').style.display === 'inline';
+	var on_hold = document.getElementById('unhold').style.display === 'inline';
+
+	if (action_mute_icon) {
+		action_mute_icon.className = muted ? 'fas fa-microphone-slash' : 'fas fa-microphone';
+	}
+	if (action_mute_label) {
+		action_mute_label.textContent = muted ? 'Unmute' : 'Mute';
+	}
+	action_mute.classList.toggle('action_item_toggle_active', muted);
+
+	if (action_hold_icon) {
+		action_hold_icon.className = on_hold ? 'fas fa-play' : 'fas fa-pause';
+	}
+	if (action_hold_label) {
+		action_hold_label.textContent = on_hold ? 'Resume' : 'Hold';
+	}
+	action_hold.classList.toggle('action_item_toggle_active', on_hold);
+
+	if (action_video_mute) {
+		var local_video_wrapper = document.getElementById('local_video_wrapper');
+		var local_video_hidden = !!(local_video_wrapper && local_video_wrapper.classList.contains('local_preview_hidden'));
+		if (action_video_mute_icon) {
+			action_video_mute_icon.className = local_video_hidden ? 'fas fa-video-slash' : 'fas fa-video';
+		}
+		if (action_video_mute_label) {
+			action_video_mute_label.textContent = 'Local';
+		}
+		action_video_mute.classList.toggle('action_item_toggle_active', local_video_hidden);
+	}
+}
+
+function set_call_action_mode(enabled, use_video) {
+	document.body.classList.toggle('audio_call_mode', enabled && !use_video);
+
+	var action_mute = document.getElementById('action_mute');
+	var action_hold = document.getElementById('action_hold');
+	var action_video_mute = document.getElementById('action_video_mute');
+	if (action_mute) {
+		action_mute.style.display = enabled ? 'flex' : 'none';
+	}
+	if (action_hold) {
+		action_hold.style.display = enabled ? 'flex' : 'none';
+	}
+	if (action_video_mute) {
+		action_video_mute.style.display = enabled && use_video ? 'flex' : 'none';
+	}
+
+	if (enabled) {
+		sync_call_action_controls();
+	}
+}
+
+function toggle_audio_mute_action() {
+	if (!session) { return; }
+	if (document.getElementById('unmute_audio').style.display === 'inline') {
+		unmute_audio();
+	}
+	else {
+		mute_audio();
+	}
+}
+
+function toggle_audio_hold_action() {
+	if (!session) { return; }
+	if (document.getElementById('unhold').style.display === 'inline') {
+		unhold();
+	}
+	else {
+		hold();
+	}
+}
+
+function toggle_video_mute_action() {
+	if (!session || !active_call_is_video) { return; }
+	var local_video_wrapper = document.getElementById('local_video_wrapper');
+	if (!local_video_wrapper) {
+		return;
+	}
+
+	local_video_wrapper.classList.toggle('local_preview_hidden');
+	sync_call_action_controls();
+}
+
+function apply_video_fit_layout() {
+	var remote_video = document.getElementById('remote_video');
+	if (!remote_video) {
+		return;
+	}
+
+	remote_video.style.objectFit = 'contain';
+	remote_video.style.width = '100%';
+	remote_video.style.height = '100%';
+	remote_video.style.maxWidth = '100%';
+	remote_video.style.maxHeight = '100%';
+}
+
+function update_video_stream_info(display_name, number, show_info) {
+	var info = document.getElementById('video_stream_info');
+	if (!info) {
+		return;
+	}
+
+	if (!show_info) {
+		info.innerHTML = '';
+		return;
+	}
+
+	var safe_name = display_name ? sanitize_string(display_name) : '';
+	var safe_number = number ? sanitize_string(number) : '';
+	if (safe_name && safe_number) {
+		info.innerHTML = safe_name + '<br>' + safe_number;
+	}
+	else {
+		info.innerHTML = safe_name || safe_number;
+	}
+}
+
+function clear_transient_status() {
+	if (transient_status_timeout) {
+		clearTimeout(transient_status_timeout);
+		transient_status_timeout = null;
+	}
+}
+
+function update_idle_status() {
+	if (session && session.status && session.status !== SIP.Session.C.STATUS_TERMINATED) {
+		return;
+	}
+
+	var camera_status = camera_available ? '' : ' (Camera unavailable)';
+	if (registration_state === 'registered') {
+		show_status('Ready' + camera_status, 'fas fa-circle');
+	}
+	else if (registration_state === 'connecting') {
+		show_status('Connecting' + camera_status, 'fas fa-circle-notch');
+	}
+	else if (registration_state === 'failed') {
+		show_status('Registration failed', 'fas fa-exclamation-circle');
+	}
+	else {
+		show_status('Disconnected', 'fas fa-exclamation-circle');
+	}
+}
+
+function show_temporary_status(text, icon_class) {
+	clear_transient_status();
+	show_status(text, icon_class);
+	transient_status_timeout = setTimeout(function() {
+		transient_status_timeout = null;
+		update_idle_status();
+	}, 4000);
+}
+
+function handle_outgoing_session_failure(current_session, status_text) {
+	stop_call_tone();
+	if (current_session && current_session.local_ended) {
+		return;
+	}
+	reset_call_ui_state(true);
+	show_temporary_status(status_text, 'fas fa-exclamation-circle');
+}
 
 var config = {
-	uri: '<?php echo $user_extension.'@'.$domain_name; ?>',
+	uri: '<?php echo $user_extension."@".$domain_name; ?>',
 	ws_servers: 'wss://<?php echo $domain_name; ?>:7443',
 	authorizationUser: '<?php echo $user_extension; ?>',
 	password: atob('<?php echo base64_encode($user_password); ?>'),
@@ -154,25 +510,107 @@ user_agent = new SIP.UA(config);
 
 // Connection status handling
 user_agent.on('connected', function() {
-	document.getElementById('status_text').textContent = 'Ready';
-	document.querySelector('#status_bar .status_icon i').className = 'fas fa-circle';
+	registration_state = 'connecting';
+	update_idle_status();
+});
+
+user_agent.on('registered', function() {
+	registration_state = 'registered';
+	update_idle_status();
+});
+
+user_agent.on('unregistered', function() {
+	registration_state = 'disconnected';
+	update_idle_status();
+});
+
+user_agent.on('registrationFailed', function() {
+	registration_state = 'failed';
+	update_idle_status();
 });
 
 user_agent.on('disconnected', function() {
+	registration_state = 'disconnected';
 	update_status_bar();
 });
 
 user_agent.on('failed', function() {
+	registration_state = 'disconnected';
 	update_status_bar();
 });
 
 function update_status_bar() {
-	// Only update if not in a call
-	if (!session || !session.status) {
-		var cameraStatus = camera_available ? '' : ' (Camera unavailable)';
-		document.getElementById('status_text').textContent = 'Ready' + cameraStatus;
-		document.querySelector('#status_bar .status_icon i').className = 'fas fa-circle';
+	update_idle_status();
+}
+
+function is_session_active() {
+	return !!(session && session.status !== SIP.Session.C.STATUS_TERMINATED);
+}
+
+function set_hangup_visibility(is_visible) {
+	document.getElementById('hangup').style.display = is_visible ? 'flex' : 'none';
+}
+
+function reset_call_ui_state(show_dialpad) {
+	if (show_dialpad === undefined) {
+		show_dialpad = true;
 	}
+
+	stop_call_tone();
+
+	reset_media();
+
+	document.getElementById('dialpad').style.display = show_dialpad ? "grid" : "none";
+	document.getElementById('ringing').style.display = "none";
+	document.getElementById('active').style.display = "none";
+
+	document.getElementById('answer_audio').style.display = "none";
+	document.getElementById('answer_video').style.display = "none";
+	document.getElementById('decline').style.display = "none";
+	set_hangup_visibility(false);
+
+	document.getElementById('video_container').style.display = "none";
+	document.getElementById('local_video_wrapper').classList.remove('local_preview_hidden');
+	document.getElementById('local_video').style.display = "inline";
+	document.getElementById('remote_video').style.display = "inline";
+
+	document.getElementById('mute_audio').style.display = "none";
+	document.getElementById('unmute_audio').style.display = "none";
+	document.getElementById('mute_video').style.display = "none";
+	document.getElementById('unmute_video').style.display = "none";
+
+	document.getElementById('hold').style.display = "inline";
+	document.getElementById('unhold').style.display = "none";
+
+	document.getElementById('ringing_caller_id').innerHTML = '';
+	document.getElementById('active_caller_id').innerHTML = '';
+	update_video_stream_info('', '', false);
+	document.getElementById('answer_time').innerHTML = '00:00:00';
+	set_call_action_mode(false, false);
+	active_call_is_video = false;
+	active_call_display_name = '';
+	active_call_number = '';
+
+	answer_time = null;
+	session_hungup = false;
+	session = null;
+
+	clear_transient_status();
+	update_idle_status();
+}
+
+function cycle_local_video_corner() {
+	var local_wrapper = document.getElementById('local_video_wrapper');
+	if (!local_wrapper) {
+		return;
+	}
+
+	var corner_order = ['top-right', 'top-left', 'bottom-left', 'bottom-right'];
+	var next_index = (corner_order.indexOf(local_video_corner) + 1) % corner_order.length;
+	local_video_corner = corner_order[next_index];
+
+	local_wrapper.classList.remove('corner-top-right', 'corner-top-left', 'corner-bottom-left', 'corner-bottom-right');
+	local_wrapper.classList.add('corner-' + local_video_corner);
 }
 
 // Contacts data (extension 1001-1005)
@@ -246,7 +684,8 @@ function get_media_options(use_video) {
 // Answer
 user_agent.on('invite', function (s) {
 
-	if (typeof session !== "undefined" && session.display_name != s.remoteIdentity.displayName) {
+	if (is_session_active()) {
+		s.reject();
 		return;
 	}
 
@@ -266,30 +705,19 @@ user_agent.on('invite', function (s) {
 	document.querySelector('#status_bar .status_icon i').className = session.has_video ? 'fas fa-video' : 'fas fa-phone-volume';
 
 	// Play the ringtone
-	document.getElementById('ringtone').play();
+	start_call_tone('incoming');
 
-<?php
-
-//open the window to search for the caller id
-if (!empty($search_enabled) && $search_enabled == 'true') {
-	echo "	//open a window when the call is answer\n";
-	echo "	dashboard_url = 'https://".$search_domain."/".$search_path."?".$search_parameter."=' + sanitize_string(session.uri_user);\n";
-	echo "	dashboard_target = '".$search_target."';\n";
-	if (!empty($search_width) && !empty($search_height)) {
-		echo "		window_parameters = 'width=".$search_width.",height=".$search_height."';\n";
+	// Open the dashboard window to search for caller ID if enabled
+	if (dashboard_enabled) {
+		const dashboard_url = dashboard_url_base + sanitize_string(session.uri_user);
+		window.open(dashboard_url, dashboard_target, window_parameters);
 	}
-	else {
-		echo "		window_parameters = '';\n";
-	}
-	echo "	window.open(dashboard_url, dashboard_target, window_parameters);\n";
-}
-
-?>
 
 	// Add the caller ID with video indicator if applicable
 	var video_indicator = session.has_video ? "<div style='color: #1eba00; font-size: 0.7em;'><i class='fas fa-video'></i> Video Call</div>" : "";
 	document.getElementById('ringing_caller_id').innerHTML = "<div>" + sanitize_string(session.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>" + video_indicator;
 	document.getElementById('active_caller_id').innerHTML = "<div>" + sanitize_string(session.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>" + video_indicator;
+	update_video_stream_info(session.display_name, session.uri_user, session.has_video);
 
 	// Show or hide the panels
 	document.getElementById('dialpad').style.display = "none";
@@ -299,7 +727,7 @@ if (!empty($search_enabled) && $search_enabled == 'true') {
 	document.getElementById('answer_audio').style.display = "inline";
 	document.getElementById('answer_video').style.display = "inline";
 	document.getElementById('decline').style.display = "inline";
-	document.getElementById('hangup').style.display = "none";
+	set_hangup_visibility(false);
 	document.getElementById('mute_audio').style.display = "none";
 	document.getElementById('mute_video').style.display = "none";
 
@@ -309,84 +737,15 @@ if (!empty($search_enabled) && $search_enabled == 'true') {
 			add_to_history(session.incoming_number, 'missed', Date.now());
 		}
 
-		// Play the ringtone
-		document.getElementById('ringtone').pause();
-
-		// Show or hide the panels
-		document.getElementById('dialpad').style.display = "grid";
-		document.getElementById('ringing').style.display = "none";
-		document.getElementById('active').style.display = "grid";
-
-		// Show or hide the buttons
-		document.getElementById('answer_audio').style.display = "none";
-		document.getElementById('answer_video').style.display = "none";
-		document.getElementById('decline').style.display = "none";
-		document.getElementById('hangup').style.display = "none";
-
-		// Clear the caller id
-		document.getElementById('ringing_caller_id').innerHTML = '';
-		document.getElementById('active_caller_id').innerHTML = '';
-
-		// Clear the answer time
-		answer_time = null;
-
-		// Reset status
-		document.getElementById('status_text').textContent = 'Ready';
-		document.querySelector('#status_bar .status_icon i').className = 'fas fa-circle';
-
-		// End the call
-		hangup();
+		reset_call_ui_state(true);
 	});
 
 	session.on('bye', function (s) {
-		// Play the ringtone
-		document.getElementById('ringtone').pause();
-
-		// Show or hide the panels
-		document.getElementById('dialpad').style.display = "grid";
-		document.getElementById('ringing').style.display = "none";
-		document.getElementById('active').style.display = "none";
-
-		// Show or hide the buttons
-		document.getElementById('answer_audio').style.display = "none";
-		document.getElementById('answer_video').style.display = "none";
-		document.getElementById('decline').style.display = "none";
-		document.getElementById('hangup').style.display = "none";
-
-		// Clear the answer time
-		answer_time = null;
-
-		// Reset the media
-		reset_media();
-
-		// End the call
-		if (!session || !session_hungup) {
-			hangup();
-		}
+		reset_call_ui_state(true);
 	});
 
 	session.on('failed', function (s) {
-		// Play the ringtone
-		document.getElementById('ringtone').pause();
-
-		// Show or hide the panels
-		document.getElementById('dialpad').style.display = "grid";
-		document.getElementById('ringing').style.display = "none";
-		document.getElementById('active').style.display = "none";
-
-		// Show or hide the buttons
-		document.getElementById('answer_audio').style.display = "none";
-		document.getElementById('answer_video').style.display = "none";
-		document.getElementById('decline').style.display = "none";
-		document.getElementById('hangup').style.display = "none";
-
-		// Clear the answer time
-		answer_time = null;
-
-		// End the call
-		if (!session || !session_hungup) {
-			hangup();
-		}
+		reset_call_ui_state(true);
 	});
 
 	session.on('rejected', function (s) {
@@ -395,25 +754,7 @@ if (!empty($search_enabled) && $search_enabled == 'true') {
 			add_to_history(session.incoming_number, 'missed', Date.now());
 		}
 
-		// Play the ringtone
-		document.getElementById('ringtone').pause();
-
-		// Show or hide the panels
-		document.getElementById('dialpad').style.display = "grid";
-		document.getElementById('ringing').style.display = "none";
-		document.getElementById('active').style.display = "none";
-
-		// Show or hide the buttons
-		document.getElementById('answer_audio').style.display = "none";
-		document.getElementById('answer_video').style.display = "none";
-		document.getElementById('decline').style.display = "none";
-		document.getElementById('hangup').style.display = "none";
-
-		// Clear the answer time
-		answer_time = null;
-
-		// End the call
-		hangup();
+		reset_call_ui_state(true);
 	});
 
 });
@@ -460,8 +801,7 @@ function answer_call(use_video) {
 	answer_time = Date.now();
 
 	// Pause the ringtone
-	document.getElementById('ringtone').pause();
-	document.getElementById('ringtone').currentTime = 0;
+	stop_call_tone();
 
 	// Answer the call with specified video settings
 	var answer_media = {
@@ -495,19 +835,35 @@ function answer_call(use_video) {
 	document.getElementById('answer_audio').style.display = "none";
 	document.getElementById('answer_video').style.display = "none";
 	document.getElementById('decline').style.display = "none";
+	document.getElementById('mute_audio').style.display = "inline";
+	document.getElementById('unmute_audio').style.display = "none";
+	document.getElementById('mute_video').style.display = use_video ? "inline" : "none";
+	document.getElementById('unmute_video').style.display = "none";
+	document.getElementById('hold').style.display = "inline";
 	document.getElementById('unhold').style.display = "none";
-	document.getElementById('hangup').style.display = "inline";
+	active_call_is_video = use_video;
+	set_call_action_mode(true, use_video);
+	set_hangup_visibility(true);
+	active_call_display_name = session.display_name || session.incoming_number || '';
+	active_call_number = session.uri_user || session.incoming_number || '';
+	update_video_stream_info(session.display_name, session.uri_user, use_video);
 
 	// Show video if enabled
 	if (use_video) {
 		document.getElementById('video_container').style.display = "block";
+		document.getElementById('local_video_wrapper').classList.remove('local_preview_hidden');
+		document.getElementById('local_video').style.display = "inline";
+		document.getElementById('remote_video').style.display = "inline";
+		apply_video_fit_layout();
 	}
 
 	// Update status bar for active call
 	if (session.incoming_number) {
-		document.getElementById('status_text').textContent = use_video ? 'Video Call' : 'Call in progress';
+		update_active_call_status(use_video, session.display_name || session.incoming_number, session.uri_user || session.incoming_number);
 	}
-	document.querySelector('#status_bar .status_icon i').className = use_video ? 'fas fa-video' : 'fas fa-phone';
+	else {
+		update_active_call_status(use_video, session.display_name, session.uri_user);
+	}
 }
 
 // Function to pad numbers with leading zeros
@@ -682,6 +1038,12 @@ function get_session_time() {
 
 		// Update the element with id="elapsed-time" to display the formatted elapsed time
 		document.getElementById("answer_time").textContent = formatted_time;
+		if (active_call_is_video) {
+			update_active_call_status(true, active_call_display_name, active_call_number, formatted_time);
+		}
+		else {
+			show_status('Call in progress ' + formatted_time, 'fas fa-phone');
+		}
 	}
 	else {
 		console.log('Call has not been answered yet');
@@ -703,65 +1065,25 @@ function reset_media() {
 
 // Function used to end the session
 function hangup() {
+	if (session && !session_hungup && session.status !== SIP.Session.C.STATUS_TERMINATED) {
+		session_hungup = true;
+		session.local_ended = true;
 
-	// Return immediately if the session is already hungup
-	if (!session || session_hungup || session.status === SIP.Session.C.STATUS_TERMINATED) {
-		return;
+		if (session.status === SIP.Session.C.STATUS_CONFIRMED || session.status === SIP.Session.C.STATUS_ANSWERED) {
+			session.bye();
+		} else {
+			session.terminate();
+		}
 	}
 
-	// Set the session state as hungup
-	session_hungup = true;
-
-	// End the session if active
-	if (session.status === SIP.Session.C.STATUS_CONFIRMED || session.status === SIP.Session.C.STATUS_ANSWERED) {
-		session.bye();
-	} else {
-		session.terminate();
-	}
-
-	// Reset the media
-	reset_media();
-
-	// Show or hide the panels
-	document.getElementById('dialpad').style.display = "grid";
-	document.getElementById('ringing').style.display = "none";
-	document.getElementById('active').style.display = "none";
-
-	// Show or hide the buttons
-	document.getElementById('answer_audio').style.display = "none";
-	document.getElementById('answer_video').style.display = "none";
-	document.getElementById('decline').style.display = "none";
-	document.getElementById('hangup').style.display = "none";
-
-	document.getElementById('video_container').style.display = "none";
-	document.getElementById('local_video').style.display = "none";
-	document.getElementById('remote_video').style.display = "none";
-
-	document.getElementById('mute_audio').style.display = "none";
-	//document.getElementById('mute_video').style.display = "none";
-	document.getElementById('unmute_audio').style.display = "none";
-	//document.getElementById('unmute_video').style.display = "none";
-
-	document.getElementById('unhold').style.display = "none";
-	document.getElementById('hold').style.display = "inline";
-
-	// Clear the caller ID and timer
-	document.getElementById('ringing_caller_id').innerHTML = '';
-	document.getElementById('active_caller_id').innerHTML = '';
-	document.getElementById('answer_time').innerHTML = '00:00:00';
-
-	// Mute the audio
-	//session.mute({audio: true});
-
-	// Reset status bar
-	document.getElementById('status_text').textContent = 'Ready';
-	document.querySelector('#status_bar .status_icon i').className = 'fas fa-circle';
+	reset_call_ui_state(true);
 }
 
 function hold() {
 	if (!session) { return; }
 	document.getElementById('hold').style.display = "none";
 	document.getElementById('unhold').style.display = "inline";
+	sync_call_action_controls();
 	session.hold();
 	//session.hold({
 	//	useUpdate: true
@@ -772,6 +1094,7 @@ function unhold() {
 	if (!session) { return; }
 	document.getElementById('hold').style.display = "inline";
 	document.getElementById('unhold').style.display = "none";
+	sync_call_action_controls();
 	session.unhold();
 	//session.unhold({
 	//	useUpdate: true
@@ -793,6 +1116,7 @@ function mute_audio(destination) {
 	session.mute({audio: true});
 	document.getElementById('mute_audio').style.display = "none";
 	document.getElementById('unmute_audio').style.display = "inline";
+	sync_call_action_controls();
 }
 
 function mute_video(destination) {
@@ -801,6 +1125,7 @@ function mute_video(destination) {
 	document.getElementById('local_video').style.display = "none";
 	document.getElementById('mute_video').style.display = "none";
 	document.getElementById('unmute_video').style.display = "inline";
+	sync_call_action_controls();
 }
 
 function unmute_audio(destination) {
@@ -808,6 +1133,7 @@ function unmute_audio(destination) {
 	session.unmute({audio: true});
 	document.getElementById('mute_audio').style.display = "inline";
 	document.getElementById('unmute_audio').style.display = "none";
+	sync_call_action_controls();
 }
 
 function unmute_video(destination) {
@@ -816,6 +1142,7 @@ function unmute_video(destination) {
 	document.getElementById('local_video').style.display = "inline";
 	document.getElementById('mute_video').style.display = "inline";
 	document.getElementById('unmute_video').style.display = "none";
+	sync_call_action_controls();
 }
 
 function decline() {
@@ -826,22 +1153,6 @@ function decline() {
 
 	// Hang up to decline the call
 	hangup();
-
-	// Reset status
-	document.getElementById('status_text').textContent = 'Ready';
-	document.querySelector('#status_bar .status_icon i').className = 'fas fa-circle';
-
-	// Show dialpad
-	document.getElementById('dialpad').style.display = 'grid';
-	document.getElementById('ringing').style.display = 'none';
-	document.getElementById('active').style.display = 'none';
-
-	// Clear all buttons
-	document.getElementById('answer_audio').style.display = 'none';
-	document.getElementById('answer_video').style.display = 'none';
-	document.getElementById('decline').style.display = 'none';
-	document.getElementById('hangup').style.display = 'none';
-	document.getElementById('mute_audio').style.display = 'none';
 }
 
 // Function to center entered digits until full, then right-align and change text direction so last entered digits are always visible
@@ -876,93 +1187,58 @@ function digit_clear() {
 	correct_alignment();
 }
 
-// Function to detect numberpad keypresses
-document.addEventListener('keyup', function(e) {
-	if (document.getElementById('destination')) { //destination field is visible
-		if (
-			(e.which >= 48 && e.which <= 57) || //numbers
-			(e.which >= 96 && e.which <= 105) || //number pad
-			(e.which == 56 || e.which == 106) || //asterisk
-			(e.which == 51) //pound
-			) {
-			e.preventDefault();
-			digit_add(e.key);
-		}
-		if (e.which == 8 || e.which == 46) { //backspace or delete
-			e.preventDefault();
-			digit_delete();
-		}
-		if (e.which == 27) { //escape
-			e.preventDefault();
-			digit_clear();
-		}
-		if (e.which == 13) { //enter - use last call type
-			e.preventDefault();
-			if (last_call_type === 'video') {
-				call_video();
-			} else {
-				call_audio();
-			}
-		}
+document.addEventListener('keydown', function(e) {
+	if (!document.getElementById('destination')) {
+		return;
 	}
-});
 
-// Function to check for Enter key press
-function send_enter_key(event) {
-	if (event.key === "Enter") {
-		// Use last_call_type for Enter key (defaults to audio)
+	if (e.key >= '0' && e.key <= '9') {
+		e.preventDefault();
+		digit_add(e.key);
+		return;
+	}
+
+	if (e.key === '*' || e.key === '#') {
+		e.preventDefault();
+		digit_add(e.key);
+		return;
+	}
+
+	if (e.key === 'Backspace' || e.key === 'Delete') {
+		e.preventDefault();
+		digit_delete();
+		return;
+	}
+
+	if (e.key === 'Escape') {
+		e.preventDefault();
+		digit_clear();
+		return;
+	}
+
+	if (e.key === 'Enter') {
+		e.preventDefault();
 		if (last_call_type === 'video') {
 			call_video();
 		} else {
 			call_audio();
 		}
 	}
-}
-
-// Add event listener for keydown event on input field
-document.addEventListener("DOMContentLoaded", function() {
-	var destinationInput = document.getElementById("destination");
-	if (destinationInput) {
-		destinationInput.addEventListener("keydown", function(event) {
-			if (event.key === "Enter") {
-				// Use last call type for Enter key (defaults to audio)
-				if (last_call_type === 'video') {
-					call_video();
-				} else {
-					call_audio();
-				}
-			}
-		});
-	}
 });
 
-// Keyboard event handler for keypad panel
-document.addEventListener('keyup', function(e) {
-	if (document.getElementById('destination')) {
-		if (
-			(e.which >= 48 && e.which <= 57) ||
-			(e.which >= 96 && e.which <= 105) ||
-			(e.which == 56 || e.which == 106) ||
-			(e.which == 51)
-			) {
-			e.preventDefault();
-			digit_add(e.key);
-		}
-		if (e.which == 8 || e.which == 46) {
-			e.preventDefault();
-			digit_delete();
-		}
-		if (e.which == 27) {
-			e.preventDefault();
-			digit_clear();
-		}
-		if (e.which == 13) { //enter - use last call type
-			e.preventDefault();
-			if (last_call_type === 'video') {
-				call_video();
-			} else {
-				call_audio();
-			}
-		}
+document.addEventListener('DOMContentLoaded', function() {
+	var local_wrapper = document.getElementById('local_video_wrapper');
+	if (local_wrapper) {
+		local_wrapper.addEventListener('click', function() {
+			cycle_local_video_corner();
+		});
 	}
+
+	var remote_video = document.getElementById('remote_video');
+	if (remote_video) {
+		remote_video.addEventListener('loadedmetadata', apply_video_fit_layout);
+	}
+
+	window.addEventListener('resize', apply_video_fit_layout);
+	apply_video_fit_layout();
 });

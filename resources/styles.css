@@ -4,6 +4,8 @@
 
 body {
 	background: #333;
+	margin: 0;
+	overflow: hidden;
 }
 
 .inner {
@@ -23,7 +25,7 @@ body {
 	top: 50px;
 	left: 0;
 	right: 0;
-	bottom: 70px;
+	bottom: 38px;
 	background: #000;
 	display: none;
 	z-index: 1000;
@@ -41,55 +43,82 @@ body {
 
 /* Remote video - fills screen with cover fit */
 .remote_video {
-	width: 100%;
-	height: 100%;
-	object-fit: cover; /* Fills screen, crops if needed */
+	width: 100% !important;
+	height: 100% !important;
+	max-width: 100% !important;
+	max-height: 100% !important;
+	object-fit: contain !important; /* Fits full video without cropping */
 	position: absolute;
 	top: 0;
 	left: 0;
 }
 
-/* Hangup button - appears only on hover over remote video */
-.hangup_on_video {
+/* Caller info overlay - shown when hovering remote video */
+.video_stream_info {
+	display: none;
 	position: absolute;
-	top: 50%;
-	left: 50%;
-	transform: translate(-50%, -50%);
-	width: 50px;
-	height: 50px;
-	border-radius: 50%;
-	background: #ba0000; /* Red - matches decline/hangup buttons */
-	border: none;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	cursor: pointer;
+	top: 16px;
+	left: 16px;
+	max-width: calc(100% - 32px);
+	padding: 8px 10px;
+	border-radius: 6px;
+	background: rgba(0, 0, 0, 0.62);
+	color: #fff;
+	font-size: 14px;
+	line-height: 1.35;
+	font-family: sans-serif;
+	pointer-events: none;
 	opacity: 0;
-	transition: opacity 0.3s ease, transform 0.2s ease;
+	transition: opacity 0.2s ease;
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	z-index: 100;
 }
 
-.hangup_on_video i {
-	font-size: 22px;
-	color: #fff;
-}
-
-.hangup_on_video:hover {
-	transform: translate(-50%, -50%) scale(1.1);
-	background: #d40000; /* Slightly lighter red on hover */
-}
-
-/* REVEAL: Show hangup button when hovering remote video wrapper */
-.remote_video_wrapper:hover .hangup_on_video {
-	opacity: 1;
-}
 
 /* Local video wrapper - positioned bottom-right */
 .local_video_wrapper {
 	position: absolute;
-	bottom: 20px;
+	top: 20px;
 	right: 20px;
 	z-index: 10;
+	cursor: pointer;
+}
+
+.local_video_wrapper.local_preview_hidden {
+	visibility: hidden;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.local_video_wrapper.corner-top-right {
+	top: 20px;
+	right: 20px;
+	left: auto;
+	bottom: auto;
+}
+
+.local_video_wrapper.corner-top-left {
+	top: 20px;
+	left: 20px;
+	right: auto;
+	bottom: auto;
+}
+
+.local_video_wrapper.corner-bottom-right {
+	bottom: 20px;
+	right: 20px;
+	left: auto;
+	top: auto;
+}
+
+.local_video_wrapper.corner-bottom-left {
+	bottom: 20px;
+	left: 20px;
+	right: auto;
+	top: auto;
 }
 
 /* Local video - small preview window */
@@ -296,14 +325,14 @@ sup {
 	bottom: 0;
 	left: 0;
 	right: 0;
-	min-height: 70px;
+	min-height: 38px;
 	background: rgba(0, 0, 0, 0.9);
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
-	gap: 10px;
+	grid-template-columns: repeat(auto-fit, minmax(56px, 1fr));
+	gap: 2px;
 	align-items: center;
 	justify-items: center;
-	padding: 10px 20px;
+	padding: 2px 8px;
 	z-index: 1000;
 }
 
@@ -311,8 +340,8 @@ sup {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 4px;
-	padding: 10px;
+	gap: 1px;
+	padding: 4px 6px;
 	cursor: pointer;
 	-webkit-user-select: none;
 	-moz-user-select: none;
@@ -327,12 +356,12 @@ sup {
 }
 
 .action_item i {
-	font-size: 24px;
+	font-size: 16px;
 	color: #fff;
 }
 
 .action_label {
-	font-size: 12px;
+	font-size: 9px;
 	color: #ccc;
 	font-family: sans-serif;
 }
@@ -345,13 +374,42 @@ sup {
 	color: #1eba00;
 }
 
+.action_item.action_item_hangup {
+	background: #ba0000;
+	border-radius: 6px;
+	min-width: 56px;
+}
+
+.action_item.action_item_hangup:hover {
+	background: #d40000;
+}
+
+.action_item.action_item_hangup i,
+.action_item.action_item_hangup .action_label {
+	color: #fff;
+}
+
+.action_item.action_item_toggle_active {
+	background: rgba(30, 186, 0, 0.22);
+}
+
+.action_item.action_item_toggle_active i,
+.action_item.action_item_toggle_active .action_label {
+	color: #9dff90;
+}
+
+body.audio_call_mode #active #answer_time,
+body.audio_call_mode #active .dialpad_wrapper {
+	display: none !important;
+}
+
 /* Keypad, Contacts, History Panels */
 #keypad,
 #contacts,
 #history {
 	position: fixed;
 	top: 50px;
-	bottom: 70px;
+	bottom: 38px;
 	left: 0;
 	right: 0;
 	background: rgba(0, 0, 0, 0.7);
