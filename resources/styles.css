@@ -43,9 +43,11 @@ body {
 
 /* Remote video - fills screen with cover fit */
 .remote_video {
-	width: 100%;
-	height: 100%;
-	object-fit: contain; /* Fits full video without cropping */
+	width: 100% !important;
+	height: 100% !important;
+	max-width: 100% !important;
+	max-height: 100% !important;
+	object-fit: contain !important; /* Fits full video without cropping */
 	position: absolute;
 	top: 0;
 	left: 0;
@@ -83,6 +85,12 @@ body {
 	right: 20px;
 	z-index: 10;
 	cursor: pointer;
+}
+
+.local_video_wrapper.local_preview_hidden {
+	visibility: hidden;
+	opacity: 0;
+	pointer-events: none;
 }
 
 .local_video_wrapper.corner-top-right {

@@ -355,7 +355,7 @@ function sync_call_action_controls() {
 
 	if (action_video_mute) {
 		var local_video_wrapper = document.getElementById('local_video_wrapper');
-		var local_video_hidden = !!(local_video_wrapper && local_video_wrapper.style.display === 'none');
+		var local_video_hidden = !!(local_video_wrapper && local_video_wrapper.classList.contains('local_preview_hidden'));
 		if (action_video_mute_icon) {
 			action_video_mute_icon.className = local_video_hidden ? 'fas fa-video-slash' : 'fas fa-video';
 		}
@@ -414,8 +414,21 @@ function toggle_video_mute_action() {
 		return;
 	}
 
-	local_video_wrapper.style.display = local_video_wrapper.style.display === 'none' ? 'block' : 'none';
+	local_video_wrapper.classList.toggle('local_preview_hidden');
 	sync_call_action_controls();
+}
+
+function apply_video_fit_layout() {
+	var remote_video = document.getElementById('remote_video');
+	if (!remote_video) {
+		return;
+	}
+
+	remote_video.style.objectFit = 'contain';
+	remote_video.style.width = '100%';
+	remote_video.style.height = '100%';
+	remote_video.style.maxWidth = '100%';
+	remote_video.style.maxHeight = '100%';
 }
 
 function update_video_stream_info(display_name, number, show_info) {
@@ -557,7 +570,7 @@ function reset_call_ui_state(show_dialpad) {
 	set_hangup_visibility(false);
 
 	document.getElementById('video_container').style.display = "none";
-	document.getElementById('local_video_wrapper').style.display = "block";
+	document.getElementById('local_video_wrapper').classList.remove('local_preview_hidden');
 	document.getElementById('local_video').style.display = "inline";
 	document.getElementById('remote_video').style.display = "inline";
 
@@ -838,9 +851,10 @@ function answer_call(use_video) {
 	// Show video if enabled
 	if (use_video) {
 		document.getElementById('video_container').style.display = "block";
-		document.getElementById('local_video_wrapper').style.display = "block";
+		document.getElementById('local_video_wrapper').classList.remove('local_preview_hidden');
 		document.getElementById('local_video').style.display = "inline";
 		document.getElementById('remote_video').style.display = "inline";
+		apply_video_fit_layout();
 	}
 
 	// Update status bar for active call
@@ -1219,4 +1233,12 @@ document.addEventListener('DOMContentLoaded', function() {
 			cycle_local_video_corner();
 		});
 	}
+
+	var remote_video = document.getElementById('remote_video');
+	if (remote_video) {
+		remote_video.addEventListener('loadedmetadata', apply_video_fit_layout);
+	}
+
+	window.addEventListener('resize', apply_video_fit_layout);
+	apply_video_fit_layout();
 });

@@ -11703,7 +11703,14 @@ MediaStreamManager.render = function render (streams, elements) {
     var interval = 100;
     mediaElement.ensurePlayingIntervalId = SIP.Timers.setInterval(function () {
       if (mediaElement.paused && mediaElement.srcObject) {
-        mediaElement.play();
+        var playPromise = mediaElement.play();
+        if (playPromise && typeof playPromise.catch === 'function') {
+          playPromise.catch(function (err) {
+            if (err && err.name !== 'AbortError') {
+              SIP.LoggerFactory.getLogger('sip.invitecontext.mediahandler').warn('media play failed', err);
+            }
+          });
+        }
       }
       else {
         SIP.Timers.clearInterval(mediaElement.ensurePlayingIntervalId);
