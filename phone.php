@@ -93,9 +93,16 @@ echo "</head>\n";
 echo "<body>\n";
 
 //define the video tag
-echo "	<div id='video_container' style='display: none; position: absolute; top: 50px; left: 0; right: 0; bottom: 70px; background: #000;'>\n";
-echo "		<div style='position: relative; width: 100%; height: 100%;' z-index: 0;><video id='remote_video' autoplay playsinline width='90%' height='100%' style='position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;'></video></div>\n";
-echo "		<div style='position: absolute; bottom: 10px; right: 10px; z-index: 10;'><video id='local_video' autoplay playsinline width='160' height='120' style='border-radius: 8px; border: 2px solid #333;'></video></div>\n";
+echo "	<div id='video_container' class='video_container'>\n";
+echo "		<div class='remote_video_wrapper'>\n";
+echo "			<video id='remote_video' class='remote_video' autoplay playsinline></video>\n";
+echo "			<button id='hangup_on_video' class='hangup_on_video' onclick='hangup()' title='End Call'>\n";
+echo "				<i class='fas fa-phone'></i>\n";
+echo "			</button>\n";
+echo "		</div>\n";
+echo "		<div class='local_video_wrapper'>\n";
+echo "			<video id='local_video' class='local_video' autoplay playsinline muted></video>\n";
+echo "		</div>\n";
 echo "	</div>\n";
 
 //define the audio ringtone
