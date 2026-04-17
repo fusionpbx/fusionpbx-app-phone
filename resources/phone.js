@@ -93,6 +93,7 @@ function send_call(use_video) {
 		set_hangup_visibility(true);
 		document.getElementById('mute_audio').style.display = "inline";
 		document.getElementById('hold').style.display = "inline";
+		update_video_stream_info(session.display_name || destination, session.uri_user || destination, use_video);
 		document.getElementById('status_text').textContent = use_video ? 'Video Call' : 'Call in progress';
 		document.querySelector('#status_bar .status_icon i').className = use_video ? 'fas fa-video' : 'fas fa-phone';
 	});
@@ -282,6 +283,27 @@ function show_status(text, icon_class) {
 	document.querySelector('#status_bar .status_icon i').className = icon_class;
 }
 
+function update_video_stream_info(display_name, number, show_info) {
+	var info = document.getElementById('video_stream_info');
+	if (!info) {
+		return;
+	}
+
+	if (!show_info) {
+		info.innerHTML = '';
+		return;
+	}
+
+	var safe_name = display_name ? sanitize_string(display_name) : '';
+	var safe_number = number ? sanitize_string(number) : '';
+	if (safe_name && safe_number) {
+		info.innerHTML = safe_name + '<br>' + safe_number;
+	}
+	else {
+		info.innerHTML = safe_name || safe_number;
+	}
+}
+
 function clear_transient_status() {
 	if (transient_status_timeout) {
 		clearTimeout(transient_status_timeout);
@@ -379,7 +401,6 @@ function is_session_active() {
 
 function set_hangup_visibility(is_visible) {
 	document.getElementById('hangup').style.display = is_visible ? 'flex' : 'none';
-	document.getElementById('hangup_on_video').style.display = is_visible ? 'flex' : 'none';
 }
 
 function reset_call_ui_state(show_dialpad) {
@@ -414,6 +435,7 @@ function reset_call_ui_state(show_dialpad) {
 
 	document.getElementById('ringing_caller_id').innerHTML = '';
 	document.getElementById('active_caller_id').innerHTML = '';
+	update_video_stream_info('', '', false);
 	document.getElementById('answer_time').innerHTML = '00:00:00';
 
 	answer_time = null;
@@ -542,6 +564,7 @@ user_agent.on('invite', function (s) {
 	var video_indicator = session.has_video ? "<div style='color: #1eba00; font-size: 0.7em;'><i class='fas fa-video'></i> Video Call</div>" : "";
 	document.getElementById('ringing_caller_id').innerHTML = "<div>" + sanitize_string(session.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>" + video_indicator;
 	document.getElementById('active_caller_id').innerHTML = "<div>" + sanitize_string(session.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>" + video_indicator;
+	update_video_stream_info(session.display_name, session.uri_user, session.has_video);
 
 	// Show or hide the panels
 	document.getElementById('dialpad').style.display = "none";
@@ -659,8 +682,11 @@ function answer_call(use_video) {
 	document.getElementById('answer_audio').style.display = "none";
 	document.getElementById('answer_video').style.display = "none";
 	document.getElementById('decline').style.display = "none";
+	document.getElementById('mute_audio').style.display = "inline";
+	document.getElementById('hold').style.display = "inline";
 	document.getElementById('unhold').style.display = "none";
 	set_hangup_visibility(true);
+	update_video_stream_info(session.display_name, session.uri_user, use_video);
 
 	// Show video if enabled
 	if (use_video) {

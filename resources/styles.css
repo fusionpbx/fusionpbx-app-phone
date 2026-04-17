@@ -51,38 +51,30 @@ body {
 	left: 0;
 }
 
-/* Hangup button - appears only on hover over remote video */
-.hangup_on_video {
+/* Caller info overlay - shown when hovering remote video */
+.video_stream_info {
 	position: absolute;
-	bottom: 20px;
-	left: 50%;
-	transform: translateX(-50%);
-	width: 50px;
-	height: 50px;
-	border-radius: 50%;
-	background: #ba0000; /* Red - matches decline/hangup buttons */
-	border: none;
-	display: none;
-	align-items: center;
-	justify-content: center;
-	cursor: pointer;
+	top: 16px;
+	left: 16px;
+	max-width: calc(100% - 32px);
+	padding: 8px 10px;
+	border-radius: 6px;
+	background: rgba(0, 0, 0, 0.62);
+	color: #fff;
+	font-size: 14px;
+	line-height: 1.35;
+	font-family: sans-serif;
+	pointer-events: none;
 	opacity: 0;
-	transition: opacity 0.3s ease, transform 0.2s ease;
+	transition: opacity 0.2s ease;
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	z-index: 100;
 }
 
-.hangup_on_video i {
-	font-size: 22px;
-	color: #fff;
-}
-
-.hangup_on_video:hover {
-	transform: translateX(-50%) scale(1.1);
-	background: #d40000; /* Slightly lighter red on hover */
-}
-
-/* REVEAL: Show hangup button when hovering remote video wrapper */
-.remote_video_wrapper:hover .hangup_on_video {
+.remote_video_wrapper:hover .video_stream_info {
 	opacity: 1;
 }
 
