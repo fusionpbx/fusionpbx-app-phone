@@ -98,7 +98,7 @@ function send_call(use_video) {
 		document.getElementById('unhold').style.display = "none";
 		document.getElementById('mute_video').style.display = use_video ? "inline" : "none";
 		document.getElementById('unmute_video').style.display = "none";
-		set_audio_call_mode(!use_video);
+		set_call_action_mode(true, use_video);
 		var remote_display_name = session.display_name || (session.remoteIdentity && session.remoteIdentity.displayName) || destination;
 		var remote_number = session.uri_user || (session.remoteIdentity && session.remoteIdentity.uri && session.remoteIdentity.uri.user) || destination;
 		active_call_display_name = remote_display_name;
@@ -319,9 +319,10 @@ function update_active_call_status(use_video, display_name, number, duration_tex
 	show_status('Call in progress', 'fas fa-phone');
 }
 
-function sync_audio_action_controls() {
+function sync_call_action_controls() {
 	var action_mute = document.getElementById('action_mute');
 	var action_hold = document.getElementById('action_hold');
+	var action_video_mute = document.getElementById('action_video_mute');
 	if (!action_mute || !action_hold) {
 		return;
 	}
@@ -330,6 +331,8 @@ function sync_audio_action_controls() {
 	var action_mute_label = document.getElementById('action_mute_label');
 	var action_hold_icon = document.getElementById('action_hold_icon');
 	var action_hold_label = document.getElementById('action_hold_label');
+	var action_video_mute_icon = document.getElementById('action_video_mute_icon');
+	var action_video_mute_label = document.getElementById('action_video_mute_label');
 
 	var muted = document.getElementById('unmute_audio').style.display === 'inline';
 	var on_hold = document.getElementById('unhold').style.display === 'inline';
@@ -349,22 +352,37 @@ function sync_audio_action_controls() {
 		action_hold_label.textContent = on_hold ? 'Resume' : 'Hold';
 	}
 	action_hold.classList.toggle('action_item_toggle_active', on_hold);
+
+	if (action_video_mute) {
+		var video_muted = document.getElementById('unmute_video').style.display === 'inline';
+		if (action_video_mute_icon) {
+			action_video_mute_icon.className = video_muted ? 'fas fa-video-slash' : 'fas fa-video';
+		}
+		if (action_video_mute_label) {
+			action_video_mute_label.textContent = video_muted ? 'Unmute Video' : 'Mute Video';
+		}
+		action_video_mute.classList.toggle('action_item_toggle_active', video_muted);
+	}
 }
 
-function set_audio_call_mode(enabled) {
-	document.body.classList.toggle('audio_call_mode', enabled);
+function set_call_action_mode(enabled, use_video) {
+	document.body.classList.toggle('audio_call_mode', enabled && !use_video);
 
 	var action_mute = document.getElementById('action_mute');
 	var action_hold = document.getElementById('action_hold');
+	var action_video_mute = document.getElementById('action_video_mute');
 	if (action_mute) {
 		action_mute.style.display = enabled ? 'flex' : 'none';
 	}
 	if (action_hold) {
 		action_hold.style.display = enabled ? 'flex' : 'none';
 	}
+	if (action_video_mute) {
+		action_video_mute.style.display = enabled && use_video ? 'flex' : 'none';
+	}
 
 	if (enabled) {
-		sync_audio_action_controls();
+		sync_call_action_controls();
 	}
 }
 
@@ -385,6 +403,16 @@ function toggle_audio_hold_action() {
 	}
 	else {
 		hold();
+	}
+}
+
+function toggle_video_mute_action() {
+	if (!session || !active_call_is_video) { return; }
+	if (document.getElementById('unmute_video').style.display === 'inline') {
+		unmute_video();
+	}
+	else {
+		mute_video();
 	}
 }
 
@@ -542,7 +570,7 @@ function reset_call_ui_state(show_dialpad) {
 	document.getElementById('active_caller_id').innerHTML = '';
 	update_video_stream_info('', '', false);
 	document.getElementById('answer_time').innerHTML = '00:00:00';
-	set_audio_call_mode(false);
+	set_call_action_mode(false, false);
 	active_call_is_video = false;
 	active_call_display_name = '';
 	active_call_number = '';
@@ -798,7 +826,7 @@ function answer_call(use_video) {
 	document.getElementById('hold').style.display = "inline";
 	document.getElementById('unhold').style.display = "none";
 	active_call_is_video = use_video;
-	set_audio_call_mode(!use_video);
+	set_call_action_mode(true, use_video);
 	set_hangup_visibility(true);
 	active_call_display_name = session.display_name || session.incoming_number || '';
 	active_call_number = session.uri_user || session.incoming_number || '';
@@ -1037,7 +1065,7 @@ function hold() {
 	if (!session) { return; }
 	document.getElementById('hold').style.display = "none";
 	document.getElementById('unhold').style.display = "inline";
-	sync_audio_action_controls();
+	sync_call_action_controls();
 	session.hold();
 	//session.hold({
 	//	useUpdate: true
@@ -1048,7 +1076,7 @@ function unhold() {
 	if (!session) { return; }
 	document.getElementById('hold').style.display = "inline";
 	document.getElementById('unhold').style.display = "none";
-	sync_audio_action_controls();
+	sync_call_action_controls();
 	session.unhold();
 	//session.unhold({
 	//	useUpdate: true
@@ -1070,7 +1098,7 @@ function mute_audio(destination) {
 	session.mute({audio: true});
 	document.getElementById('mute_audio').style.display = "none";
 	document.getElementById('unmute_audio').style.display = "inline";
-	sync_audio_action_controls();
+	sync_call_action_controls();
 }
 
 function mute_video(destination) {
@@ -1079,6 +1107,7 @@ function mute_video(destination) {
 	document.getElementById('local_video').style.display = "none";
 	document.getElementById('mute_video').style.display = "none";
 	document.getElementById('unmute_video').style.display = "inline";
+	sync_call_action_controls();
 }
 
 function unmute_audio(destination) {
@@ -1086,7 +1115,7 @@ function unmute_audio(destination) {
 	session.unmute({audio: true});
 	document.getElementById('mute_audio').style.display = "inline";
 	document.getElementById('unmute_audio').style.display = "none";
-	sync_audio_action_controls();
+	sync_call_action_controls();
 }
 
 function unmute_video(destination) {
@@ -1095,6 +1124,7 @@ function unmute_video(destination) {
 	document.getElementById('local_video').style.display = "inline";
 	document.getElementById('mute_video').style.display = "inline";
 	document.getElementById('unmute_video').style.display = "none";
+	sync_call_action_controls();
 }
 
 function decline() {
