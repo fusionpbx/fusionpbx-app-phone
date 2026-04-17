@@ -197,9 +197,6 @@ echo "		<div id='answer_time' class='answer_time'>00:00:00</div>\n";
 echo "		<div class='dialpad_wrapper'>\n";
 echo "			<div class='dialpad_box mute' id='mute_audio' onclick='mute_audio();'><i class='fas fa-microphone' title=\"".$text['label-mute']."\"></i><br><sup>".$text['label-mute']."</sup></div>\n";
 echo "			<div class='dialpad_box' id='unmute_audio' style='color: #ba0000; display: none;' onclick='unmute_audio();'><i class='fas fa-microphone-slash' title=\"".$text['label-unmute']."\"></i><br><sup>".$text['label-unmute']."</sup></div>\n";
-
-echo "			<div class='dialpad_box phone_hangup_floating' id='hangup' onclick='hangup();' style='background-color: #ba0000;'><i class='fas fa-phone-slash' title=\"".$text['label-end']."\"></i><br><sup>".$text['label-end']."</sup></div>\n";
-
 echo "			<div class='dialpad_box hold' id='hold' onclick='hold();'><i class='fas fa-pause' title=\"".$text['label-hold']."\"></i><br><sup>".$text['label-hold']."</sup></div>\n";
 echo "			<div class='dialpad_box' id='unhold' style='color: #1ba800; display: none;' onclick='unhold();'><i class='fas fa-play' title=\"".$text['label-resume']."\"></i><br><sup>".$text['label-resume']."</sup></div>\n";
 
@@ -218,6 +215,9 @@ echo "			<span class='action_label'>Contacts</span>\n";
 echo "		</div>\n";
 echo "		<div class='action_item' onclick='show_history();' id='action_history'><i class='fas fa-history'></i>\n";
 echo "			<span class='action_label'>History</span>\n";
+echo "		</div>\n";
+echo "		<div class='action_item action_item_hangup' id='hangup' onclick='hangup();' style='display: none;'><i class='fas fa-phone-slash' title=\"".$text['label-end']."\"></i>\n";
+echo "			<span class='action_label'>".$text['label-end']."</span>\n";
 echo "		</div>\n";
 echo "		<div class='action_item' onclick='show_keypad();' id='action_keypad_during_call' style='display: none;'><i class='fas fa-keyboard'></i>\n";
 echo "			<span class='action_label'>Keypad</span>\n";
