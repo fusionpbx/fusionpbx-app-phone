@@ -54,8 +54,15 @@ $search_target = $settings->get('phone', 'search_target', '');
 $search_width = $settings->get('phone', 'search_width', '');
 $search_height = $settings->get('phone', 'search_height', '');
 
+$domain_name = (string) ($_SESSION['domain_name'] ?? '');
+$user_extension = '';
+$user_password = '';
+$user_display_name = '';
+$user_sender_extensions = [];
+$selected_sender_extension_uuid = trim((string) ($_SESSION['phone_message_sender_extension_uuid'][$domain_uuid] ?? ''));
+
 //get the user ID
-$sql = "SELECT d.domain_name,e.extension,e.password FROM ";
+$sql = "SELECT d.domain_name,e.extension,e.password,u.username,e.effective_caller_id_name FROM ";
 $sql .= "v_extension_users as t, v_extensions as e, v_users as u, v_domains as d ";
 $sql .= "WHERE u.user_uuid = t.user_uuid ";
 $sql .= "AND e.extension_uuid = t.extension_uuid ";
@@ -69,6 +76,77 @@ if ($prep_statement) {
 	$domain_name = $row['domain_name'];
 	$user_extension = $row['extension'];
 	$user_password = $row['password'];
+	$user_display_name = trim((string) ($row['effective_caller_id_name'] ?? ''));
+	if ($user_display_name === '') {
+		$user_display_name = trim((string) ($row['username'] ?? ''));
+	}
+	if ($user_display_name === '') {
+		$user_display_name = $user_extension;
+	}
+}
+
+$extensions_sql = "select
+		e.extension_uuid,
+		e.extension,
+		e.number_alias,
+		e.effective_caller_id_name
+	from v_extensions e
+	join v_extension_users eu
+		on eu.extension_uuid = e.extension_uuid
+		and eu.domain_uuid = :domain_uuid
+	where e.domain_uuid = :domain_uuid
+	and eu.user_uuid = :user_uuid
+	order by e.extension asc";
+$extensions_statement = $db->prepare($extensions_sql);
+if ($extensions_statement) {
+	$extensions_statement->execute([
+		'domain_uuid' => $domain_uuid,
+		'user_uuid' => $user_uuid,
+	]);
+	$extension_rows = $extensions_statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+	foreach ($extension_rows as $extension_row) {
+		$extension_uuid = trim((string) ($extension_row['extension_uuid'] ?? ''));
+		$extension_value = trim((string) ($extension_row['extension'] ?? ''));
+		if (!is_uuid($extension_uuid) || $extension_value === '') {
+			continue;
+		}
+		if (!preg_match('/^[0-9A-Za-z_.\-]+$/', $extension_value)) {
+			continue;
+		}
+
+		$label_parts = [];
+		$number_alias = trim((string) ($extension_row['number_alias'] ?? ''));
+		if ($number_alias !== '' && $number_alias !== $extension_value) {
+			$label_parts[] = $number_alias;
+		}
+		$label_parts[] = $extension_value;
+		$caller_name = trim((string) ($extension_row['effective_caller_id_name'] ?? ''));
+		if ($caller_name !== '') {
+			$label_parts[] = $caller_name;
+		}
+
+		$user_sender_extensions[] = [
+			'extension_uuid' => $extension_uuid,
+			'extension' => $extension_value,
+			'label' => implode(' - ', $label_parts),
+		];
+	}
+}
+
+if (count($user_sender_extensions) > 0) {
+	$selected_exists = false;
+	foreach ($user_sender_extensions as $sender_extension_row) {
+		if ((string) ($sender_extension_row['extension_uuid'] ?? '') === $selected_sender_extension_uuid) {
+			$selected_exists = true;
+			break;
+		}
+	}
+	if (!$selected_exists) {
+		$selected_sender_extension_uuid = (string) ($user_sender_extensions[0]['extension_uuid'] ?? '');
+	}
+}
+else {
+	$selected_sender_extension_uuid = '';
 }
 
 //set the title
@@ -111,6 +189,17 @@ echo "	</audio>\n";
 //audio or video objects need to be initialized before phone.js
 echo "	<script language='JavaScript' type='text/javascript'>\n";
 echo "	const time_zone = '".$settings->get('domain', 'time_zone')."';\n";
+echo "	const phone_e2ee_user_uuid = '".escape($user_uuid)."';\n";
+echo "	const phone_e2ee_domain_uuid = '".escape($domain_uuid)."';\n";
+echo "	const phone_can_delete_rooms = ".(permission_exists('xmpp_room_delete') ? 'true' : 'false').";\n";
+echo "	const phone_registered_extension = '".escape($user_extension)."';\n";
+echo "	const phone_registered_display_name = '".escape($user_display_name)."';\n";
+echo "	const phone_sender_extensions = ".json_encode($user_sender_extensions, JSON_UNESCAPED_SLASHES).";\n";
+echo "	const phone_selected_sender_extension_uuid = '".escape($selected_sender_extension_uuid)."';\n";
+echo "	const phone_e2ee_default_device_label = '".escape($_SERVER['HTTP_USER_AGENT'] ?? 'Browser Device')."';\n";
+$session_unlock_material = session_id().'|'.$user_uuid.'|'.$domain_uuid.'|'.(string) $config->get('phone.message_encryption_key', '');
+$session_unlock_key = hash('sha256', $session_unlock_material);
+echo "	const phone_e2ee_session_unlock_key = '".escape($session_unlock_key)."';\n";
 echo "\n";
 // Dashboard search configuration
 echo "	const dashboard_enabled = " . (!empty($search_enabled) && $search_enabled == 'true' ? 'true' : 'false') . ";\n";
@@ -130,6 +219,7 @@ echo "	</script>\n";
 echo "	<div class='status_bar' id='status_bar'>\n";
 echo "		<span class='status_icon'><i class='fas fa-circle'></i></span>\n";
 echo "		<span class='status_text' id='status_text'>Ready</span>\n";
+echo "		<span class='status_identity' id='status_identity'><span class='status_identity_name'>".escape($user_display_name)."</span><span class='status_identity_ext'>Ext ".escape($user_extension)."</span></span>\n";
 echo "	</div>\n";
 
 //start the body_content
@@ -184,15 +274,20 @@ echo "\t\t<div class='messages_layout'>\n";
 echo "\t\t\t<div class='messages_sidebar'>\n";
 echo "\t\t\t\t<div class='messages_header'><i class='fas fa-comments'></i> Messages</div>\n";
 echo "\t\t\t\t<div class='messages_destination_bar'>\n";
-echo "\t\t\t\t\t<input type='text' id='message_destination' class='message_destination' list='message_room_suggestions' placeholder='Destination (e.g. 102, user@example.com, #ops-room)' />\n";
+echo "\t\t\t\t\t<input type='text' id='message_destination' class='message_destination' list='message_room_suggestions' placeholder='Destination (e.g. 102, user@example.com, #ops-room)' autocomplete='off' autocorrect='off' autocapitalize='off' spellcheck='false' data-lpignore='true' data-1p-ignore='true' />\n";
 echo "\t\t\t\t\t<button type='button' id='message_set_destination' class='message_set_destination' onclick='set_message_destination();'><i class='fas fa-location-arrow'></i> Set</button>\n";
 echo "\t\t\t\t</div>\n";
 echo "\t\t\t\t<datalist id='message_room_suggestions'></datalist>\n";
-echo "\t\t\t\t<div class='messages_hint'>Tip: use <strong>/join #room</strong> in the message box to join a room.</div>\n";
+echo "\t\t\t\t<div class='messages_hint'>Tip: use <strong>/list</strong>, <strong>/create #room</strong> or <strong>/join #room</strong> in the message box.</div>\n";
 echo "\t\t\t\t<div class='messages_conversations' id='messages_conversations'></div>\n";
 echo "\t\t\t</div>\n";
 echo "\t\t\t<div class='messages_thread'>\n";
 echo "\t\t\t\t<div class='thread_header'>\n";
+echo "\t\t\t\t\t<div class='thread_conversation_picker'>\n";
+echo "\t\t\t\t\t\t<select id='thread_conversation_select' class='thread_conversation_select'>\n";
+echo "\t\t\t\t\t\t\t<option value=''>Select a conversation</option>\n";
+echo "\t\t\t\t\t\t</select>\n";
+echo "\t\t\t\t\t</div>\n";
 echo "\t\t\t\t\t<div class='thread_title' id='thread_title'>Select a conversation</div>\n";
 echo "\t\t\t\t\t<div class='thread_presence' id='thread_presence'>Offline</div>\n";
 echo "\t\t\t\t</div>\n";
@@ -200,7 +295,11 @@ echo "\t\t\t\t<div class='thread_messages' id='thread_messages'>\n";
 echo "\t\t\t\t\t<div class='thread_empty'>Select a conversation to start messaging.</div>\n";
 echo "\t\t\t\t</div>\n";
 echo "\t\t\t\t<div class='thread_composer'>\n";
-echo "\t\t\t\t\t<input type='text' id='message_input' class='message_input' placeholder='Type an XMPP message...' />\n";
+echo "\t\t\t\t\t<div class='thread_sender_context' id='thread_sender_context' style='display: none;'>\n";
+echo "\t\t\t\t\t\t<label class='thread_sender_label' for='message_sender_extension'>Send as</label>\n";
+echo "\t\t\t\t\t\t<select id='message_sender_extension' class='message_sender_extension'></select>\n";
+echo "\t\t\t\t\t</div>\n";
+echo "\t\t\t\t\t<textarea id='message_input' class='message_input' placeholder='Type an XMPP message...' rows='1' autocomplete='off' autocorrect='off' autocapitalize='off' spellcheck='false' data-lpignore='true' data-1p-ignore='true'></textarea>\n";
 echo "\t\t\t\t\t<button type='button' id='message_send' class='message_send' onclick='send_message_mock();'><i class='fas fa-paper-plane'></i> Send</button>\n";
 echo "\t\t\t\t</div>\n";
 echo "\t\t\t</div>\n";

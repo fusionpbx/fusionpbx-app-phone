@@ -219,13 +219,29 @@ let transient_status_timeout;
 let active_call_is_video = false;
 let active_call_display_name = '';
 let active_call_number = '';
+let active_panel = 'dialpad';
 let active_conversation_id = null;
 let messages_loaded_from_db = false;
 let messages_load_in_progress = false;
+let message_refresh_interval_id = null;
+let sender_extension_options = Array.isArray((typeof phone_sender_extensions !== 'undefined') ? phone_sender_extensions : null) ? phone_sender_extensions : [];
+let selected_sender_extension_uuid = String((typeof phone_selected_sender_extension_uuid !== 'undefined') ? phone_selected_sender_extension_uuid : '').trim();
+
+let e2ee_private_key = null;
+let e2ee_public_jwk = null;
+let e2ee_device_uuid = '';
+let e2ee_unlocked = false;
 
 const message_conversations = [];
+const can_delete_rooms = (typeof phone_can_delete_rooms !== 'undefined') ? !!phone_can_delete_rooms : false;
 
 const known_chat_rooms = ['#ops-room', '#support', '#sales'];
+
+const E2EE_PBKDF2_ITERATIONS = 260000;
+const E2EE_SALT_BYTES = 16;
+const E2EE_IV_BYTES = 12;
+const E2EE_STORAGE_PREFIX = 'fusionpbx_phone_e2ee_v1_' + String(typeof phone_e2ee_user_uuid !== 'undefined' ? phone_e2ee_user_uuid : 'unknown') + '_';
+const E2EE_VAULT_KEY = E2EE_STORAGE_PREFIX + 'vault';
 
 function stop_call_tone() {
 	const ringtone = document.getElementById('ringtone');
@@ -528,10 +544,10 @@ function handle_outgoing_session_failure(current_session, status_text) {
 var config = {
 	uri: '<?php echo $user_extension."@".$domain_name; ?>',
 	ws_servers: 'wss://<?php echo $domain_name; ?>:7443',
-	authorizationUser: '<?php echo $user_extension; ?>',
+	authorizationUser: phone_registered_extension,
 	password: atob('<?php echo base64_encode($user_password); ?>'),
 	registerExpires: 120,
-	displayName: "<?php echo $user_extension; ?>"
+	displayName: phone_registered_display_name
 };
 
 user_agent = new SIP.UA(config);
@@ -567,6 +583,13 @@ user_agent.on('failed', function() {
 	registration_state = 'disconnected';
 	stop_call_tone();
 	update_status_bar();
+});
+
+user_agent.on('message', function(event) {
+	if (!event || event.originator === 'local') {
+		return;
+	}
+	handle_incoming_sip_message(event.message || event);
 });
 
 function update_status_bar() {
@@ -932,7 +955,103 @@ function show_history() {
 	update_action_bar_state('history');
 }
 
-function show_messages() {
+function render_sender_extension_selector() {
+	var sender_context = document.getElementById('thread_sender_context');
+	var sender_select = document.getElementById('message_sender_extension');
+	if (!sender_context || !sender_select) {
+		return;
+	}
+
+	var options = Array.isArray(sender_extension_options) ? sender_extension_options : [];
+	if (options.length === 0) {
+		sender_select.innerHTML = '';
+		sender_context.style.display = 'none';
+		selected_sender_extension_uuid = '';
+		return;
+	}
+
+	var selected_exists = false;
+	options.forEach(function(option) {
+		if (String(option.extension_uuid || '') === selected_sender_extension_uuid) {
+			selected_exists = true;
+		}
+	});
+	if (!selected_exists) {
+		selected_sender_extension_uuid = String(options[0].extension_uuid || '');
+	}
+
+	sender_select.innerHTML = '';
+	options.forEach(function(option) {
+		var extension_uuid = String(option.extension_uuid || '');
+		if (!extension_uuid) {
+			return;
+		}
+		var item = document.createElement('option');
+		item.value = extension_uuid;
+		item.textContent = String(option.label || option.extension || extension_uuid);
+		if (extension_uuid === selected_sender_extension_uuid) {
+			item.selected = true;
+		}
+		sender_select.appendChild(item);
+	});
+
+	sender_context.style.display = options.length > 1 ? 'flex' : 'none';
+}
+
+async function load_sender_extensions() {
+	try {
+		var result = await get_message_api('sender_extensions', {});
+		if (result && result.status === 'ok') {
+			sender_extension_options = Array.isArray(result.extensions) ? result.extensions : [];
+			selected_sender_extension_uuid = String(result.selected_extension_uuid || '').trim();
+		}
+	}
+	catch (error) {
+		// Keep existing sender extension state if API call fails.
+	}
+
+	render_sender_extension_selector();
+}
+
+async function set_selected_sender_extension(extension_uuid) {
+	var normalized_extension_uuid = String(extension_uuid || '').trim();
+	if (!normalized_extension_uuid) {
+		return;
+	}
+
+	try {
+		var result = await post_message_api({
+			action: 'set_sender_extension',
+			extension_uuid: normalized_extension_uuid
+		});
+		if (!result || result.status !== 'ok') {
+			show_temporary_status((result && result.message) ? result.message : 'Could not set sender extension', 'fas fa-exclamation-circle');
+			return;
+		}
+
+		selected_sender_extension_uuid = String(result.selected_extension_uuid || normalized_extension_uuid);
+		render_sender_extension_selector();
+	}
+	catch (error) {
+		show_temporary_status('Could not set sender extension', 'fas fa-exclamation-circle');
+	}
+}
+
+async function show_messages() {
+	var unlocked = false;
+	try {
+		unlocked = await ensure_e2ee_unlocked();
+	}
+	catch (error) {
+		unlocked = false;
+	}
+
+	if (!unlocked) {
+		return;
+	}
+
+	await load_sender_extensions();
+
 	hide_all_panels();
 	load_messages_from_database();
 	render_messages_sidebar();
@@ -958,8 +1077,9 @@ function post_message_api(payload) {
 	});
 }
 
-function get_message_api(action) {
-	return fetch('resources/messages.php?action=' + encodeURIComponent(action), {
+function get_message_api(action, params) {
+	var query = new URLSearchParams(Object.assign({ action: action }, params || {}));
+	return fetch('resources/messages.php?' + query.toString(), {
 		method: 'GET',
 		credentials: 'same-origin'
 	}).then(function(response) {
@@ -968,6 +1088,708 @@ function get_message_api(action) {
 				status: 'error',
 				message: 'Invalid server response'
 			};
+		});
+	});
+}
+
+function bytes_to_base64(bytes) {
+	var binary = '';
+	var array = new Uint8Array(bytes);
+	for (var i = 0; i < array.length; i++) {
+		binary += String.fromCharCode(array[i]);
+	}
+	return btoa(binary);
+}
+
+function base64_to_bytes(base64_value) {
+	var binary = atob(String(base64_value || ''));
+	var bytes = new Uint8Array(binary.length);
+	for (var i = 0; i < binary.length; i++) {
+		bytes[i] = binary.charCodeAt(i);
+	}
+	return bytes;
+}
+
+function generate_uuid() {
+	if (window.crypto && window.crypto.randomUUID) {
+		return window.crypto.randomUUID();
+	}
+
+	var template = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx';
+	return template.replace(/[xy]/g, function(char) {
+		var random = Math.random() * 16 | 0;
+		var value = char === 'x' ? random : ((random & 0x3) | 0x8);
+		return value.toString(16);
+	});
+}
+
+function read_e2ee_vault() {
+	var raw = localStorage.getItem(E2EE_VAULT_KEY);
+	if (!raw) {
+		return null;
+	}
+
+	try {
+		var parsed = JSON.parse(raw);
+		if (!parsed || typeof parsed !== 'object') {
+			return null;
+		}
+		return parsed;
+	}
+	catch (error) {
+		return null;
+	}
+}
+
+function write_e2ee_vault(vault) {
+	localStorage.setItem(E2EE_VAULT_KEY, JSON.stringify(vault));
+}
+
+async function sha256_hex(input) {
+	var input_bytes = new TextEncoder().encode(String(input || ''));
+	var digest = await window.crypto.subtle.digest('SHA-256', input_bytes);
+	var bytes = new Uint8Array(digest);
+	var parts = [];
+	for (var i = 0; i < bytes.length; i++) {
+		parts.push(bytes[i].toString(16).padStart(2, '0'));
+	}
+	return parts.join('');
+}
+
+async function derive_password_key(password, salt_bytes) {
+	var base_key = await window.crypto.subtle.importKey(
+		'raw',
+		new TextEncoder().encode(password),
+		{ name: 'PBKDF2' },
+		false,
+		['deriveKey']
+	);
+
+	return window.crypto.subtle.deriveKey(
+		{
+			name: 'PBKDF2',
+			salt: salt_bytes,
+			iterations: E2EE_PBKDF2_ITERATIONS,
+			hash: 'SHA-256'
+		},
+		base_key,
+		{ name: 'AES-GCM', length: 256 },
+		false,
+		['encrypt', 'decrypt']
+	);
+}
+
+async function encrypt_private_key_for_storage(private_key_bytes, password) {
+	var salt = window.crypto.getRandomValues(new Uint8Array(E2EE_SALT_BYTES));
+	var iv = window.crypto.getRandomValues(new Uint8Array(E2EE_IV_BYTES));
+	var wrap_key = await derive_password_key(password, salt);
+	var encrypted = await window.crypto.subtle.encrypt(
+		{ name: 'AES-GCM', iv: iv },
+		wrap_key,
+		private_key_bytes
+	);
+
+	return {
+		salt: bytes_to_base64(salt),
+		iv: bytes_to_base64(iv),
+		ciphertext: bytes_to_base64(encrypted)
+	};
+}
+
+async function decrypt_private_key_from_storage(vault, password) {
+	var salt = base64_to_bytes(vault.salt || '');
+	var iv = base64_to_bytes(vault.iv || '');
+	var ciphertext = base64_to_bytes(vault.ciphertext || '');
+	var wrap_key = await derive_password_key(password, salt);
+	var decrypted = await window.crypto.subtle.decrypt(
+		{ name: 'AES-GCM', iv: iv },
+		wrap_key,
+		ciphertext
+	);
+	return new Uint8Array(decrypted);
+}
+
+async function derive_session_key() {
+	var material = String(typeof phone_e2ee_session_unlock_key !== 'undefined' ? phone_e2ee_session_unlock_key : '').trim();
+	if (!material) {
+		return null;
+	}
+
+	var digest = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(material));
+	return window.crypto.subtle.importKey(
+		'raw',
+		digest,
+		{ name: 'AES-GCM' },
+		false,
+		['encrypt', 'decrypt']
+	);
+}
+
+async function encrypt_private_key_for_session(private_key_bytes) {
+	var session_key = await derive_session_key();
+	if (!session_key) {
+		return null;
+	}
+
+	var iv = window.crypto.getRandomValues(new Uint8Array(E2EE_IV_BYTES));
+	var ciphertext = await window.crypto.subtle.encrypt(
+		{ name: 'AES-GCM', iv: iv },
+		session_key,
+		private_key_bytes
+	);
+
+	return {
+		session_iv: bytes_to_base64(iv),
+		session_ciphertext: bytes_to_base64(ciphertext)
+	};
+}
+
+async function decrypt_private_key_from_session(vault) {
+	if (!vault || !vault.session_iv || !vault.session_ciphertext) {
+		return null;
+	}
+
+	var session_key = await derive_session_key();
+	if (!session_key) {
+		return null;
+	}
+
+	try {
+		var decrypted = await window.crypto.subtle.decrypt(
+			{ name: 'AES-GCM', iv: base64_to_bytes(vault.session_iv) },
+			session_key,
+			base64_to_bytes(vault.session_ciphertext)
+		);
+		return new Uint8Array(decrypted);
+	}
+	catch (error) {
+		return null;
+	}
+}
+
+async function register_e2ee_device(rotate_other_devices) {
+	if (!e2ee_device_uuid || !e2ee_public_jwk) {
+		return false;
+	}
+
+	var result = await post_message_api({
+		action: 'register_device',
+		device_uuid: e2ee_device_uuid,
+		public_key_jwk: JSON.stringify(e2ee_public_jwk),
+		key_fingerprint: await sha256_hex(JSON.stringify(e2ee_public_jwk)),
+		device_label: String(typeof phone_e2ee_default_device_label !== 'undefined' ? phone_e2ee_default_device_label : 'Browser Device').substring(0, 250),
+		rotate_other_devices: rotate_other_devices ? 'true' : 'false'
+	});
+
+	return !!(result && result.status === 'ok');
+}
+
+async function create_new_e2ee_vault(password, rotate_other_devices) {
+	var key_pair = await window.crypto.subtle.generateKey(
+		{ name: 'ECDH', namedCurve: 'P-256' },
+		true,
+		['deriveBits']
+	);
+
+	var private_key_bytes = new Uint8Array(await window.crypto.subtle.exportKey('pkcs8', key_pair.privateKey));
+	var public_jwk = await window.crypto.subtle.exportKey('jwk', key_pair.publicKey);
+	var encrypted_private = await encrypt_private_key_for_storage(private_key_bytes, password);
+	var session_wrapped_private = await encrypt_private_key_for_session(private_key_bytes);
+	var vault = {
+		device_uuid: generate_uuid(),
+		public_jwk: public_jwk,
+		salt: encrypted_private.salt,
+		iv: encrypted_private.iv,
+		ciphertext: encrypted_private.ciphertext,
+		session_iv: session_wrapped_private ? session_wrapped_private.session_iv : '',
+		session_ciphertext: session_wrapped_private ? session_wrapped_private.session_ciphertext : '',
+		created_at: Date.now()
+	};
+
+	write_e2ee_vault(vault);
+	e2ee_private_key = key_pair.privateKey;
+	e2ee_public_jwk = public_jwk;
+	e2ee_device_uuid = vault.device_uuid;
+	e2ee_unlocked = true;
+
+	await register_e2ee_device(rotate_other_devices);
+}
+
+async function unlock_existing_e2ee_vault(vault, password) {
+	var private_key_bytes = await decrypt_private_key_from_storage(vault, password);
+	e2ee_private_key = await window.crypto.subtle.importKey(
+		'pkcs8',
+		private_key_bytes,
+		{ name: 'ECDH', namedCurve: 'P-256' },
+		false,
+		['deriveBits']
+	);
+	e2ee_public_jwk = vault.public_jwk;
+	e2ee_device_uuid = vault.device_uuid;
+	e2ee_unlocked = true;
+
+	// Backfill session wrapper so subsequent sends in this login can unlock silently.
+	var session_wrapped_private = await encrypt_private_key_for_session(private_key_bytes);
+	if (session_wrapped_private) {
+		vault.session_iv = session_wrapped_private.session_iv;
+		vault.session_ciphertext = session_wrapped_private.session_ciphertext;
+		write_e2ee_vault(vault);
+	}
+
+	await register_e2ee_device(false);
+}
+
+function prompt_password_modal(title, message, options) {
+	options = options || {};
+	return new Promise(function(resolve) {
+		var existing_overlay = document.getElementById('e2ee_password_overlay');
+		if (existing_overlay) {
+			existing_overlay.remove();
+		}
+
+		var overlay = document.createElement('div');
+		overlay.id = 'e2ee_password_overlay';
+		overlay.style.position = 'fixed';
+		overlay.style.inset = '0';
+		overlay.style.background = 'rgba(0,0,0,0.55)';
+		overlay.style.display = 'flex';
+		overlay.style.alignItems = 'center';
+		overlay.style.justifyContent = 'center';
+		overlay.style.zIndex = '100000';
+
+		var panel = document.createElement('div');
+		panel.style.width = 'min(440px, calc(100vw - 32px))';
+		panel.style.background = '#1f1f1f';
+		panel.style.border = '1px solid rgba(255,255,255,0.12)';
+		panel.style.borderRadius = '10px';
+		panel.style.boxShadow = '0 16px 44px rgba(0,0,0,0.4)';
+		panel.style.padding = '16px';
+		panel.style.color = '#f2f2f2';
+
+		var heading = document.createElement('div');
+		heading.textContent = title;
+		heading.style.fontSize = '16px';
+		heading.style.fontWeight = '700';
+		heading.style.marginBottom = '8px';
+
+		var description = document.createElement('div');
+		description.textContent = message;
+		description.style.fontSize = '13px';
+		description.style.color = '#d2d2d2';
+		description.style.marginBottom = '12px';
+
+		var input = document.createElement('input');
+		input.type = 'password';
+		input.autocomplete = options.autocomplete || 'new-password';
+		input.setAttribute('data-lpignore', 'true');
+		input.setAttribute('data-1p-ignore', 'true');
+		input.setAttribute('autocorrect', 'off');
+		input.setAttribute('autocapitalize', 'off');
+		input.setAttribute('spellcheck', 'false');
+		input.placeholder = options.placeholder || 'Password';
+		input.style.width = '100%';
+		input.style.padding = '10px 12px';
+		input.style.borderRadius = '8px';
+		input.style.border = '1px solid rgba(255,255,255,0.22)';
+		input.style.background = 'rgba(255,255,255,0.07)';
+		input.style.color = '#fff';
+		input.style.fontSize = '14px';
+
+		var actions = document.createElement('div');
+		actions.style.display = 'flex';
+		actions.style.justifyContent = 'flex-end';
+		actions.style.gap = '8px';
+		actions.style.marginTop = '12px';
+
+		var cancel_btn = document.createElement('button');
+		cancel_btn.type = 'button';
+		cancel_btn.textContent = 'Cancel';
+		cancel_btn.style.padding = '8px 12px';
+		cancel_btn.style.borderRadius = '8px';
+		cancel_btn.style.border = '1px solid rgba(255,255,255,0.2)';
+		cancel_btn.style.background = 'rgba(255,255,255,0.08)';
+		cancel_btn.style.color = '#fff';
+		cancel_btn.style.cursor = 'pointer';
+
+		var submit_btn = document.createElement('button');
+		submit_btn.type = 'button';
+		submit_btn.textContent = options.submitLabel || 'Unlock';
+		submit_btn.style.padding = '8px 12px';
+		submit_btn.style.borderRadius = '8px';
+		submit_btn.style.border = '1px solid rgba(0,167,196,0.65)';
+		submit_btn.style.background = 'rgba(0,167,196,0.22)';
+		submit_btn.style.color = '#fff';
+		submit_btn.style.cursor = 'pointer';
+
+		actions.appendChild(cancel_btn);
+		actions.appendChild(submit_btn);
+
+		panel.appendChild(heading);
+		panel.appendChild(description);
+		panel.appendChild(input);
+		panel.appendChild(actions);
+		overlay.appendChild(panel);
+		document.body.appendChild(overlay);
+
+		var settled = false;
+		var close_modal = function(value) {
+			if (settled) {
+				return;
+			}
+			settled = true;
+			overlay.remove();
+			resolve(value);
+		};
+
+		cancel_btn.addEventListener('click', function() {
+			close_modal(null);
+		});
+
+		submit_btn.addEventListener('click', function() {
+			close_modal(input.value);
+		});
+
+		overlay.addEventListener('click', function(event) {
+			if (event.target === overlay) {
+				close_modal(null);
+			}
+		});
+
+		input.addEventListener('keydown', function(event) {
+			if (event.key === 'Enter') {
+				event.preventDefault();
+				close_modal(input.value);
+				return;
+			}
+			if (event.key === 'Escape') {
+				event.preventDefault();
+				close_modal(null);
+			}
+		});
+
+		setTimeout(function() {
+			input.focus();
+		}, 10);
+	});
+}
+
+async function ensure_e2ee_unlocked() {
+	if (e2ee_unlocked && e2ee_private_key && e2ee_public_jwk && e2ee_device_uuid) {
+		return true;
+	}
+
+	if (!window.crypto || !window.crypto.subtle) {
+		show_temporary_status('Browser does not support WebCrypto', 'fas fa-exclamation-circle');
+		return false;
+	}
+
+	var vault = read_e2ee_vault();
+	if (!vault) {
+		var password_create = await prompt_password_modal(
+			'Create Encryption Password',
+			'Set the password used to unlock this device key.',
+			{ autocomplete: 'new-password', placeholder: 'Create password', submitLabel: 'Create' }
+		);
+		if (!password_create) {
+			show_temporary_status('Encryption setup canceled', 'fas fa-exclamation-circle');
+			return false;
+		}
+		var password_confirm = await prompt_password_modal(
+			'Confirm Encryption Password',
+			'Re-enter your password to confirm.',
+			{ autocomplete: 'new-password', placeholder: 'Confirm password', submitLabel: 'Confirm' }
+		);
+		if (!password_confirm || password_create !== password_confirm) {
+			show_temporary_status('Passwords did not match', 'fas fa-exclamation-circle');
+			return false;
+		}
+
+		try {
+			await create_new_e2ee_vault(password_create, true);
+			show_temporary_status('Encryption key created for this device', 'fas fa-lock');
+			return true;
+		}
+		catch (error) {
+			show_temporary_status('Could not create device encryption key', 'fas fa-exclamation-circle');
+			return false;
+		}
+	}
+
+	// Silent unlock path for active authenticated session.
+	var session_private_key_bytes = await decrypt_private_key_from_session(vault);
+	if (session_private_key_bytes) {
+		try {
+			e2ee_private_key = await window.crypto.subtle.importKey(
+				'pkcs8',
+				session_private_key_bytes,
+				{ name: 'ECDH', namedCurve: 'P-256' },
+				false,
+				['deriveBits']
+			);
+			e2ee_public_jwk = vault.public_jwk;
+			e2ee_device_uuid = vault.device_uuid;
+			e2ee_unlocked = true;
+			await register_e2ee_device(false);
+			return true;
+		}
+		catch (error) {
+			vault.session_iv = '';
+			vault.session_ciphertext = '';
+			write_e2ee_vault(vault);
+		}
+	}
+
+	var unlock_attempt = 0;
+	while (unlock_attempt < 3) {
+		var unlock_message = unlock_attempt === 0
+			? 'Enter your password to unlock this device key.'
+			: 'Password was incorrect. Try again to unlock this device key.';
+
+		var password_unlock = await prompt_password_modal(
+			'Unlock Encrypted Messages',
+			unlock_message,
+			{ autocomplete: 'current-password', placeholder: 'Password', submitLabel: 'Unlock' }
+		);
+		if (!password_unlock) {
+			show_temporary_status('Encryption unlock canceled', 'fas fa-exclamation-circle');
+			return false;
+		}
+
+		try {
+			await unlock_existing_e2ee_vault(vault, password_unlock);
+			return true;
+		}
+		catch (error) {
+			// Ensure there is no stale key state before another attempt.
+			e2ee_private_key = null;
+			e2ee_public_jwk = null;
+			e2ee_device_uuid = null;
+			e2ee_unlocked = false;
+			unlock_attempt++;
+		}
+	}
+
+	show_temporary_status('Invalid password or key data', 'fas fa-exclamation-circle');
+	return false;
+}
+
+async function derive_shared_wrap_key(peer_public_jwk) {
+	var peer_public_key = await window.crypto.subtle.importKey(
+		'jwk',
+		peer_public_jwk,
+		{ name: 'ECDH', namedCurve: 'P-256' },
+		false,
+		[]
+	);
+
+	var shared_bits = await window.crypto.subtle.deriveBits(
+		{ name: 'ECDH', public: peer_public_key },
+		e2ee_private_key,
+		256
+	);
+
+	return window.crypto.subtle.importKey(
+		'raw',
+		shared_bits,
+		{ name: 'AES-GCM' },
+		false,
+		['encrypt', 'decrypt']
+	);
+}
+
+async function encrypt_message_envelope(plaintext, recipient_devices) {
+	var content_key = await window.crypto.subtle.generateKey(
+		{ name: 'AES-GCM', length: 256 },
+		true,
+		['encrypt', 'decrypt']
+	);
+	var content_key_raw = await window.crypto.subtle.exportKey('raw', content_key);
+	var content_iv = window.crypto.getRandomValues(new Uint8Array(E2EE_IV_BYTES));
+	var ciphertext = await window.crypto.subtle.encrypt(
+		{ name: 'AES-GCM', iv: content_iv },
+		content_key,
+		new TextEncoder().encode(plaintext)
+	);
+
+	var recipient_keys = [];
+	for (var i = 0; i < recipient_devices.length; i++) {
+		var device = recipient_devices[i];
+		if (!device || !device.phone_device_uuid || !device.public_key_jwk) {
+			continue;
+		}
+
+		var peer_jwk;
+		try {
+			peer_jwk = typeof device.public_key_jwk === 'string'
+				? JSON.parse(device.public_key_jwk)
+				: device.public_key_jwk;
+		}
+		catch (error) {
+			continue;
+		}
+
+		var wrap_key = await derive_shared_wrap_key(peer_jwk);
+		var wrapped_iv = window.crypto.getRandomValues(new Uint8Array(E2EE_IV_BYTES));
+		var wrapped_key_cipher = await window.crypto.subtle.encrypt(
+			{ name: 'AES-GCM', iv: wrapped_iv },
+			wrap_key,
+			content_key_raw
+		);
+
+		recipient_keys.push({
+			recipient_device_uuid: device.phone_device_uuid,
+			wrapped_key: bytes_to_base64(wrapped_key_cipher),
+			wrapped_iv: bytes_to_base64(wrapped_iv)
+		});
+	}
+
+	return {
+		ciphertext: bytes_to_base64(ciphertext),
+		content_iv: bytes_to_base64(content_iv),
+		recipient_keys: recipient_keys
+	};
+}
+
+async function decrypt_message_row(row) {
+	var sender_public_jwk;
+	try {
+		sender_public_jwk = typeof row.sender_public_key_jwk === 'string'
+			? JSON.parse(row.sender_public_key_jwk)
+			: row.sender_public_key_jwk;
+	}
+	catch (error) {
+		return null;
+	}
+
+	var wrap_key = await derive_shared_wrap_key(sender_public_jwk);
+	var wrapped_key_raw = await window.crypto.subtle.decrypt(
+		{ name: 'AES-GCM', iv: base64_to_bytes(row.wrapped_iv || '') },
+		wrap_key,
+		base64_to_bytes(row.wrapped_key || '')
+	);
+	var content_key = await window.crypto.subtle.importKey(
+		'raw',
+		wrapped_key_raw,
+		{ name: 'AES-GCM' },
+		false,
+		['decrypt']
+	);
+	var plaintext_bytes = await window.crypto.subtle.decrypt(
+		{ name: 'AES-GCM', iv: base64_to_bytes(row.message_content_iv || '') },
+		content_key,
+		base64_to_bytes(row.message_ciphertext || '')
+	);
+
+	return new TextDecoder().decode(plaintext_bytes);
+}
+
+function get_conversation_lookup_destination(conversation) {
+	if (!conversation) {
+		return '';
+	}
+
+	var destination = normalize_message_destination(conversation.destination || '');
+	if (!destination) {
+		destination = get_conversation_destination(conversation);
+	}
+
+	if (destination.charAt(0) === '#') {
+		return normalize_room_name(destination);
+	}
+
+	return normalize_message_destination(destination);
+}
+
+function conversation_has_message(conversation, message_candidate) {
+	if (!conversation || !Array.isArray(conversation.messages) || !message_candidate) {
+		return false;
+	}
+
+	for (var i = 0; i < conversation.messages.length; i++) {
+		var existing = conversation.messages[i];
+		if (!existing) {
+			continue;
+		}
+
+		if (message_candidate.message_uuid && existing.message_uuid && String(existing.message_uuid) === String(message_candidate.message_uuid)) {
+			return true;
+		}
+
+		if (
+			existing.direction === message_candidate.direction &&
+			String(existing.text || '') === String(message_candidate.text || '') &&
+			Math.abs(Number(existing.timestamp || 0) - Number(message_candidate.timestamp || 0)) < 2000
+		) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+function collect_local_pending_messages_by_destination() {
+	var pending = {};
+	var now = Date.now();
+
+	message_conversations.forEach(function(conversation) {
+		var destination = get_conversation_lookup_destination(conversation);
+		if (!destination || !conversation || !Array.isArray(conversation.messages)) {
+			return;
+		}
+
+		conversation.messages.forEach(function(message) {
+			if (!message || message.direction !== 'outgoing') {
+				return;
+			}
+
+			var is_local = !!message.local_only || message.send_status === 'sending' || message.send_status === 'failed';
+			if (!is_local) {
+				return;
+			}
+
+			if (message.send_status === 'sent' && Number(message.local_expires_at || 0) > 0 && Number(message.local_expires_at) < now) {
+				return;
+			}
+
+			if (!pending[destination]) {
+				pending[destination] = [];
+			}
+
+			pending[destination].push(Object.assign({}, message));
+		});
+	});
+
+	return pending;
+}
+
+function merge_local_pending_messages(pending_by_destination) {
+	Object.keys(pending_by_destination || {}).forEach(function(destination) {
+		var pending_messages = pending_by_destination[destination] || [];
+		if (!pending_messages.length) {
+			return;
+		}
+
+		var conversation = find_conversation_by_destination(destination);
+		if (!conversation) {
+			conversation = get_or_create_destination_conversation(destination);
+		}
+		if (!conversation) {
+			return;
+		}
+
+		conversation.destination = destination;
+		if (!Array.isArray(conversation.messages)) {
+			conversation.messages = [];
+		}
+
+		pending_messages.forEach(function(local_message) {
+			if (!conversation_has_message(conversation, local_message)) {
+				conversation.messages.push(local_message);
+			}
+		});
+
+		conversation.messages.sort(function(left, right) {
+			return Number(left.timestamp || 0) - Number(right.timestamp || 0);
 		});
 	});
 }
@@ -986,7 +1808,29 @@ function load_messages_from_database(force_reload) {
 	}
 
 	messages_load_in_progress = true;
-	get_message_api('list').then(function(result) {
+	var local_pending_by_destination = collect_local_pending_messages_by_destination();
+	var pending_destination = '';
+	var destination_input = document.getElementById('message_destination');
+	if (destination_input) {
+		pending_destination = normalize_message_destination(destination_input.value);
+	}
+	if (!pending_destination && active_conversation_id) {
+		var current_conversation = find_conversation(active_conversation_id);
+		pending_destination = get_conversation_destination(current_conversation);
+	}
+	if (pending_destination.charAt(0) === '/') {
+		pending_destination = '';
+	}
+
+	ensure_e2ee_unlocked().then(function(unlocked) {
+		if (!unlocked) {
+			throw new Error('unlock_failed');
+		}
+		return get_message_api('list', {
+			device_uuid: e2ee_device_uuid,
+			limit: 1000
+		});
+	}).then(async function(result) {
 		if (!result || result.status !== 'ok') {
 			var message = (result && result.message) ? result.message : 'Failed to load messages';
 			show_temporary_status(message, 'fas fa-exclamation-circle');
@@ -994,14 +1838,80 @@ function load_messages_from_database(force_reload) {
 		}
 
 		message_conversations.splice(0, message_conversations.length);
-		if (Array.isArray(result.conversations)) {
-			result.conversations.forEach(function(conversation) {
-				message_conversations.push(conversation);
+		var conversation_map = {};
+		var rows = Array.isArray(result.messages) ? result.messages : [];
+		for (var i = 0; i < rows.length; i++) {
+			var row = rows[i];
+			var plaintext = null;
+			try {
+				plaintext = await decrypt_message_row(row);
+			}
+			catch (error) {
+				plaintext = null;
+			}
+
+			if (plaintext === null) {
+				continue;
+			}
+
+			var peer_key = String(row.peer_key || ('dest:' + String(row.destination || 'unknown')));
+			if (!conversation_map[peer_key]) {
+				var inferred_destination = '';
+				var row_destination = normalize_message_destination(String(row.destination || ''));
+				if (row_destination.charAt(0) === '#') {
+					inferred_destination = row_destination;
+				}
+				else if (String(row.sender_user_uuid || '') === String(phone_e2ee_user_uuid || '')) {
+					inferred_destination = normalize_message_destination(String(row.destination || ''));
+				}
+				else {
+					inferred_destination = normalize_message_destination(String(row.sender_username || row.peer_name || ''));
+				}
+
+				conversation_map[peer_key] = {
+					id: 'xmpp-peer-' + peer_key.replace(/[^a-zA-Z0-9_\-:@#\.]/g, '_'),
+					name: String(row.peer_name || row.destination || 'Unknown'),
+					destination: inferred_destination,
+					presence: (String(row.peer_name || '').charAt(0) === '#') ? 'room' : 'unknown',
+					unread: 0,
+					messages: []
+				};
+			}
+
+			var is_outgoing = String(row.sender_user_uuid || '') === String(phone_e2ee_user_uuid || '');
+			var timestamp_ms = Date.parse(String(row.message_created || ''));
+			if (!isFinite(timestamp_ms)) {
+				timestamp_ms = Date.now();
+			}
+
+			conversation_map[peer_key].messages.push({
+				message_uuid: String(row.phone_message_uuid || ''),
+				direction: is_outgoing ? 'outgoing' : 'incoming',
+				text: plaintext,
+				timestamp: timestamp_ms,
+				send_status: 'sent'
 			});
 		}
 
+		Object.keys(conversation_map).forEach(function(key) {
+			message_conversations.push(conversation_map[key]);
+		});
+
+		merge_local_pending_messages(local_pending_by_destination);
+
+		message_conversations.sort(function(left, right) {
+			var left_time = left.messages.length ? left.messages[left.messages.length - 1].timestamp : 0;
+			var right_time = right.messages.length ? right.messages[right.messages.length - 1].timestamp : 0;
+			return right_time - left_time;
+		});
+
+		if (Array.isArray(result.messages) && result.messages.length > 0 && message_conversations.length === 0) {
+			show_temporary_status('Some messages could not be decrypted on this device', 'fas fa-exclamation-circle');
+		}
+
 		if (active_conversation_id && !find_conversation(active_conversation_id)) {
-			active_conversation_id = null;
+			var pending_conversation = get_or_create_destination_conversation(pending_destination);
+			active_conversation_id = pending_conversation ? pending_conversation.id : null;
 		}
 
 		messages_loaded_from_db = true;
@@ -1013,14 +1923,19 @@ function load_messages_from_database(force_reload) {
 			open_conversation(message_conversations[0].id);
 		}
 		populate_room_suggestions();
-	}).catch(function() {
-		show_temporary_status('Failed to load messages', 'fas fa-exclamation-circle');
+	}).catch(function(error) {
+		if (error && error.message === 'unlock_failed') {
+			return;
+		}
+		show_temporary_status('Failed to load encrypted messages', 'fas fa-exclamation-circle');
 	}).finally(function() {
 		messages_load_in_progress = false;
 	});
 }
 
-function update_action_bar_state(active_panel) {
+function update_action_bar_state(panel_name) {
+	active_panel = panel_name || 'dialpad';
+
 	// Remove active class from all action items
 	document.querySelectorAll('.action_item').forEach(function(item) {
 		item.classList.remove('active');
@@ -1060,6 +1975,9 @@ function find_conversation_by_destination(destination_value) {
 	var destination_suffix = '(' + normalized_destination + ')';
 	for (var i = 0; i < message_conversations.length; i++) {
 		var conversation = message_conversations[i];
+		if (normalize_message_destination(conversation.destination) === normalized_destination) {
+			return conversation;
+		}
 		if (conversation.id === 'xmpp-dest-' + normalized_destination) {
 			return conversation;
 		}
@@ -1080,6 +1998,10 @@ function normalize_room_name(room_name) {
 		normalized = '#' + normalized;
 	}
 	return normalized.toLowerCase();
+}
+
+function is_room_destination(destination_value) {
+	return normalize_message_destination(destination_value).charAt(0) === '#';
 }
 
 function list_available_rooms() {
@@ -1152,6 +2074,7 @@ function get_or_create_destination_conversation(destination_value) {
 	var new_conversation = {
 		id: 'xmpp-dest-' + normalized_destination,
 		name: normalized_destination.charAt(0) === '#' ? normalized_destination : ('Ext ' + normalized_destination),
+		destination: normalized_destination,
 		presence: normalized_destination.charAt(0) === '#' ? 'room' : 'unknown',
 		unread: 0,
 		messages: []
@@ -1161,13 +2084,93 @@ function get_or_create_destination_conversation(destination_value) {
 	return new_conversation;
 }
 
-function set_message_destination() {
+function bump_conversation_to_top(conversation) {
+	if (!conversation) {
+		return;
+	}
+
+	var existing_index = message_conversations.indexOf(conversation);
+	if (existing_index > 0) {
+		message_conversations.splice(existing_index, 1);
+		message_conversations.unshift(conversation);
+	}
+}
+
+function handle_incoming_sip_message(message_event) {
+	if (!message_event) {
+		return;
+	}
+
+	var remote_user = '';
+	if (message_event.remoteIdentity && message_event.remoteIdentity.uri && message_event.remoteIdentity.uri.user) {
+		remote_user = String(message_event.remoteIdentity.uri.user);
+	}
+	else if (message_event.request && message_event.request.from && message_event.request.from.uri && message_event.request.from.uri.user) {
+		remote_user = String(message_event.request.from.uri.user);
+	}
+
+	var message_text = '';
+	if (typeof message_event.body === 'string') {
+		message_text = message_event.body;
+	}
+	else if (message_event.request && typeof message_event.request.body === 'string') {
+		message_text = message_event.request.body;
+	}
+
+	var destination = normalize_message_destination(remote_user);
+	var text = String(message_text || '').trim();
+	if (!destination || !text) {
+		return;
+	}
+
+	var conversation = get_or_create_destination_conversation(destination);
+	if (!conversation) {
+		return;
+	}
+
+	conversation.destination = destination;
+	conversation.presence = 'online';
+	if (!conversation.name || conversation.name.indexOf('#') !== 0) {
+		conversation.name = 'Ext ' + destination;
+	}
+
+	conversation.messages.push({
+		direction: 'incoming',
+		text: text,
+		timestamp: Date.now()
+	});
+
+	bump_conversation_to_top(conversation);
+
+	if (active_conversation_id !== conversation.id || active_panel !== 'messages') {
+		conversation.unread = (conversation.unread || 0) + 1;
+	}
+
+	if (active_conversation_id === conversation.id) {
+		render_messages_thread(conversation);
+	}
+	render_messages_sidebar();
+
+	if (active_panel !== 'messages') {
+		show_temporary_status('New message from ' + destination, 'fas fa-comment-dots');
+	}
+}
+
+async function set_message_destination() {
 	var destination_input = document.getElementById('message_destination');
 	if (!destination_input) {
 		return;
 	}
 
 	var normalized_destination = normalize_message_destination(destination_input.value);
+	if (normalized_destination.charAt(0) === '/') {
+		if (await handle_room_command(normalized_destination)) {
+			return;
+		}
+		show_temporary_status('Unknown command. Use /list, /create #room or /join #room', 'fas fa-exclamation-circle');
+		return;
+	}
+
 	if (normalized_destination.charAt(0) === '#') {
 		normalized_destination = find_room_match(normalized_destination) || normalize_room_name(normalized_destination);
 	}
@@ -1182,9 +2185,43 @@ function set_message_destination() {
 		return;
 	}
 
+	conversation.destination = normalized_destination;
+
 	destination_input.value = normalized_destination;
 	open_conversation(conversation.id);
 	show_temporary_status('Destination set to ' + normalized_destination, 'fas fa-comments');
+}
+
+function get_conversation_destination(conversation) {
+	if (!conversation) {
+		return '';
+	}
+
+	var explicit_destination = normalize_message_destination(conversation.destination);
+	if (explicit_destination) {
+		return explicit_destination;
+	}
+
+	if (conversation.name && conversation.name.charAt(0) === '#') {
+		return normalize_room_name(conversation.name);
+	}
+
+	var extension_match = conversation.name ? conversation.name.match(/\(([^\)]+)\)$/) : null;
+	if (extension_match && extension_match[1]) {
+		return normalize_message_destination(extension_match[1]);
+	}
+
+	var ext_prefix_match = conversation.name ? conversation.name.match(/^Ext\s+(.+)$/i) : null;
+	if (ext_prefix_match && ext_prefix_match[1]) {
+		return normalize_message_destination(ext_prefix_match[1]);
+	}
+
+	var fallback_name = normalize_message_destination(conversation.name);
+	if (fallback_name) {
+		return fallback_name;
+	}
+
+	return '';
 }
 
 function set_thread_presence(presence_value) {
@@ -1218,10 +2255,25 @@ function set_thread_presence(presence_value) {
 	presence.textContent = label;
 }
 
-function join_room_by_name(room_name) {
+async function join_room_by_name(room_name) {
 	var normalized_room = find_room_match(room_name) || normalize_room_name(room_name);
 	if (!normalized_room) {
 		show_temporary_status('Invalid room name', 'fas fa-exclamation-circle');
+		return false;
+	}
+
+	try {
+		var join_result = await post_message_api({
+			action: 'join_room',
+			room_name: normalized_room
+		});
+		if (!join_result || join_result.status !== 'ok') {
+			show_temporary_status((join_result && join_result.message) ? join_result.message : 'Could not join room on server', 'fas fa-exclamation-circle');
+			return false;
+		}
+	}
+	catch (error) {
+		show_temporary_status('Could not join room on server', 'fas fa-exclamation-circle');
 		return false;
 	}
 
@@ -1241,17 +2293,194 @@ function join_room_by_name(room_name) {
 	}
 
 	populate_room_suggestions();
+	load_messages_from_database(true);
 	show_temporary_status('Joined room ' + normalized_room, 'fas fa-users');
 	return true;
 }
 
-function handle_join_command(command_text) {
-	var join_match = String(command_text || '').trim().match(/^\/join\s+(.+)$/i);
-	if (!join_match) {
+async function create_room_by_name(room_name) {
+	var normalized_room = normalize_room_name(room_name);
+	if (!normalized_room) {
+		show_temporary_status('Invalid room name', 'fas fa-exclamation-circle');
 		return false;
 	}
 
-	return join_room_by_name(join_match[1]);
+	try {
+		var create_result = await post_message_api({
+			action: 'join_room',
+			room_name: normalized_room
+		});
+		if (!create_result || create_result.status !== 'ok') {
+			show_temporary_status((create_result && create_result.message) ? create_result.message : 'Could not create room on server', 'fas fa-exclamation-circle');
+			return false;
+		}
+	}
+	catch (error) {
+		show_temporary_status('Could not create room on server', 'fas fa-exclamation-circle');
+		return false;
+	}
+
+	if (known_chat_rooms.indexOf(normalized_room) === -1) {
+		known_chat_rooms.push(normalized_room);
+	}
+
+	var conversation = get_or_create_destination_conversation(normalized_room);
+	if (!conversation) {
+		show_temporary_status('Could not create room', 'fas fa-exclamation-circle');
+		return false;
+	}
+
+	conversation.name = normalized_room;
+	conversation.destination = normalized_room;
+	conversation.presence = 'room';
+	open_conversation(conversation.id);
+
+	var destination_input = document.getElementById('message_destination');
+	if (destination_input) {
+		destination_input.value = normalized_room;
+	}
+
+	populate_room_suggestions();
+	load_messages_from_database(true);
+	show_temporary_status('Created room ' + normalized_room, 'fas fa-users');
+	return true;
+}
+
+async function list_rooms_into_autocomplete() {
+	var result;
+	try {
+		result = await get_message_api('list_rooms', {});
+	}
+	catch (error) {
+		show_temporary_status('Could not load rooms from server', 'fas fa-exclamation-circle');
+		return false;
+	}
+
+	if (!result || result.status !== 'ok') {
+		show_temporary_status((result && result.message) ? result.message : 'Could not load rooms from server', 'fas fa-exclamation-circle');
+		return false;
+	}
+
+	var server_rooms = Array.isArray(result.rooms) ? result.rooms : [];
+	server_rooms.forEach(function(room_name) {
+		var normalized_room = normalize_room_name(room_name);
+		if (!normalized_room) {
+			return;
+		}
+		if (known_chat_rooms.indexOf(normalized_room) === -1) {
+			known_chat_rooms.push(normalized_room);
+		}
+	});
+
+	populate_room_suggestions();
+
+	var destination_input = document.getElementById('message_destination');
+	if (destination_input) {
+		destination_input.value = '#';
+		destination_input.focus();
+		destination_input.dispatchEvent(new Event('input', { bubbles: true }));
+	}
+
+	show_temporary_status('Loaded ' + server_rooms.length + ' room' + (server_rooms.length === 1 ? '' : 's') + ' into autocomplete', 'fas fa-list');
+	return true;
+}
+
+async function delete_room_by_name(room_name) {
+	var normalized_room = normalize_room_name(room_name);
+	if (!normalized_room) {
+		show_temporary_status('Invalid room name', 'fas fa-exclamation-circle');
+		return false;
+	}
+
+	if (!can_delete_rooms) {
+		show_temporary_status('You do not have permission to delete rooms', 'fas fa-exclamation-circle');
+		return false;
+	}
+
+	var confirmed = window.confirm('Delete room ' + normalized_room + '? This will remove room history for all members.');
+	if (!confirmed) {
+		return false;
+	}
+
+	var result;
+	try {
+		result = await post_message_api({
+			action: 'delete_room',
+			room_name: normalized_room
+		});
+	}
+	catch (error) {
+		show_temporary_status('Could not delete room on server', 'fas fa-exclamation-circle');
+		return false;
+	}
+
+	if (!result || result.status !== 'ok') {
+		show_temporary_status((result && result.message) ? result.message : 'Could not delete room on server', 'fas fa-exclamation-circle');
+		return false;
+	}
+
+	for (var i = message_conversations.length - 1; i >= 0; i--) {
+		var conversation = message_conversations[i];
+		var conversation_destination = normalize_message_destination(conversation.destination || '');
+		var conversation_name = normalize_room_name(conversation.name || '');
+		if (conversation_destination === normalized_room || conversation_name === normalized_room) {
+			if (active_conversation_id === conversation.id) {
+				active_conversation_id = null;
+			}
+			message_conversations.splice(i, 1);
+		}
+	}
+
+	for (var j = known_chat_rooms.length - 1; j >= 0; j--) {
+		if (normalize_room_name(known_chat_rooms[j]) === normalized_room) {
+			known_chat_rooms.splice(j, 1);
+		}
+	}
+
+	render_messages_sidebar();
+	if (active_conversation_id) {
+		open_conversation(active_conversation_id);
+	}
+	else {
+		var thread_title = document.getElementById('thread_title');
+		if (thread_title) {
+			thread_title.textContent = 'Select a conversation';
+		}
+		set_thread_presence('offline');
+		var thread_messages = document.getElementById('thread_messages');
+		if (thread_messages) {
+			thread_messages.innerHTML = '<div class="thread_empty">Select a conversation to start messaging.</div>';
+		}
+	}
+
+	show_temporary_status('Deleted room ' + normalized_room, 'fas fa-trash');
+	return true;
+}
+
+async function handle_room_command(command_text) {
+	if (/^\/list$/i.test(String(command_text || '').trim())) {
+		return await list_rooms_into_autocomplete();
+	}
+
+	var room_match = String(command_text || '').trim().match(/^\/(join|create)\s+(.+)$/i);
+	if (!room_match) {
+		return false;
+	}
+
+	var command = room_match[1].toLowerCase();
+	var room_name = room_match[2];
+	if (command === 'create') {
+		return await create_room_by_name(room_name);
+	}
+	if (command === 'join') {
+		return await join_room_by_name(room_name);
+	}
+
+	return false;
+}
+
+async function handle_join_command(command_text) {
+	return await handle_room_command(command_text);
 }
 
 function format_message_time(timestamp) {
@@ -1263,9 +2492,43 @@ function format_message_time(timestamp) {
 	});
 }
 
+function render_thread_conversation_selector() {
+	var selector = document.getElementById('thread_conversation_select');
+	if (!selector) {
+		return;
+	}
+
+	var selected_id = active_conversation_id || '';
+	selector.innerHTML = '';
+
+	if (message_conversations.length === 0) {
+		var empty_option = document.createElement('option');
+		empty_option.value = '';
+		empty_option.textContent = 'Select a conversation';
+		selector.appendChild(empty_option);
+		selector.disabled = true;
+		return;
+	}
+
+	selector.disabled = false;
+	message_conversations.forEach(function(conversation) {
+		var option = document.createElement('option');
+		option.value = conversation.id;
+		var unread = Number(conversation.unread || 0);
+		option.textContent = unread > 0
+			? (String(conversation.name) + ' (' + unread + ')')
+			: String(conversation.name);
+		if (conversation.id === selected_id) {
+			option.selected = true;
+		}
+		selector.appendChild(option);
+	});
+}
+
 function render_messages_sidebar() {
 	var container = document.getElementById('messages_conversations');
 	if (!container) {
+		render_thread_conversation_selector();
 		return;
 	}
 
@@ -1281,6 +2544,14 @@ function render_messages_sidebar() {
 			open_conversation(conversation.id);
 		};
 
+		if (can_delete_rooms && is_room_destination(conversation.destination || conversation.name || '')) {
+			item.addEventListener('contextmenu', function(event) {
+				event.preventDefault();
+				delete_room_by_name(conversation.destination || conversation.name || '');
+			});
+			item.title = 'Right-click to delete room';
+		}
+
 		var last_message = conversation.messages.length
 			? conversation.messages[conversation.messages.length - 1]
 			: { text: 'No messages yet', timestamp: Date.now() };
@@ -1294,6 +2565,7 @@ function render_messages_sidebar() {
 	});
 
 	update_messages_badge();
+	render_thread_conversation_selector();
 
 	if (!active_conversation_id && message_conversations.length > 0) {
 		open_conversation(message_conversations[0].id);
@@ -1320,23 +2592,19 @@ function open_conversation(conversation_id) {
 
 	var destination_input = document.getElementById('message_destination');
 	if (destination_input) {
-		if (conversation.name && conversation.name.charAt(0) === '#') {
-			destination_input.value = conversation.name;
-		}
-		else {
-			var extension_match = conversation.name ? conversation.name.match(/\(([^\)]+)\)$/) : null;
-			if (extension_match) {
-				destination_input.value = extension_match[1];
-			}
-			else {
-				var ext_prefix_match = conversation.name ? conversation.name.match(/^Ext\s+(.+)$/i) : null;
-				destination_input.value = ext_prefix_match ? ext_prefix_match[1] : '';
-			}
+		var conversation_destination = get_conversation_destination(conversation);
+		conversation.destination = conversation_destination;
+		if (document.activeElement !== destination_input) {
+			destination_input.value = conversation_destination;
 		}
 	}
 
 	render_messages_thread(conversation);
 	render_messages_sidebar();
+	var selector = document.getElementById('thread_conversation_select');
+	if (selector && selector.value !== conversation_id) {
+		selector.value = conversation_id;
+	}
 }
 
 function render_messages_thread(conversation) {
@@ -1353,11 +2621,19 @@ function render_messages_thread(conversation) {
 
 	conversation.messages.forEach(function(message) {
 		var row = document.createElement('div');
-		row.className = 'message_row ' + message.direction;
+		var status_class = message && message.send_status ? (' ' + message.send_status) : '';
+		row.className = 'message_row ' + message.direction + status_class;
+		var meta_text = format_message_time(message.timestamp);
+		if (message && message.send_status === 'sending') {
+			meta_text += ' - sending';
+		}
+		else if (message && message.send_status === 'failed') {
+			meta_text += ' - failed';
+		}
 		row.innerHTML =
 			'<div class="message_bubble">' +
 				sanitize_string(message.text) +
-				'<div class="message_meta">' + format_message_time(message.timestamp) + '</div>' +
+				'<div class="message_meta">' + sanitize_string(meta_text) + '</div>' +
 			'</div>';
 		container.appendChild(row);
 	});
@@ -1396,7 +2672,7 @@ async function send_message_mock() {
 		return;
 	}
 
-	if (handle_join_command(text)) {
+	if (await handle_room_command(text)) {
 		input.value = '';
 		return;
 	}
@@ -1425,17 +2701,82 @@ async function send_message_mock() {
 
 	var destination_for_send = requested_destination;
 	if (!destination_for_send) {
-		if (conversation.name && conversation.name.charAt(0) === '#') {
-			destination_for_send = conversation.name;
-		}
-		else {
-			var ext_prefix_match = conversation.name ? conversation.name.match(/^Ext\s+(.+)$/i) : null;
-			destination_for_send = ext_prefix_match ? ext_prefix_match[1] : '';
-		}
+		destination_for_send = get_conversation_destination(conversation);
 	}
+	conversation.destination = destination_for_send;
 
 	if (!destination_for_send) {
 		show_temporary_status('Set a destination first (example: 102)', 'fas fa-exclamation-circle');
+		return;
+	}
+
+	var optimistic_message = {
+		direction: 'outgoing',
+		text: text,
+		timestamp: Date.now(),
+		send_status: 'sending',
+		local_only: true,
+		local_expires_at: Date.now() + 120000,
+		message_uuid: ''
+	};
+
+	conversation.messages.push(optimistic_message);
+	input.value = '';
+	input.focus();
+	render_messages_thread(conversation);
+	render_messages_sidebar();
+
+	function mark_message_failed(error_message) {
+		optimistic_message.send_status = 'failed';
+		render_messages_thread(conversation);
+		render_messages_sidebar();
+		show_temporary_status(error_message, 'fas fa-exclamation-circle');
+	}
+
+	var unlocked = await ensure_e2ee_unlocked();
+	if (!unlocked) {
+		mark_message_failed('Encryption unlock is required before sending');
+		return;
+	}
+
+	var recipient_result;
+	var my_devices_result;
+	try {
+		recipient_result = await get_message_api('recipient_devices', { destination: destination_for_send });
+		my_devices_result = await get_message_api('my_devices', {});
+	}
+	catch (error) {
+		mark_message_failed('Could not load recipient keys');
+		return;
+	}
+
+	if (!recipient_result || recipient_result.status !== 'ok') {
+		mark_message_failed((recipient_result && recipient_result.message) ? recipient_result.message : 'Destination has no encryption keys');
+		return;
+	}
+
+	if (!my_devices_result || my_devices_result.status !== 'ok') {
+		mark_message_failed((my_devices_result && my_devices_result.message) ? my_devices_result.message : 'Could not load your device keys');
+		return;
+	}
+
+	var device_map = {};
+	var recipient_devices = Array.isArray(recipient_result.devices) ? recipient_result.devices : [];
+	var my_devices = Array.isArray(my_devices_result.devices) ? my_devices_result.devices : [];
+	recipient_devices.concat(my_devices).forEach(function(device) {
+		if (device && device.phone_device_uuid) {
+			device_map[device.phone_device_uuid] = device;
+		}
+	});
+
+	var envelope;
+	try {
+		envelope = await encrypt_message_envelope(text, Object.keys(device_map).map(function(device_uuid) {
+			return device_map[device_uuid];
+		}));
+	}
+	catch (error) {
+		mark_message_failed('Encryption failed for destination devices');
 		return;
 	}
 
@@ -1443,31 +2784,34 @@ async function send_message_mock() {
 	try {
 		send_result = await post_message_api({
 			action: 'send',
+			device_uuid: e2ee_device_uuid,
+			sender_extension_uuid: selected_sender_extension_uuid,
 			destination: destination_for_send,
-			text: text
+			message_text: text,
+			ciphertext: envelope.ciphertext,
+			content_iv: envelope.content_iv,
+			sender_public_key_jwk: JSON.stringify(e2ee_public_jwk),
+			recipient_keys: JSON.stringify(envelope.recipient_keys)
 		});
 	}
 	catch (error) {
-		show_temporary_status('Could not save message', 'fas fa-exclamation-circle');
+		mark_message_failed('Could not save message');
 		return;
 	}
 
 	if (!send_result || send_result.status !== 'ok' || !send_result.message) {
 		var error_message = (send_result && send_result.message) ? send_result.message : 'Could not save message';
-		show_temporary_status(error_message, 'fas fa-exclamation-circle');
+		mark_message_failed(error_message);
 		return;
 	}
 
-	conversation.messages.push({
-		direction: send_result.message.direction || 'outgoing',
-		text: send_result.message.text || text,
-		timestamp: send_result.message.timestamp || Date.now()
-	});
-
-	input.value = '';
+	optimistic_message.send_status = 'sent';
+	optimistic_message.message_uuid = String((send_result.message && send_result.message.id) ? send_result.message.id : '');
+	optimistic_message.local_only = true;
+	optimistic_message.local_expires_at = Date.now() + 20000;
+	optimistic_message.timestamp = send_result.message.timestamp || Date.now();
 	render_messages_thread(conversation);
 	render_messages_sidebar();
-	show_temporary_status('Message queued to ' + conversation.name, 'fas fa-paper-plane');
 }
 
 // Render contacts list
@@ -1789,6 +3133,43 @@ document.addEventListener('keydown', function(e) {
 });
 
 document.addEventListener('DOMContentLoaded', function() {
+	function harden_message_field_autofill(field, field_prefix) {
+		if (!field) {
+			return;
+		}
+
+		field.setAttribute('autocomplete', 'section-xmpp new-password');
+		field.setAttribute('autocorrect', 'off');
+		field.setAttribute('autocapitalize', 'off');
+		field.setAttribute('spellcheck', 'false');
+		field.setAttribute('data-lpignore', 'true');
+		field.setAttribute('data-1p-ignore', 'true');
+		field.setAttribute('data-form-type', 'other');
+		field.setAttribute('aria-autocomplete', 'none');
+		field.setAttribute('inputmode', 'text');
+
+		// Randomized field name makes saved-login heuristics less likely to trigger.
+		field.name = field_prefix + '_' + Math.random().toString(36).slice(2, 12);
+
+		var deflect_autofill = function() {
+			if (field.readOnly) {
+				return;
+			}
+			field.readOnly = true;
+			setTimeout(function() {
+				field.readOnly = false;
+			}, 0);
+		};
+
+		if (String(field.tagName || '').toUpperCase() === 'TEXTAREA') {
+			return;
+		}
+
+		field.addEventListener('mousedown', deflect_autofill);
+		field.addEventListener('touchstart', deflect_autofill, { passive: true });
+		field.addEventListener('focus', deflect_autofill);
+	}
+
 	var local_wrapper = document.getElementById('local_video_wrapper');
 	if (local_wrapper) {
 		local_wrapper.addEventListener('click', function() {
@@ -1798,6 +3179,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 	var message_input = document.getElementById('message_input');
 	if (message_input) {
+		harden_message_field_autofill(message_input, 'xmpp_message');
 		message_input.addEventListener('keydown', function(event) {
 			if (event.key === 'Tab') {
 				var current_text = message_input.value.trim();
@@ -1821,6 +3203,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 	var message_destination = document.getElementById('message_destination');
 	if (message_destination) {
+		harden_message_field_autofill(message_destination, 'xmpp_destination');
 		message_destination.addEventListener('keydown', function(event) {
 			if (event.key === 'Tab') {
 				var destination_value = normalize_message_destination(message_destination.value);
@@ -1840,6 +3223,23 @@ document.addEventListener('DOMContentLoaded', function() {
 		});
 	}
 
+	var message_sender_extension = document.getElementById('message_sender_extension');
+	if (message_sender_extension) {
+		message_sender_extension.addEventListener('change', function() {
+			set_selected_sender_extension(message_sender_extension.value);
+		});
+	}
+
+	var thread_conversation_select = document.getElementById('thread_conversation_select');
+	if (thread_conversation_select) {
+		thread_conversation_select.addEventListener('change', function() {
+			if (thread_conversation_select.value) {
+				open_conversation(thread_conversation_select.value);
+			}
+		});
+	}
+	render_sender_extension_selector();
+
 	var remote_video = document.getElementById('remote_video');
 	if (remote_video) {
 		remote_video.addEventListener('loadedmetadata', apply_video_fit_layout);
@@ -1849,5 +3249,16 @@ document.addEventListener('DOMContentLoaded', function() {
 	apply_video_fit_layout();
 	populate_room_suggestions();
 	update_messages_badge();
-	load_messages_from_database();
+
+	if (!message_refresh_interval_id) {
+		message_refresh_interval_id = setInterval(function() {
+			if (active_panel !== 'messages') {
+				return;
+			}
+			if (!e2ee_unlocked) {
+				return;
+			}
+			load_messages_from_database(true);
+		}, 3000);
+	}
 });
