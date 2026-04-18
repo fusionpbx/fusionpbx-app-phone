@@ -3371,6 +3371,9 @@ document.addEventListener('DOMContentLoaded', function() {
 			if (!event) {
 				return;
 			}
+			if (event.defaultPrevented) {
+				return;
+			}
 			if (event.shiftKey) {
 				return;
 			}
@@ -3388,6 +3391,9 @@ document.addEventListener('DOMContentLoaded', function() {
 			send_message_mock();
 		};
 		message_input.addEventListener('keydown', function(event) {
+			if (event.defaultPrevented) {
+				return;
+			}
 			if (event.key === 'Tab') {
 				var current_text = message_input.value.trim();
 				var join_match = current_text.match(/^\/join\s+(#[^\s]*)?$/i);
@@ -3405,6 +3411,32 @@ document.addEventListener('DOMContentLoaded', function() {
 		});
 		message_input.addEventListener('keypress', handle_message_input_enter);
 	}
+
+	// Fallback Enter-to-send path for browsers where field-level handlers are not consistently triggered.
+	document.addEventListener('keydown', function(event) {
+		if (!event || event.defaultPrevented) {
+			return;
+		}
+		if (event.shiftKey || event.isComposing) {
+			return;
+		}
+		var key_name = String(event.key || '');
+		var key_code = String(event.code || '');
+		var enter_pressed = key_name === 'Enter' || key_name === 'Return' || key_code === 'NumpadEnter';
+		if (!enter_pressed) {
+			return;
+		}
+		var target = event.target;
+		if (!target || target.id !== 'message_input') {
+			return;
+		}
+		if (active_panel !== 'messages') {
+			return;
+		}
+		event.preventDefault();
+		event.stopPropagation();
+		send_message_mock();
+	}, true);
 
 	var message_destination = document.getElementById('message_destination');
 	if (message_destination) {

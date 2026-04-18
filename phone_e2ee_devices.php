@@ -149,16 +149,16 @@ require_once 'resources/header.php';
 $token_hash = $token->create($_SERVER['PHP_SELF']);
 
 echo "<div class='action_bar'>&\n";
-echo "\t<div class='heading'><b>Phone E2EE Device Management</b></div>\n";
+echo "	<div class='heading'><b>Phone E2EE Device Management</b></div>\n";
 echo "</div>\n";
 
 echo "<form method='get' action='phone_e2ee_devices.php'>\n";
-echo "\t<table class='tr_hover' width='100%' border='0' cellpadding='0' cellspacing='0'>\n";
-echo "\t\t<tr>\n";
-echo "\t\t\t<td class='vncellreq' width='180'>User</td>\n";
-echo "\t\t\t<td class='vtable'>\n";
-echo "\t\t\t\t<select class='formfld' name='user_uuid' style='min-width: 300px;'>\n";
-echo "\t\t\t\t\t<option value=''>Select a user</option>\n";
+echo "	<table class='tr_hover' width='100%' border='0' cellpadding='0' cellspacing='0'>\n";
+echo "		<tr>\n";
+echo "			<td class='vncellreq' width='180'>User</td>\n";
+echo "			<td class='vtable'>\n";
+echo "				<select class='formfld' name='user_uuid' style='min-width: 300px;'>\n";
+echo "					<option value=''>Select a user</option>\n";
 foreach ($user_rows as $user_row) {
 	$user_uuid = (string) ($user_row['user_uuid'] ?? '');
 	$user_domain_uuid = (string) ($user_row['domain_uuid'] ?? '');
@@ -183,38 +183,38 @@ foreach ($user_rows as $user_row) {
 		$label = $user_uuid;
 	}
 	$selected_attr = ($selected_user_uuid === $user_uuid && $selected_domain_uuid === $user_domain_uuid) ? " selected='selected'" : '';
-	echo "\t\t\t\t\t<option value='" . escape($user_uuid) . "' data-domain='" . escape($user_domain_uuid) . "'" . $selected_attr . ">" . escape($label) . "</option>\n";
+	echo "					<option value='" . escape($user_uuid) . "' data-domain='" . escape($user_domain_uuid) . "'" . $selected_attr . ">" . escape($label) . "</option>\n";
 }
-echo "\t\t\t\t</select>\n";
-echo "\t\t\t\t<input type='hidden' name='domain_uuid' id='selected_domain_uuid' value='" . escape($selected_domain_uuid) . "'>\n";
-echo "\t\t\t\t<input class='btn' type='submit' value='Load Devices'>\n";
-echo "\t\t\t</td>\n";
-echo "\t\t</tr>\n";
-echo "\t\t<tr>\n";
-echo "\t\t\t<td class='vncell'>Warning</td>\n";
-echo "\t\t\t<td class='vtable'>Revoking a device key blocks that browser/device from decrypting new encrypted messages. This action does not delete messages from the server.</td>\n";
-echo "\t\t</tr>\n";
-echo "\t</table>\n";
+echo "				</select>\n";
+echo "				<input type='hidden' name='domain_uuid' id='selected_domain_uuid' value='" . escape($selected_domain_uuid) . "'>\n";
+echo "				<input class='btn' type='submit' value='Load Devices'>\n";
+echo "			</td>\n";
+echo "		</tr>\n";
+echo "		<tr>\n";
+echo "			<td class='vncell'>Warning</td>\n";
+echo "			<td class='vtable'>Revoking a device key blocks that browser/device from decrypting new encrypted messages. This action does not delete messages from the server.</td>\n";
+echo "		</tr>\n";
+echo "	</table>\n";
 echo "</form>\n";
 
 echo "<br />\n";
 
 echo "<table class='tr_hover' width='100%' border='0' cellpadding='0' cellspacing='0'>\n";
-echo "\t<tr>\n";
-echo "\t\t<th class='th'>Device Label</th>\n";
-echo "\t\t<th class='th'>Device UUID</th>\n";
-echo "\t\t<th class='th'>Fingerprint</th>\n";
-echo "\t\t<th class='th'>Created</th>\n";
-echo "\t\t<th class='th'>Updated</th>\n";
-echo "\t\t<th class='th'>Status</th>\n";
-echo "\t\t<th class='th' width='120'>Action</th>\n";
-echo "\t</tr>\n";
+echo "	<tr>\n";
+echo "		<th class='th'>Device Label</th>\n";
+echo "		<th class='th'>Device UUID</th>\n";
+echo "		<th class='th'>Fingerprint</th>\n";
+echo "		<th class='th'>Created</th>\n";
+echo "		<th class='th'>Updated</th>\n";
+echo "		<th class='th'>Status</th>\n";
+echo "		<th class='th' width='120'>Action</th>\n";
+echo "	</tr>\n";
 
 if ($selected_user_uuid === '') {
-	echo "\t<tr><td class='row_style0' colspan='7'>Select a user to view registered E2EE devices.</td></tr>\n";
+	echo "	<tr><td class='row_style0' colspan='7'>Select a user to view registered E2EE devices.</td></tr>\n";
 }
 else if (empty($devices)) {
-	echo "\t<tr><td class='row_style0' colspan='7'>No E2EE devices found for the selected user.</td></tr>\n";
+	echo "	<tr><td class='row_style0' colspan='7'>No E2EE devices found for the selected user.</td></tr>\n";
 }
 else {
 	$row_style_index = 0;
@@ -223,31 +223,31 @@ else {
 		$row_style = 'row_style' . $row_style_index;
 		$row_style_index = ($row_style_index === 0 ? 1 : 0);
 
-		echo "\t<tr>\n";
-		echo "\t\t<td class='" . $row_style . "'>" . escape((string) ($device['device_label'] ?? 'Browser Device')) . "</td>\n";
-		echo "\t\t<td class='" . $row_style . "'><code>" . escape((string) ($device['phone_device_uuid'] ?? '')) . "</code></td>\n";
-		echo "\t\t<td class='" . $row_style . "'><code>" . escape((string) ($device['key_fingerprint'] ?? '')) . "</code></td>\n";
-		echo "\t\t<td class='" . $row_style . "'>" . escape((string) ($device['phone_device_created'] ?? '')) . "</td>\n";
-		echo "\t\t<td class='" . $row_style . "'>" . escape((string) ($device['phone_device_updated'] ?? '')) . "</td>\n";
-		echo "\t\t<td class='" . $row_style . "'>" . escape($status) . "</td>\n";
-		echo "\t\t<td class='" . $row_style . "'>\n";
+		echo "	<tr>\n";
+		echo "		<td class='" . $row_style . "'>" . escape((string) ($device['device_label'] ?? 'Browser Device')) . "</td>\n";
+		echo "		<td class='" . $row_style . "'><code>" . escape((string) ($device['phone_device_uuid'] ?? '')) . "</code></td>\n";
+		echo "		<td class='" . $row_style . "'><code>" . escape((string) ($device['key_fingerprint'] ?? '')) . "</code></td>\n";
+		echo "		<td class='" . $row_style . "'>" . escape((string) ($device['phone_device_created'] ?? '')) . "</td>\n";
+		echo "		<td class='" . $row_style . "'>" . escape((string) ($device['phone_device_updated'] ?? '')) . "</td>\n";
+		echo "		<td class='" . $row_style . "'>" . escape($status) . "</td>\n";
+		echo "		<td class='" . $row_style . "'>\n";
 
 		if ($status === 'Active') {
-			echo "\t\t\t<form method='post' action='phone_e2ee_devices.php?domain_uuid=" . urlencode($selected_domain_uuid) . "&user_uuid=" . urlencode($selected_user_uuid) . "' onsubmit=\"return confirm('Revoke this device key?');\">\n";
-			echo "\t\t\t\t<input type='hidden' name='action' value='revoke_device'>\n";
-			echo "\t\t\t\t<input type='hidden' name='domain_uuid' value='" . escape($selected_domain_uuid) . "'>\n";
-			echo "\t\t\t\t<input type='hidden' name='user_uuid' value='" . escape($selected_user_uuid) . "'>\n";
-			echo "\t\t\t\t<input type='hidden' name='device_uuid' value='" . escape((string) ($device['phone_device_uuid'] ?? '')) . "'>\n";
-			echo "\t\t\t\t<input type='hidden' name='" . escape($token_hash['name']) . "' value='" . escape($token_hash['hash']) . "'>\n";
-			echo "\t\t\t\t<input type='submit' class='btn' value='Revoke'>\n";
-			echo "\t\t\t</form>\n";
+			echo "			<form method='post' action='phone_e2ee_devices.php?domain_uuid=" . urlencode($selected_domain_uuid) . "&user_uuid=" . urlencode($selected_user_uuid) . "' onsubmit=\"return confirm('Revoke this device key?');\">\n";
+			echo "				<input type='hidden' name='action' value='revoke_device'>\n";
+			echo "				<input type='hidden' name='domain_uuid' value='" . escape($selected_domain_uuid) . "'>\n";
+			echo "				<input type='hidden' name='user_uuid' value='" . escape($selected_user_uuid) . "'>\n";
+			echo "				<input type='hidden' name='device_uuid' value='" . escape((string) ($device['phone_device_uuid'] ?? '')) . "'>\n";
+			echo "				<input type='hidden' name='" . escape($token_hash['name']) . "' value='" . escape($token_hash['hash']) . "'>\n";
+			echo "				<input type='submit' class='btn' value='Revoke'>\n";
+			echo "			</form>\n";
 		}
 		else {
 			echo "Revoked";
 		}
 
-		echo "\t\t</td>\n";
-		echo "\t</tr>\n";
+		echo "		</td>\n";
+		echo "	</tr>\n";
 	}
 }
 
@@ -255,17 +255,17 @@ echo "</table>\n";
 
 echo "<script>\n";
 echo "(function(){\n";
-echo "\tvar userSelect = document.querySelector(\"select[name='user_uuid']\");\n";
-echo "\tvar domainInput = document.getElementById('selected_domain_uuid');\n";
-echo "\tif (!userSelect || !domainInput) { return; }\n";
-echo "\tuserSelect.addEventListener('change', function(){\n";
-echo "\t\tvar selected = userSelect.options[userSelect.selectedIndex];\n";
-echo "\t\tif (!selected) { return; }\n";
-echo "\t\tvar selectedDomain = selected.getAttribute('data-domain');\n";
-echo "\t\tif (selectedDomain) {\n";
-echo "\t\t\tdomainInput.value = selectedDomain;\n";
-echo "\t\t}\n";
-echo "\t});\n";
+echo "	var userSelect = document.querySelector(\"select[name='user_uuid']\");\n";
+echo "	var domainInput = document.getElementById('selected_domain_uuid');\n";
+echo "	if (!userSelect || !domainInput) { return; }\n";
+echo "	userSelect.addEventListener('change', function(){\n";
+echo "		var selected = userSelect.options[userSelect.selectedIndex];\n";
+echo "		if (!selected) { return; }\n";
+echo "		var selectedDomain = selected.getAttribute('data-domain');\n";
+echo "		if (selectedDomain) {\n";
+echo "			domainInput.value = selectedDomain;\n";
+echo "		}\n";
+echo "	});\n";
 echo "})();\n";
 echo "</script>\n";
 

@@ -1407,8 +1407,8 @@ module.exports = (function() {
           { type: "class", value: "[\"]", description: "[\"]" },
           " ",
           { type: "literal", value: " ", description: "\" \"" },
-          "\t",
-          { type: "literal", value: "\t", description: "\"\\t\"" },
+          "	",
+          { type: "literal", value: "	", description: "\"\	\"" },
           /^[a-zA-Z0-9]/,
           { type: "class", value: "[a-zA-Z0-9]", description: "[a-zA-Z0-9]" },
           ";",
@@ -1501,8 +1501,8 @@ module.exports = (function() {
                                   return contents; },
           /^[#-[]/,
           { type: "class", value: "[#-[]", description: "[#-[]" },
-          /^[\0-\t]/,
-          { type: "class", value: "[\\0-\\t]", description: "[\\0-\\t]" },
+          /^[\0-	]/,
+          { type: "class", value: "[\\0-\	]", description: "[\\0-\	]" },
           /^[\x0B-\f]/,
           { type: "class", value: "[\\x0B-\\f]", description: "[\\x0B-\\f]" },
           /^[\x0E-]/,
@@ -2378,7 +2378,7 @@ module.exports = (function() {
             .replace(/\\/g,   '\\\\')
             .replace(/"/g,    '\\"')
             .replace(/\x08/g, '\\b')
-            .replace(/\t/g,   '\\t')
+            .replace(/	/g,   '\	')
             .replace(/\n/g,   '\\n')
             .replace(/\f/g,   '\\f')
             .replace(/\r/g,   '\\r')
