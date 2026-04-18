@@ -81,14 +81,31 @@ function send_call(use_video) {
 	session = user_agent.invite('sip:'+destination+'@<?php echo $domain_name; ?>', call_options);
 	var current_session = session;
 	current_session.local_ended = false;
+	current_session.outgoing_finalized = false;
+
+	function finalize_outgoing_session() {
+		if (current_session.outgoing_finalized) {
+			return;
+		}
+		current_session.outgoing_finalized = true;
+		stop_call_tone();
+	}
+
+	function handle_outgoing_terminal_status(status_text) {
+		finalize_outgoing_session();
+		handle_outgoing_session_failure(current_session, status_text);
+	}
+
 	start_call_tone('outgoing');
 
 	current_session.on('progress', function() {
-		start_call_tone('outgoing');
+		if (!current_session.outgoing_finalized) {
+			start_call_tone('outgoing');
+		}
 	});
 
 	current_session.on('accepted', function() {
-		stop_call_tone();
+		finalize_outgoing_session();
 		answer_time = Date.now();
 		active_call_is_video = use_video;
 		set_hangup_visibility(true);
@@ -108,22 +125,26 @@ function send_call(use_video) {
 	});
 
 	current_session.on('bye', function() {
-		stop_call_tone();
+		finalize_outgoing_session();
 		if (!current_session.local_ended) {
 			reset_call_ui_state(true);
 		}
 	});
 
 	current_session.on('failed', function() {
-		handle_outgoing_session_failure(current_session, 'Call failed');
+		handle_outgoing_terminal_status('Call failed');
 	});
 
 	current_session.on('rejected', function() {
-		handle_outgoing_session_failure(current_session, 'Call rejected');
+		handle_outgoing_terminal_status('Call rejected');
 	});
 
 	current_session.on('cancel', function() {
-		handle_outgoing_session_failure(current_session, 'Call canceled');
+		handle_outgoing_terminal_status('Call canceled');
+	});
+
+	current_session.on('terminated', function() {
+		handle_outgoing_terminal_status('Call ended');
 	});
 
 	// Unmute the audio
@@ -198,6 +219,13 @@ let transient_status_timeout;
 let active_call_is_video = false;
 let active_call_display_name = '';
 let active_call_number = '';
+let active_conversation_id = null;
+let messages_loaded_from_db = false;
+let messages_load_in_progress = false;
+
+const message_conversations = [];
+
+const known_chat_rooms = ['#ops-room', '#support', '#sales'];
 
 function stop_call_tone() {
 	const ringtone = document.getElementById('ringtone');
@@ -531,11 +559,13 @@ user_agent.on('registrationFailed', function() {
 
 user_agent.on('disconnected', function() {
 	registration_state = 'disconnected';
+	stop_call_tone();
 	update_status_bar();
 });
 
 user_agent.on('failed', function() {
 	registration_state = 'disconnected';
+	stop_call_tone();
 	update_status_bar();
 });
 
@@ -877,6 +907,7 @@ function hide_all_panels() {
 	//document.getElementById('keypad').style.display = 'none';
 	document.getElementById('contacts').style.display = 'none';
 	document.getElementById('history').style.display = 'none';
+	document.getElementById('messages').style.display = 'none';
 	document.getElementById('ringing').style.display = 'none';
 	document.getElementById('active').style.display = 'none';
 }
@@ -901,6 +932,94 @@ function show_history() {
 	update_action_bar_state('history');
 }
 
+function show_messages() {
+	hide_all_panels();
+	load_messages_from_database();
+	render_messages_sidebar();
+	document.getElementById('messages').style.display = 'flex';
+	update_action_bar_state('messages');
+}
+
+function post_message_api(payload) {
+	return fetch('resources/messages.php', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+		},
+		credentials: 'same-origin',
+		body: new URLSearchParams(payload).toString()
+	}).then(function(response) {
+		return response.json().catch(function() {
+			return {
+				status: 'error',
+				message: 'Invalid server response'
+			};
+		});
+	});
+}
+
+function get_message_api(action) {
+	return fetch('resources/messages.php?action=' + encodeURIComponent(action), {
+		method: 'GET',
+		credentials: 'same-origin'
+	}).then(function(response) {
+		return response.json().catch(function() {
+			return {
+				status: 'error',
+				message: 'Invalid server response'
+			};
+		});
+	});
+}
+
+function load_messages_from_database(force_reload) {
+	if (force_reload === undefined) {
+		force_reload = false;
+	}
+
+	if (messages_load_in_progress) {
+		return;
+	}
+
+	if (messages_loaded_from_db && !force_reload) {
+		return;
+	}
+
+	messages_load_in_progress = true;
+	get_message_api('list').then(function(result) {
+		if (!result || result.status !== 'ok') {
+			var message = (result && result.message) ? result.message : 'Failed to load messages';
+			show_temporary_status(message, 'fas fa-exclamation-circle');
+			return;
+		}
+
+		message_conversations.splice(0, message_conversations.length);
+		if (Array.isArray(result.conversations)) {
+			result.conversations.forEach(function(conversation) {
+				message_conversations.push(conversation);
+			});
+		}
+
+		if (active_conversation_id && !find_conversation(active_conversation_id)) {
+			active_conversation_id = null;
+		}
+
+		messages_loaded_from_db = true;
+		render_messages_sidebar();
+		if (active_conversation_id) {
+			open_conversation(active_conversation_id);
+		}
+		else if (message_conversations.length > 0) {
+			open_conversation(message_conversations[0].id);
+		}
+		populate_room_suggestions();
+	}).catch(function() {
+		show_temporary_status('Failed to load messages', 'fas fa-exclamation-circle');
+	}).finally(function() {
+		messages_load_in_progress = false;
+	});
+}
+
 function update_action_bar_state(active_panel) {
 	// Remove active class from all action items
 	document.querySelectorAll('.action_item').forEach(function(item) {
@@ -914,7 +1033,441 @@ function update_action_bar_state(active_panel) {
 		document.getElementById('action_contacts').classList.add('active');
 	} else if (active_panel === 'history') {
 		document.getElementById('action_history').classList.add('active');
+	} else if (active_panel === 'messages') {
+		document.getElementById('action_messages').classList.add('active');
 	}
+}
+
+function find_conversation(conversation_id) {
+	for (var i = 0; i < message_conversations.length; i++) {
+		if (message_conversations[i].id === conversation_id) {
+			return message_conversations[i];
+		}
+	}
+	return null;
+}
+
+function normalize_message_destination(destination_value) {
+	return String(destination_value || '').trim();
+}
+
+function find_conversation_by_destination(destination_value) {
+	var normalized_destination = normalize_message_destination(destination_value);
+	if (!normalized_destination) {
+		return null;
+	}
+
+	var destination_suffix = '(' + normalized_destination + ')';
+	for (var i = 0; i < message_conversations.length; i++) {
+		var conversation = message_conversations[i];
+		if (conversation.id === 'xmpp-dest-' + normalized_destination) {
+			return conversation;
+		}
+		if (conversation.name && conversation.name.indexOf(destination_suffix) !== -1) {
+			return conversation;
+		}
+	}
+
+	return null;
+}
+
+function normalize_room_name(room_name) {
+	var normalized = String(room_name || '').trim();
+	if (!normalized) {
+		return '';
+	}
+	if (normalized.charAt(0) !== '#') {
+		normalized = '#' + normalized;
+	}
+	return normalized.toLowerCase();
+}
+
+function list_available_rooms() {
+	var seen = {};
+	var rooms = [];
+
+	known_chat_rooms.forEach(function(room_name) {
+		var normalized = normalize_room_name(room_name);
+		if (normalized && !seen[normalized]) {
+			seen[normalized] = true;
+			rooms.push(normalized);
+		}
+	});
+
+	message_conversations.forEach(function(conversation) {
+		if (conversation && conversation.name && conversation.name.charAt(0) === '#') {
+			var normalized = normalize_room_name(conversation.name);
+			if (normalized && !seen[normalized]) {
+				seen[normalized] = true;
+				rooms.push(normalized);
+			}
+		}
+	});
+
+	rooms.sort();
+	return rooms;
+}
+
+function find_room_match(partial_room) {
+	var normalized_partial = normalize_room_name(partial_room);
+	if (!normalized_partial) {
+		return '';
+	}
+
+	var rooms = list_available_rooms();
+	for (var i = 0; i < rooms.length; i++) {
+		if (rooms[i].indexOf(normalized_partial) === 0) {
+			return rooms[i];
+		}
+	}
+
+	return '';
+}
+
+function populate_room_suggestions() {
+	var datalist = document.getElementById('message_room_suggestions');
+	if (!datalist) {
+		return;
+	}
+
+	datalist.innerHTML = '';
+	list_available_rooms().forEach(function(room_name) {
+		var option = document.createElement('option');
+		option.value = room_name;
+		datalist.appendChild(option);
+	});
+}
+
+function get_or_create_destination_conversation(destination_value) {
+	var normalized_destination = normalize_message_destination(destination_value);
+	if (!normalized_destination) {
+		return null;
+	}
+
+	var existing_conversation = find_conversation_by_destination(normalized_destination);
+	if (existing_conversation) {
+		return existing_conversation;
+	}
+
+	var new_conversation = {
+		id: 'xmpp-dest-' + normalized_destination,
+		name: normalized_destination.charAt(0) === '#' ? normalized_destination : ('Ext ' + normalized_destination),
+		presence: normalized_destination.charAt(0) === '#' ? 'room' : 'unknown',
+		unread: 0,
+		messages: []
+	};
+
+	message_conversations.unshift(new_conversation);
+	return new_conversation;
+}
+
+function set_message_destination() {
+	var destination_input = document.getElementById('message_destination');
+	if (!destination_input) {
+		return;
+	}
+
+	var normalized_destination = normalize_message_destination(destination_input.value);
+	if (normalized_destination.charAt(0) === '#') {
+		normalized_destination = find_room_match(normalized_destination) || normalize_room_name(normalized_destination);
+	}
+	if (!normalized_destination) {
+		show_temporary_status('Enter destination (example: 102)', 'fas fa-exclamation-circle');
+		return;
+	}
+
+	var conversation = get_or_create_destination_conversation(normalized_destination);
+	if (!conversation) {
+		show_temporary_status('Could not set destination', 'fas fa-exclamation-circle');
+		return;
+	}
+
+	destination_input.value = normalized_destination;
+	open_conversation(conversation.id);
+	show_temporary_status('Destination set to ' + normalized_destination, 'fas fa-comments');
+}
+
+function set_thread_presence(presence_value) {
+	var presence = document.getElementById('thread_presence');
+	if (!presence) {
+		return;
+	}
+
+	var normalized = String(presence_value || 'unknown').toLowerCase();
+	var label = 'UNKNOWN';
+	var presence_class = 'unknown';
+
+	if (normalized === 'online') {
+		label = 'ONLINE';
+		presence_class = 'online';
+	}
+	else if (normalized === 'away') {
+		label = 'AWAY';
+		presence_class = 'away';
+	}
+	else if (normalized === 'offline') {
+		label = 'OFFLINE';
+		presence_class = 'offline';
+	}
+	else if (normalized === 'room') {
+		label = 'ROOM';
+		presence_class = 'room';
+	}
+
+	presence.className = 'thread_presence ' + presence_class;
+	presence.textContent = label;
+}
+
+function join_room_by_name(room_name) {
+	var normalized_room = find_room_match(room_name) || normalize_room_name(room_name);
+	if (!normalized_room) {
+		show_temporary_status('Invalid room name', 'fas fa-exclamation-circle');
+		return false;
+	}
+
+	var conversation = get_or_create_destination_conversation(normalized_room);
+	if (!conversation) {
+		show_temporary_status('Could not join room', 'fas fa-exclamation-circle');
+		return false;
+	}
+
+	conversation.name = normalized_room;
+	conversation.presence = 'room';
+	open_conversation(conversation.id);
+
+	var destination_input = document.getElementById('message_destination');
+	if (destination_input) {
+		destination_input.value = normalized_room;
+	}
+
+	populate_room_suggestions();
+	show_temporary_status('Joined room ' + normalized_room, 'fas fa-users');
+	return true;
+}
+
+function handle_join_command(command_text) {
+	var join_match = String(command_text || '').trim().match(/^\/join\s+(.+)$/i);
+	if (!join_match) {
+		return false;
+	}
+
+	return join_room_by_name(join_match[1]);
+}
+
+function format_message_time(timestamp) {
+	return new Date(timestamp).toLocaleTimeString([], {
+		timeZone: time_zone,
+		hour: '2-digit',
+		minute: '2-digit',
+		hour12: true
+	});
+}
+
+function render_messages_sidebar() {
+	var container = document.getElementById('messages_conversations');
+	if (!container) {
+		return;
+	}
+
+	container.innerHTML = '';
+
+	message_conversations.forEach(function(conversation) {
+		var item = document.createElement('div');
+		item.className = 'conversation_item';
+		if (conversation.id === active_conversation_id) {
+			item.classList.add('active');
+		}
+		item.onclick = function() {
+			open_conversation(conversation.id);
+		};
+
+		var last_message = conversation.messages.length
+			? conversation.messages[conversation.messages.length - 1]
+			: { text: 'No messages yet', timestamp: Date.now() };
+
+		item.innerHTML =
+			'<div class="conversation_name">' + sanitize_string(conversation.name) + '</div>' +
+			'<div class="conversation_meta">' + format_message_time(last_message.timestamp) + '</div>' +
+			'<div class="conversation_preview">' + sanitize_string(last_message.text) + '</div>';
+
+		container.appendChild(item);
+	});
+
+	update_messages_badge();
+
+	if (!active_conversation_id && message_conversations.length > 0) {
+		open_conversation(message_conversations[0].id);
+	}
+}
+
+function open_conversation(conversation_id) {
+	var conversation = find_conversation(conversation_id);
+	if (!conversation) {
+		return;
+	}
+
+	active_conversation_id = conversation_id;
+	conversation.unread = 0;
+
+	var title = document.getElementById('thread_title');
+	var presence = document.getElementById('thread_presence');
+	if (title) {
+		title.textContent = conversation.name;
+	}
+	if (presence) {
+		set_thread_presence(conversation.presence);
+	}
+
+	var destination_input = document.getElementById('message_destination');
+	if (destination_input) {
+		if (conversation.name && conversation.name.charAt(0) === '#') {
+			destination_input.value = conversation.name;
+		}
+		else {
+			var extension_match = conversation.name ? conversation.name.match(/\(([^\)]+)\)$/) : null;
+			if (extension_match) {
+				destination_input.value = extension_match[1];
+			}
+			else {
+				var ext_prefix_match = conversation.name ? conversation.name.match(/^Ext\s+(.+)$/i) : null;
+				destination_input.value = ext_prefix_match ? ext_prefix_match[1] : '';
+			}
+		}
+	}
+
+	render_messages_thread(conversation);
+	render_messages_sidebar();
+}
+
+function render_messages_thread(conversation) {
+	var container = document.getElementById('thread_messages');
+	if (!container) {
+		return;
+	}
+
+	container.innerHTML = '';
+	if (!conversation.messages.length) {
+		container.innerHTML = '<div class="thread_empty">No messages yet.</div>';
+		return;
+	}
+
+	conversation.messages.forEach(function(message) {
+		var row = document.createElement('div');
+		row.className = 'message_row ' + message.direction;
+		row.innerHTML =
+			'<div class="message_bubble">' +
+				sanitize_string(message.text) +
+				'<div class="message_meta">' + format_message_time(message.timestamp) + '</div>' +
+			'</div>';
+		container.appendChild(row);
+	});
+
+	container.scrollTop = container.scrollHeight;
+}
+
+function update_messages_badge() {
+	var badge = document.getElementById('action_messages_badge');
+	if (!badge) {
+		return;
+	}
+
+	var unread_total = 0;
+	message_conversations.forEach(function(conversation) {
+		unread_total += conversation.unread || 0;
+	});
+
+	if (unread_total > 0) {
+		badge.textContent = unread_total > 99 ? '99+' : String(unread_total);
+		badge.style.display = 'inline-block';
+	}
+	else {
+		badge.style.display = 'none';
+	}
+}
+
+async function send_message_mock() {
+	var input = document.getElementById('message_input');
+	if (!input) {
+		return;
+	}
+
+	var text = input.value.trim();
+	if (!text) {
+		return;
+	}
+
+	if (handle_join_command(text)) {
+		input.value = '';
+		return;
+	}
+
+	var destination_input = document.getElementById('message_destination');
+	var requested_destination = destination_input ? normalize_message_destination(destination_input.value) : '';
+	if (requested_destination) {
+		if (requested_destination.charAt(0) === '#') {
+			requested_destination = find_room_match(requested_destination) || normalize_room_name(requested_destination);
+		}
+		var destination_conversation = get_or_create_destination_conversation(requested_destination);
+		if (destination_conversation) {
+			active_conversation_id = destination_conversation.id;
+		}
+	}
+
+	if (!active_conversation_id) {
+		show_temporary_status('Set a destination first (example: 102)', 'fas fa-exclamation-circle');
+		return;
+	}
+
+	var conversation = find_conversation(active_conversation_id);
+	if (!conversation) {
+		return;
+	}
+
+	var destination_for_send = requested_destination;
+	if (!destination_for_send) {
+		if (conversation.name && conversation.name.charAt(0) === '#') {
+			destination_for_send = conversation.name;
+		}
+		else {
+			var ext_prefix_match = conversation.name ? conversation.name.match(/^Ext\s+(.+)$/i) : null;
+			destination_for_send = ext_prefix_match ? ext_prefix_match[1] : '';
+		}
+	}
+
+	if (!destination_for_send) {
+		show_temporary_status('Set a destination first (example: 102)', 'fas fa-exclamation-circle');
+		return;
+	}
+
+	var send_result;
+	try {
+		send_result = await post_message_api({
+			action: 'send',
+			destination: destination_for_send,
+			text: text
+		});
+	}
+	catch (error) {
+		show_temporary_status('Could not save message', 'fas fa-exclamation-circle');
+		return;
+	}
+
+	if (!send_result || send_result.status !== 'ok' || !send_result.message) {
+		var error_message = (send_result && send_result.message) ? send_result.message : 'Could not save message';
+		show_temporary_status(error_message, 'fas fa-exclamation-circle');
+		return;
+	}
+
+	conversation.messages.push({
+		direction: send_result.message.direction || 'outgoing',
+		text: send_result.message.text || text,
+		timestamp: send_result.message.timestamp || Date.now()
+	});
+
+	input.value = '';
+	render_messages_thread(conversation);
+	render_messages_sidebar();
+	show_temporary_status('Message queued to ' + conversation.name, 'fas fa-paper-plane');
 }
 
 // Render contacts list
@@ -1192,6 +1745,15 @@ document.addEventListener('keydown', function(e) {
 		return;
 	}
 
+	var target = e.target;
+	if (target && (
+		target.tagName === 'INPUT' ||
+		target.tagName === 'TEXTAREA' ||
+		target.isContentEditable
+	)) {
+		return;
+	}
+
 	if (e.key >= '0' && e.key <= '9') {
 		e.preventDefault();
 		digit_add(e.key);
@@ -1234,6 +1796,50 @@ document.addEventListener('DOMContentLoaded', function() {
 		});
 	}
 
+	var message_input = document.getElementById('message_input');
+	if (message_input) {
+		message_input.addEventListener('keydown', function(event) {
+			if (event.key === 'Tab') {
+				var current_text = message_input.value.trim();
+				var join_match = current_text.match(/^\/join\s+(#[^\s]*)?$/i);
+				if (join_match) {
+					event.preventDefault();
+					var partial_room = join_match[1] || '#';
+					var room_match = find_room_match(partial_room);
+					if (room_match) {
+						message_input.value = '/join ' + room_match;
+					}
+					return;
+				}
+			}
+			if (event.key === 'Enter') {
+				event.preventDefault();
+				send_message_mock();
+			}
+		});
+	}
+
+	var message_destination = document.getElementById('message_destination');
+	if (message_destination) {
+		message_destination.addEventListener('keydown', function(event) {
+			if (event.key === 'Tab') {
+				var destination_value = normalize_message_destination(message_destination.value);
+				if (destination_value.charAt(0) === '#') {
+					event.preventDefault();
+					var room_match = find_room_match(destination_value);
+					if (room_match) {
+						message_destination.value = room_match;
+					}
+				}
+				return;
+			}
+			if (event.key === 'Enter') {
+				event.preventDefault();
+				set_message_destination();
+			}
+		});
+	}
+
 	var remote_video = document.getElementById('remote_video');
 	if (remote_video) {
 		remote_video.addEventListener('loadedmetadata', apply_video_fit_layout);
@@ -1241,4 +1847,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 	window.addEventListener('resize', apply_video_fit_layout);
 	apply_video_fit_layout();
+	populate_room_suggestions();
+	update_messages_badge();
+	load_messages_from_database();
 });

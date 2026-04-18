@@ -105,7 +105,7 @@ echo "	</div>\n";
 
 //define the audio ringtone
 echo "	<audio id='ringtone' preload='auto'>\n";
-echo "		<source src='resources/ringtones/ringtone.mp3' type='audio/mpeg' loop='loop' />\n";
+echo "		<source src='resources/ringtones/ringtone.wav' type='audio/wav' loop='loop' />\n";
 echo "	</audio>\n";
 
 //audio or video objects need to be initialized before phone.js
@@ -178,6 +178,35 @@ echo "		<div class='history_list' id='history_list'>\n";
 echo "		</div>\n";
 echo "	</div>\n";
 
+//define the messages panel (XMPP UI scaffold)
+echo "\t<div class='dialpad' id='messages' style='display: none;'>\n";
+echo "\t\t<div class='messages_layout'>\n";
+echo "\t\t\t<div class='messages_sidebar'>\n";
+echo "\t\t\t\t<div class='messages_header'><i class='fas fa-comments'></i> Messages</div>\n";
+echo "\t\t\t\t<div class='messages_destination_bar'>\n";
+echo "\t\t\t\t\t<input type='text' id='message_destination' class='message_destination' list='message_room_suggestions' placeholder='Destination (e.g. 102, user@example.com, #ops-room)' />\n";
+echo "\t\t\t\t\t<button type='button' id='message_set_destination' class='message_set_destination' onclick='set_message_destination();'><i class='fas fa-location-arrow'></i> Set</button>\n";
+echo "\t\t\t\t</div>\n";
+echo "\t\t\t\t<datalist id='message_room_suggestions'></datalist>\n";
+echo "\t\t\t\t<div class='messages_hint'>Tip: use <strong>/join #room</strong> in the message box to join a room.</div>\n";
+echo "\t\t\t\t<div class='messages_conversations' id='messages_conversations'></div>\n";
+echo "\t\t\t</div>\n";
+echo "\t\t\t<div class='messages_thread'>\n";
+echo "\t\t\t\t<div class='thread_header'>\n";
+echo "\t\t\t\t\t<div class='thread_title' id='thread_title'>Select a conversation</div>\n";
+echo "\t\t\t\t\t<div class='thread_presence' id='thread_presence'>Offline</div>\n";
+echo "\t\t\t\t</div>\n";
+echo "\t\t\t\t<div class='thread_messages' id='thread_messages'>\n";
+echo "\t\t\t\t\t<div class='thread_empty'>Select a conversation to start messaging.</div>\n";
+echo "\t\t\t\t</div>\n";
+echo "\t\t\t\t<div class='thread_composer'>\n";
+echo "\t\t\t\t\t<input type='text' id='message_input' class='message_input' placeholder='Type an XMPP message...' />\n";
+echo "\t\t\t\t\t<button type='button' id='message_send' class='message_send' onclick='send_message_mock();'><i class='fas fa-paper-plane'></i> Send</button>\n";
+echo "\t\t\t\t</div>\n";
+echo "\t\t\t</div>\n";
+echo "\t\t</div>\n";
+echo "\t</div>\n";
+
 //define the ringing control
 echo "	<div class='dialpad' id='ringing' style='display: none;'>\n";
 echo "		<div class='caller_id ringing' id='ringing_caller_id'></div>\n";
@@ -213,6 +242,10 @@ echo "			<span class='action_label'>Contacts</span>\n";
 echo "		</div>\n";
 echo "		<div class='action_item' onclick='show_history();' id='action_history'><i class='fas fa-history'></i>\n";
 echo "			<span class='action_label'>History</span>\n";
+echo "		</div>\n";
+echo "		<div class='action_item' onclick='show_messages();' id='action_messages'><i class='fas fa-comments'></i>\n";
+echo "			<span class='action_label'>Messages</span>\n";
+echo "			<span class='action_badge' id='action_messages_badge' style='display: none;'>0</span>\n";
 echo "		</div>\n";
 echo "		<div class='action_item' id='action_mute' onclick='toggle_audio_mute_action();' style='display: none;'><i id='action_mute_icon' class='fas fa-microphone'></i>\n";
 echo "			<span class='action_label' id='action_mute_label'>".$text['label-mute']."</span>\n";
