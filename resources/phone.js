@@ -666,12 +666,10 @@ function cycle_local_video_corner() {
 	local_wrapper.classList.add('corner-' + local_video_corner);
 }
 
-// Contacts data (extension 1001-1005)
-var contacts = [
-	{ extension: '1003', name: 'John' },
-	{ extension: '1004', name: 'Jane' },
-	{ extension: '1005', name: 'Bob' }
-];
+// Contacts data loaded from phone.php
+var contacts = Array.isArray((typeof phone_contacts !== 'undefined') ? phone_contacts : null)
+	? phone_contacts.slice()
+	: [];
 
 // Call history storage
 function get_call_history() {
@@ -944,17 +942,32 @@ function show_dialpad() {
 function show_contacts() {
 	hide_all_panels();
 	render_contacts();
+	if (!Array.isArray(contacts) || contacts.length === 0) {
+		container.innerHTML = '<div style="text-align: center; color: #ccc; padding: 30px; font-size: 15px;">No contacts found for this domain</div>';
+		return;
+	}
 	document.getElementById('contacts').style.display = 'flex';
 	update_action_bar_state('contacts');
+		var destination = normalize_message_destination(contact && (contact.destination || contact.extension));
+		if (!destination) {
+			return;
+		}
+		var label = String(contact && contact.name ? contact.name : '').trim() || destination;
+		var extension_label = String(contact && contact.extension ? contact.extension : destination).trim() || destination;
+
 }
 
-function show_history() {
+		contactDiv.onclick = function() { call_contact(destination); };
 	hide_all_panels();
 	render_history();
 	document.getElementById('history').style.display = 'flex';
 	update_action_bar_state('history');
-}
-
+		contact_html += '      <div class="contact_extension">' + sanitize_string(extension_label) + '</div>';
+		contact_html += '      <div class="contact_name">' + sanitize_string(label) + '</div>';
+		contact_html += '  </div>';
+		contact_html += '  <div class="contact_actions">';
+		contact_html += '      <button type="button" class="contact_action_button contact_call" title="Call" onclick="event.stopPropagation(); call_contact(\'' + sanitize_string(destination) + '\');"><i class="fas fa-phone"></i></button>';
+		contact_html += '      <button type="button" class="contact_action_button contact_message" title="Message" onclick="event.stopPropagation(); message_contact(\'' + sanitize_string(destination) + '\');"><i class="fas fa-comment-dots"></i></button>';
 function render_sender_extension_selector() {
 	var sender_context = document.getElementById('thread_sender_context');
 	var sender_select = document.getElementById('message_sender_extension');
@@ -2525,6 +2538,123 @@ function render_thread_conversation_selector() {
 	});
 }
 
+function ensure_message_context_menu() {
+	var menu = document.getElementById('message_context_menu');
+	if (menu) {
+		return menu;
+	}
+
+	menu = document.createElement('div');
+	menu.id = 'message_context_menu';
+	menu.className = 'message_context_menu';
+	menu.style.display = 'none';
+	document.body.appendChild(menu);
+	return menu;
+}
+
+function hide_message_context_menu() {
+	var menu = document.getElementById('message_context_menu');
+	if (!menu) {
+		return;
+	}
+	menu.style.display = 'none';
+	menu.innerHTML = '';
+}
+
+async function add_destination_to_contacts(destination_value, contact_name) {
+	var destination = normalize_message_destination(destination_value);
+	if (!destination || destination.charAt(0) === '#') {
+		show_temporary_status('Only direct destinations can be added as contacts', 'fas fa-exclamation-circle');
+		return;
+	}
+
+	try {
+		var result = await post_message_api({
+			action: 'add_contact',
+			destination: destination,
+			contact_name: String(contact_name || '').trim()
+		});
+
+		if (!result || result.status !== 'ok') {
+			show_temporary_status((result && result.message) ? result.message : 'Could not add contact', 'fas fa-exclamation-circle');
+			return;
+		}
+
+		if (result.contact && result.contact.destination) {
+			var already_exists = contacts.some(function(contact) {
+				return normalize_message_destination(contact.destination || contact.extension) === normalize_message_destination(result.contact.destination);
+			});
+			if (!already_exists) {
+				contacts.push(result.contact);
+				render_contacts();
+			}
+		}
+
+		show_temporary_status('Added contact ' + destination, 'fas fa-address-book');
+	}
+	catch (error) {
+		show_temporary_status('Could not add contact', 'fas fa-exclamation-circle');
+	}
+}
+
+function show_message_context_menu(event, conversation) {
+	if (!event || !conversation) {
+		return;
+	}
+
+	event.preventDefault();
+	event.stopPropagation();
+
+	var menu = ensure_message_context_menu();
+	menu.innerHTML = '';
+
+	var destination = get_conversation_destination(conversation);
+	var is_room = is_room_destination(destination || conversation.name || '');
+
+	if (can_delete_rooms && is_room) {
+		var delete_item = document.createElement('button');
+		delete_item.type = 'button';
+		delete_item.className = 'message_context_menu_item';
+		delete_item.textContent = 'Delete room';
+		delete_item.addEventListener('click', function() {
+			hide_message_context_menu();
+			delete_room_by_name(destination || conversation.name || '');
+		});
+		menu.appendChild(delete_item);
+	}
+
+	var add_contact_item = document.createElement('button');
+	add_contact_item.type = 'button';
+	add_contact_item.className = 'message_context_menu_item';
+	add_contact_item.textContent = 'Add to contact';
+	if (is_room || !destination) {
+		add_contact_item.disabled = true;
+	}
+	else {
+		add_contact_item.addEventListener('click', function() {
+			hide_message_context_menu();
+			add_destination_to_contacts(destination, conversation.name || destination);
+		});
+	}
+	menu.appendChild(add_contact_item);
+
+	if (!menu.children.length) {
+		return;
+	}
+
+	menu.style.display = 'block';
+	menu.style.left = Math.max(8, event.clientX) + 'px';
+	menu.style.top = Math.max(8, event.clientY) + 'px';
+
+	var menu_rect = menu.getBoundingClientRect();
+	if (menu_rect.right > window.innerWidth - 8) {
+		menu.style.left = Math.max(8, window.innerWidth - menu_rect.width - 8) + 'px';
+	}
+	if (menu_rect.bottom > window.innerHeight - 8) {
+		menu.style.top = Math.max(8, window.innerHeight - menu_rect.height - 8) + 'px';
+	}
+}
+
 function render_messages_sidebar() {
 	var container = document.getElementById('messages_conversations');
 	if (!container) {
@@ -2544,13 +2674,10 @@ function render_messages_sidebar() {
 			open_conversation(conversation.id);
 		};
 
-		if (can_delete_rooms && is_room_destination(conversation.destination || conversation.name || '')) {
-			item.addEventListener('contextmenu', function(event) {
-				event.preventDefault();
-				delete_room_by_name(conversation.destination || conversation.name || '');
-			});
-			item.title = 'Right-click to delete room';
-		}
+		item.addEventListener('contextmenu', function(event) {
+			show_message_context_menu(event, conversation);
+		});
+		item.title = 'Right-click for actions';
 
 		var last_message = conversation.messages.length
 			? conversation.messages[conversation.messages.length - 1]
@@ -2818,19 +2945,61 @@ async function send_message_mock() {
 function render_contacts() {
 	var container = document.getElementById('contacts_list');
 	container.innerHTML = '';
+	if (!Array.isArray(contacts) || contacts.length === 0) {
+		container.innerHTML = '<div style="text-align: center; color: #ccc; padding: 30px; font-size: 15px;">No contacts found for this domain</div>';
+		return;
+	}
 
 	contacts.forEach(function(contact) {
+		var destination = normalize_message_destination(contact && (contact.destination || contact.extension));
+		if (!destination) {
+			return;
+		}
+		var extension_label = String(contact && contact.extension ? contact.extension : destination).trim() || destination;
+		var display_name = String(contact && contact.name ? contact.name : '').trim() || destination;
+
 		var contactDiv = document.createElement('div');
 		contactDiv.className = 'contact_item';
-		contactDiv.onclick = function() { call_contact(contact.extension); };
-		contact_html = '	<div class="contact_icon">';
-		contact_html += '	<i class="fas fa-user"></i>';
-		contact_html += '	</div>';
-		contact_html += '	<div class="contact_info">';
-		contact_html += '		<div class="contact_extension">' + sanitize_string(contact.extension) + '</div>';
-		contact_html += '		<div class="contact_name">' + sanitize_string(contact.name) + '</div>';
-		contact_html += '	</div>';
-		contactDiv.innerHTML = contact_html;
+		contactDiv.onclick = function() { call_contact(destination); };
+
+		var iconDiv = document.createElement('div');
+		iconDiv.className = 'contact_icon';
+		iconDiv.innerHTML = '<i class="fas fa-user"></i>';
+
+		var infoDiv = document.createElement('div');
+		infoDiv.className = 'contact_info';
+		infoDiv.innerHTML =
+			'<div class="contact_extension">' + sanitize_string(extension_label) + '</div>' +
+			'<div class="contact_name">' + sanitize_string(display_name) + '</div>';
+
+		var actionsDiv = document.createElement('div');
+		actionsDiv.className = 'contact_actions';
+
+		var callButton = document.createElement('button');
+		callButton.type = 'button';
+		callButton.className = 'contact_action_button contact_call';
+		callButton.title = 'Call';
+		callButton.innerHTML = '<i class="fas fa-phone"></i>';
+		callButton.addEventListener('click', function(event) {
+			event.stopPropagation();
+			call_contact(destination);
+		});
+
+		var messageButton = document.createElement('button');
+		messageButton.type = 'button';
+		messageButton.className = 'contact_action_button contact_message';
+		messageButton.title = 'Message';
+		messageButton.innerHTML = '<i class="fas fa-comment-dots"></i>';
+		messageButton.addEventListener('click', function(event) {
+			event.stopPropagation();
+			message_contact(destination);
+		});
+
+		actionsDiv.appendChild(callButton);
+		actionsDiv.appendChild(messageButton);
+		contactDiv.appendChild(iconDiv);
+		contactDiv.appendChild(infoDiv);
+		contactDiv.appendChild(actionsDiv);
 		container.appendChild(contactDiv);
 	});
 }
@@ -2911,6 +3080,24 @@ function call_contact(extension) {
 	document.getElementById('destination').value = extension;
 	correct_alignment();
 	send();
+}
+
+async function message_contact(destination) {
+	var normalized_destination = normalize_message_destination(destination);
+	if (!normalized_destination) {
+		return;
+	}
+
+	await show_messages();
+	var conversation = get_or_create_destination_conversation(normalized_destination);
+	if (conversation) {
+		conversation.destination = normalized_destination;
+		open_conversation(conversation.id);
+	}
+	var destination_input = document.getElementById('message_destination');
+	if (destination_input) {
+		destination_input.value = normalized_destination;
+	}
 }
 
 function call_number(number) {
@@ -3229,6 +3416,16 @@ document.addEventListener('DOMContentLoaded', function() {
 			set_selected_sender_extension(message_sender_extension.value);
 		});
 	}
+
+	document.addEventListener('click', function() {
+		hide_message_context_menu();
+	});
+	document.addEventListener('scroll', function() {
+		hide_message_context_menu();
+	}, true);
+	window.addEventListener('resize', function() {
+		hide_message_context_menu();
+	});
 
 	var thread_conversation_select = document.getElementById('thread_conversation_select');
 	if (thread_conversation_select) {

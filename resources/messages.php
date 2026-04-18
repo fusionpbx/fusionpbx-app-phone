@@ -847,6 +847,205 @@ if ($action === 'admin_revoke_device') {
 	exit;
 }
 
+if ($action === 'add_contact') {
+	if (!permission_exists('contact_add')) {
+		bad_request('access denied', 403);
+	}
+
+	if (!file_exists(dirname(__DIR__, 2) . '/core/contacts/')) {
+		bad_request('contacts app is not available', 404);
+	}
+
+	$destination = normalize_destination((string) ($_POST['destination'] ?? ''));
+	$contact_name = trim((string) ($_POST['contact_name'] ?? ''));
+	if ($destination === '' || $destination[0] === '#') {
+		bad_request('destination is required');
+	}
+
+	$destination = preg_replace('/\s+/', '', $destination);
+	if (preg_match('/^([^@\s]+)@[^@\s]+$/', $destination, $matches)) {
+		$destination = $matches[1];
+	}
+
+	if ($destination === '' || !preg_match('/^[0-9A-Za-z+_.\-]+$/', $destination)) {
+		bad_request('destination format is invalid');
+	}
+
+	$existing_contact = $database->select("select c.contact_uuid,
+		c.contact_name_given,
+		c.contact_name_family,
+		c.contact_nickname,
+		cp.phone_number
+		from v_contacts c
+		join v_contact_phones cp
+			on cp.contact_uuid = c.contact_uuid
+		where (c.domain_uuid = :domain_uuid or c.domain_uuid is null)
+		and (cp.domain_uuid = :domain_uuid or cp.domain_uuid is null)
+		and cp.phone_number = :phone_number
+		order by cp.phone_primary desc
+		limit 1", [
+		'domain_uuid' => $domain_uuid,
+		'phone_number' => $destination,
+	], 'row');
+
+	if (!empty($existing_contact['contact_uuid']) && is_uuid((string) $existing_contact['contact_uuid'])) {
+		$existing_name_parts = [];
+		if (!empty($existing_contact['contact_name_family'])) {
+			$existing_name_parts[] = (string) $existing_contact['contact_name_family'];
+		}
+		if (!empty($existing_contact['contact_name_given'])) {
+			$existing_name_parts[] = (string) $existing_contact['contact_name_given'];
+		}
+		$existing_name = trim(implode(' ', $existing_name_parts));
+		if ($existing_name === '') {
+			$existing_name = trim((string) ($existing_contact['contact_nickname'] ?? ''));
+		}
+		if ($existing_name === '') {
+			$existing_name = (string) ($existing_contact['phone_number'] ?? $destination);
+		}
+
+		echo json_encode([
+			'status' => 'ok',
+			'exists' => true,
+			'contact' => [
+				'contact_uuid' => (string) $existing_contact['contact_uuid'],
+				'destination' => (string) ($existing_contact['phone_number'] ?? $destination),
+				'extension' => (string) ($existing_contact['phone_number'] ?? $destination),
+				'name' => $existing_name,
+				'source' => 'core_contact',
+			],
+		]);
+		exit;
+	}
+
+	$contact_name = trim($contact_name);
+	if ($contact_name === '') {
+		$contact_name = $destination;
+	}
+
+	$contact_given_name = '';
+	$contact_family_name = '';
+	if (strpos($contact_name, ' ') !== false) {
+		$name_parts = preg_split('/\s+/', $contact_name, 2);
+		$contact_given_name = trim((string) ($name_parts[1] ?? ''));
+		$contact_family_name = trim((string) ($name_parts[0] ?? ''));
+	}
+	else {
+		$contact_given_name = $contact_name;
+	}
+
+	$contact_uuid = uuid();
+	$contact_phone_uuid = uuid();
+	$contact_user_uuid = uuid();
+
+	$database->execute("insert into v_contacts (
+		contact_uuid,
+		domain_uuid,
+		contact_type,
+		contact_name_given,
+		contact_name_family,
+		contact_nickname,
+		insert_date,
+		insert_user,
+		update_date,
+		update_user
+	) values (
+		:contact_uuid,
+		:domain_uuid,
+		:contact_type,
+		:contact_name_given,
+		:contact_name_family,
+		:contact_nickname,
+		now(),
+		:insert_user,
+		now(),
+		:update_user
+	)", [
+		'contact_uuid' => $contact_uuid,
+		'domain_uuid' => $domain_uuid,
+		'contact_type' => 'phone',
+		'contact_name_given' => $contact_given_name,
+		'contact_name_family' => $contact_family_name,
+		'contact_nickname' => $contact_name,
+		'insert_user' => $user_uuid,
+		'update_user' => $user_uuid,
+	]);
+
+	$database->execute("insert into v_contact_phones (
+		contact_phone_uuid,
+		domain_uuid,
+		contact_uuid,
+		phone_number,
+		phone_primary,
+		phone_type_voice,
+		phone_type_text,
+		insert_date,
+		insert_user,
+		update_date,
+		update_user
+	) values (
+		:contact_phone_uuid,
+		:domain_uuid,
+		:contact_uuid,
+		:phone_number,
+		:true_value,
+		:true_value,
+		:true_value,
+		now(),
+		:insert_user,
+		now(),
+		:update_user
+	)", [
+		'contact_phone_uuid' => $contact_phone_uuid,
+		'domain_uuid' => $domain_uuid,
+		'contact_uuid' => $contact_uuid,
+		'phone_number' => $destination,
+		'true_value' => 1,
+		'insert_user' => $user_uuid,
+		'update_user' => $user_uuid,
+	]);
+
+	$database->execute("insert into v_contact_users (
+		contact_user_uuid,
+		domain_uuid,
+		contact_uuid,
+		user_uuid,
+		insert_date,
+		insert_user,
+		update_date,
+		update_user
+	) values (
+		:contact_user_uuid,
+		:domain_uuid,
+		:contact_uuid,
+		:user_uuid,
+		now(),
+		:insert_user,
+		now(),
+		:update_user
+	)", [
+		'contact_user_uuid' => $contact_user_uuid,
+		'domain_uuid' => $domain_uuid,
+		'contact_uuid' => $contact_uuid,
+		'user_uuid' => $user_uuid,
+		'insert_user' => $user_uuid,
+		'update_user' => $user_uuid,
+	]);
+
+	echo json_encode([
+		'status' => 'ok',
+		'exists' => false,
+		'contact' => [
+			'contact_uuid' => $contact_uuid,
+			'destination' => $destination,
+			'extension' => $destination,
+			'name' => $contact_name,
+			'source' => 'core_contact',
+		],
+	]);
+	exit;
+}
+
 if ($action === 'recipient_devices') {
 	$destination = normalize_destination((string) ($_GET['destination'] ?? ''));
 	if ($destination === '') {

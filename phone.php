@@ -60,6 +60,7 @@ $user_password = '';
 $user_display_name = '';
 $user_sender_extensions = [];
 $selected_sender_extension_uuid = trim((string) ($_SESSION['phone_message_sender_extension_uuid'][$domain_uuid] ?? ''));
+$phone_contacts = [];
 
 //get the user ID
 $sql = "SELECT d.domain_name,e.extension,e.password,u.username,e.effective_caller_id_name FROM ";
@@ -149,6 +150,136 @@ else {
 	$selected_sender_extension_uuid = '';
 }
 
+//load contacts for phone panel: domain extensions + core contacts (phones)
+$contact_destinations = [];
+
+$domain_extensions_sql = "select
+		e.extension,
+		e.effective_caller_id_name,
+		e.number_alias,
+		(
+			select u.username
+			from v_extension_users eu
+			join v_users u
+				on u.user_uuid = eu.user_uuid
+		where eu.domain_uuid = e.domain_uuid
+		and eu.extension_uuid = e.extension_uuid
+		order by u.username asc
+		limit 1
+		) as assigned_username
+	from v_extensions e
+	where e.domain_uuid = :domain_uuid
+	order by e.extension asc";
+$domain_extensions_statement = $db->prepare($domain_extensions_sql);
+if ($domain_extensions_statement) {
+	$domain_extensions_statement->execute([
+		'domain_uuid' => $domain_uuid,
+	]);
+	$domain_extension_rows = $domain_extensions_statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+	foreach ($domain_extension_rows as $extension_row) {
+		$destination = trim((string) ($extension_row['extension'] ?? ''));
+		if ($destination === '' || !preg_match('/^[0-9A-Za-z_.\-]+$/', $destination)) {
+			continue;
+		}
+		if (isset($contact_destinations[$destination])) {
+			continue;
+		}
+
+		$display_name = trim((string) ($extension_row['effective_caller_id_name'] ?? ''));
+		if ($display_name === '') {
+			$display_name = trim((string) ($extension_row['assigned_username'] ?? ''));
+		}
+		if ($display_name === '') {
+			$display_name = trim((string) ($extension_row['number_alias'] ?? ''));
+		}
+		if ($display_name === '') {
+			$display_name = 'Extension';
+		}
+
+		$phone_contacts[] = [
+			'destination' => $destination,
+			'extension' => $destination,
+			'name' => $display_name,
+			'source' => 'extension',
+		];
+		$contact_destinations[$destination] = true;
+	}
+}
+
+if (file_exists(dirname(__DIR__, 2) . '/core/contacts/') && permission_exists('contact_view')) {
+	$core_contacts_sql = "select
+			c.contact_uuid,
+			c.contact_name_given,
+			c.contact_name_family,
+			c.contact_nickname,
+			cp.phone_number
+		from v_contacts c
+		left join lateral (
+			select p.phone_number
+			from v_contact_phones p
+			where p.contact_uuid = c.contact_uuid
+			and (p.domain_uuid = :domain_uuid or p.domain_uuid is null)
+			order by p.phone_primary desc, p.insert_date asc
+			limit 1
+		) cp on true
+		where (c.domain_uuid = :domain_uuid or c.domain_uuid is null)
+		and cp.phone_number is not null
+		and cp.phone_number <> ''
+		order by c.contact_name_given asc, c.contact_name_family asc, c.contact_nickname asc";
+	$core_contacts_statement = $db->prepare($core_contacts_sql);
+	if ($core_contacts_statement) {
+		$core_contacts_statement->execute([
+			'domain_uuid' => $domain_uuid,
+		]);
+		$core_contact_rows = $core_contacts_statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+		foreach ($core_contact_rows as $contact_row) {
+			$destination = trim((string) ($contact_row['phone_number'] ?? ''));
+			$destination = preg_replace('/\s+/', '', $destination);
+			if ($destination === '') {
+				continue;
+			}
+
+			if (preg_match('/^([^@\s]+)@[^@\s]+$/', $destination, $matches)) {
+				$destination = $matches[1];
+			}
+
+			if (!preg_match('/^[0-9A-Za-z+_.\-]+$/', $destination)) {
+				continue;
+			}
+
+			if (isset($contact_destinations[$destination])) {
+				continue;
+			}
+
+			$name_parts = [];
+			$family_name = trim((string) ($contact_row['contact_name_family'] ?? ''));
+			$given_name = trim((string) ($contact_row['contact_name_given'] ?? ''));
+			if ($family_name !== '') {
+				$name_parts[] = $family_name;
+			}
+			if ($given_name !== '') {
+				$name_parts[] = $given_name;
+			}
+			$display_name = trim(implode(' ', $name_parts));
+			if ($display_name === '') {
+				$display_name = trim((string) ($contact_row['contact_nickname'] ?? ''));
+			}
+			if ($display_name === '') {
+				$display_name = 'Contact';
+			}
+
+			$phone_contacts[] = [
+				'destination' => $destination,
+				'extension' => $destination,
+				'name' => $display_name,
+				'source' => 'core_contact',
+				'contact_uuid' => (string) ($contact_row['contact_uuid'] ?? ''),
+			];
+			$contact_destinations[$destination] = true;
+		}
+	}
+}
+
 //set the title
 $document['title'] = $text['title-phone'];
 
@@ -196,6 +327,7 @@ echo "	const phone_registered_extension = '".escape($user_extension)."';\n";
 echo "	const phone_registered_display_name = '".escape($user_display_name)."';\n";
 echo "	const phone_sender_extensions = ".json_encode($user_sender_extensions, JSON_UNESCAPED_SLASHES).";\n";
 echo "	const phone_selected_sender_extension_uuid = '".escape($selected_sender_extension_uuid)."';\n";
+echo "	const phone_contacts = ".json_encode($phone_contacts, JSON_UNESCAPED_SLASHES).";\n";
 echo "	const phone_e2ee_default_device_label = '".escape($_SERVER['HTTP_USER_AGENT'] ?? 'Browser Device')."';\n";
 $session_unlock_material = session_id().'|'.$user_uuid.'|'.$domain_uuid.'|'.(string) $config->get('phone.message_encryption_key', '');
 $session_unlock_key = hash('sha256', $session_unlock_material);
