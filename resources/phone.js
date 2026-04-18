@@ -3367,6 +3367,26 @@ document.addEventListener('DOMContentLoaded', function() {
 	var message_input = document.getElementById('message_input');
 	if (message_input) {
 		harden_message_field_autofill(message_input, 'xmpp_message');
+		var handle_message_input_enter = function(event) {
+			if (!event) {
+				return;
+			}
+			if (event.shiftKey) {
+				return;
+			}
+			if (event.isComposing) {
+				return;
+			}
+			var key_name = String(event.key || '');
+			var key_code = String(event.code || '');
+			var enter_pressed = key_name === 'Enter' || key_name === 'Return' || key_code === 'NumpadEnter';
+			if (!enter_pressed) {
+				return;
+			}
+			event.preventDefault();
+			event.stopPropagation();
+			send_message_mock();
+		};
 		message_input.addEventListener('keydown', function(event) {
 			if (event.key === 'Tab') {
 				var current_text = message_input.value.trim();
@@ -3381,11 +3401,9 @@ document.addEventListener('DOMContentLoaded', function() {
 					return;
 				}
 			}
-			if (event.key === 'Enter') {
-				event.preventDefault();
-				send_message_mock();
-			}
+			handle_message_input_enter(event);
 		});
+		message_input.addEventListener('keypress', handle_message_input_enter);
 	}
 
 	var message_destination = document.getElementById('message_destination');
