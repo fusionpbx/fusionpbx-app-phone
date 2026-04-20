@@ -54,8 +54,16 @@ $search_target = $settings->get('phone', 'search_target', '');
 $search_width = $settings->get('phone', 'search_width', '');
 $search_height = $settings->get('phone', 'search_height', '');
 
+$domain_name = (string) ($_SESSION['domain_name'] ?? '');
+$user_extension = '';
+$user_password = '';
+$user_display_name = '';
+$user_sender_extensions = [];
+$selected_sender_extension_uuid = trim((string) ($_SESSION['phone_message_sender_extension_uuid'][$domain_uuid] ?? ''));
+$phone_contacts = [];
+
 //get the user ID
-$sql = "SELECT d.domain_name,e.extension,e.password FROM ";
+$sql = "SELECT d.domain_name,e.extension,e.password,u.username,e.effective_caller_id_name FROM ";
 $sql .= "v_extension_users as t, v_extensions as e, v_users as u, v_domains as d ";
 $sql .= "WHERE u.user_uuid = t.user_uuid ";
 $sql .= "AND e.extension_uuid = t.extension_uuid ";
@@ -69,6 +77,207 @@ if ($prep_statement) {
 	$domain_name = $row['domain_name'];
 	$user_extension = $row['extension'];
 	$user_password = $row['password'];
+	$user_display_name = trim((string) ($row['effective_caller_id_name'] ?? ''));
+	if ($user_display_name === '') {
+		$user_display_name = trim((string) ($row['username'] ?? ''));
+	}
+	if ($user_display_name === '') {
+		$user_display_name = $user_extension;
+	}
+}
+
+$extensions_sql = "select
+		e.extension_uuid,
+		e.extension,
+		e.number_alias,
+		e.effective_caller_id_name
+	from v_extensions e
+	join v_extension_users eu
+		on eu.extension_uuid = e.extension_uuid
+		and eu.domain_uuid = :domain_uuid
+	where e.domain_uuid = :domain_uuid
+	and eu.user_uuid = :user_uuid
+	order by e.extension asc";
+$extensions_statement = $db->prepare($extensions_sql);
+if ($extensions_statement) {
+	$extensions_statement->execute([
+		'domain_uuid' => $domain_uuid,
+		'user_uuid' => $user_uuid,
+	]);
+	$extension_rows = $extensions_statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+	foreach ($extension_rows as $extension_row) {
+		$extension_uuid = trim((string) ($extension_row['extension_uuid'] ?? ''));
+		$extension_value = trim((string) ($extension_row['extension'] ?? ''));
+		if (!is_uuid($extension_uuid) || $extension_value === '') {
+			continue;
+		}
+		if (!preg_match('/^[0-9A-Za-z_.\-]+$/', $extension_value)) {
+			continue;
+		}
+
+		$label_parts = [];
+		$number_alias = trim((string) ($extension_row['number_alias'] ?? ''));
+		if ($number_alias !== '' && $number_alias !== $extension_value) {
+			$label_parts[] = $number_alias;
+		}
+		$label_parts[] = $extension_value;
+		$caller_name = trim((string) ($extension_row['effective_caller_id_name'] ?? ''));
+		if ($caller_name !== '') {
+			$label_parts[] = $caller_name;
+		}
+
+		$user_sender_extensions[] = [
+			'extension_uuid' => $extension_uuid,
+			'extension' => $extension_value,
+			'label' => implode(' - ', $label_parts),
+		];
+	}
+}
+
+if (count($user_sender_extensions) > 0) {
+	$selected_exists = false;
+	foreach ($user_sender_extensions as $sender_extension_row) {
+		if ((string) ($sender_extension_row['extension_uuid'] ?? '') === $selected_sender_extension_uuid) {
+			$selected_exists = true;
+			break;
+		}
+	}
+	if (!$selected_exists) {
+		$selected_sender_extension_uuid = (string) ($user_sender_extensions[0]['extension_uuid'] ?? '');
+	}
+}
+else {
+	$selected_sender_extension_uuid = '';
+}
+
+//load contacts for phone panel: domain extensions + core contacts (phones)
+$contact_destinations = [];
+
+$domain_extensions_sql = "select
+		e.extension,
+		e.effective_caller_id_name,
+		e.number_alias,
+		(
+			select u.username
+			from v_extension_users eu
+			join v_users u
+				on u.user_uuid = eu.user_uuid
+		where eu.domain_uuid = e.domain_uuid
+		and eu.extension_uuid = e.extension_uuid
+		order by u.username asc
+		limit 1
+		) as assigned_username
+	from v_extensions e
+	where e.domain_uuid = :domain_uuid
+	order by e.extension asc";
+$domain_extensions_statement = $db->prepare($domain_extensions_sql);
+if ($domain_extensions_statement) {
+	$domain_extensions_statement->execute([
+		'domain_uuid' => $domain_uuid,
+	]);
+	$domain_extension_rows = $domain_extensions_statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+	foreach ($domain_extension_rows as $extension_row) {
+		$destination = trim((string) ($extension_row['extension'] ?? ''));
+		if ($destination === '' || !preg_match('/^[0-9A-Za-z_.\-]+$/', $destination)) {
+			continue;
+		}
+		if (isset($contact_destinations[$destination])) {
+			continue;
+		}
+
+		$display_name = trim((string) ($extension_row['effective_caller_id_name'] ?? ''));
+		if ($display_name === '') {
+			$display_name = trim((string) ($extension_row['assigned_username'] ?? ''));
+		}
+		if ($display_name === '') {
+			$display_name = trim((string) ($extension_row['number_alias'] ?? ''));
+		}
+		if ($display_name === '') {
+			$display_name = 'Extension';
+		}
+
+		$phone_contacts[] = [
+			'destination' => $destination,
+			'extension' => $destination,
+			'name' => $display_name,
+			'source' => 'extension',
+		];
+		$contact_destinations[$destination] = true;
+	}
+}
+
+if (file_exists(dirname(__DIR__, 2) . '/core/contacts/') && permission_exists('contact_view')) {
+	$core_contacts_sql = "select
+			c.contact_uuid,
+			c.contact_name_given,
+			c.contact_name_family,
+			c.contact_nickname,
+			cp.phone_number
+		from v_contacts c
+		left join lateral (
+			select p.phone_number
+			from v_contact_phones p
+			where p.contact_uuid = c.contact_uuid
+			and (p.domain_uuid = :domain_uuid or p.domain_uuid is null)
+			order by p.phone_primary desc, p.insert_date asc
+			limit 1
+		) cp on true
+		where (c.domain_uuid = :domain_uuid or c.domain_uuid is null)
+		and cp.phone_number is not null
+		and cp.phone_number <> ''
+		order by c.contact_name_given asc, c.contact_name_family asc, c.contact_nickname asc";
+	$core_contacts_statement = $db->prepare($core_contacts_sql);
+	if ($core_contacts_statement) {
+		$core_contacts_statement->execute([
+			'domain_uuid' => $domain_uuid,
+		]);
+		$core_contact_rows = $core_contacts_statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+		foreach ($core_contact_rows as $contact_row) {
+			$destination = trim((string) ($contact_row['phone_number'] ?? ''));
+			$destination = preg_replace('/\s+/', '', $destination);
+			if ($destination === '') {
+				continue;
+			}
+
+			if (preg_match('/^([^@\s]+)@[^@\s]+$/', $destination, $matches)) {
+				$destination = $matches[1];
+			}
+
+			if (!preg_match('/^[0-9A-Za-z+_.\-]+$/', $destination)) {
+				continue;
+			}
+
+			if (isset($contact_destinations[$destination])) {
+				continue;
+			}
+
+			$name_parts = [];
+			$family_name = trim((string) ($contact_row['contact_name_family'] ?? ''));
+			$given_name = trim((string) ($contact_row['contact_name_given'] ?? ''));
+			if ($family_name !== '') {
+				$name_parts[] = $family_name;
+			}
+			if ($given_name !== '') {
+				$name_parts[] = $given_name;
+			}
+			$display_name = trim(implode(' ', $name_parts));
+			if ($display_name === '') {
+				$display_name = trim((string) ($contact_row['contact_nickname'] ?? ''));
+			}
+			if ($display_name === '') {
+				$display_name = 'Contact';
+			}
+
+			$phone_contacts[] = [
+				'destination' => $destination,
+				'extension' => $destination,
+				'name' => $display_name,
+				'source' => 'core_contact',
+				'contact_uuid' => (string) ($contact_row['contact_uuid'] ?? ''),
+			];
+			$contact_destinations[$destination] = true;
+		}
+	}
 }
 
 //set the title
@@ -105,12 +314,24 @@ echo "	</div>\n";
 
 //define the audio ringtone
 echo "	<audio id='ringtone' preload='auto'>\n";
-echo "		<source src='resources/ringtones/ringtone.mp3' type='audio/mpeg' loop='loop' />\n";
+echo "		<source src='resources/ringtones/ringtone.wav' type='audio/wav' loop='loop' />\n";
 echo "	</audio>\n";
 
 //audio or video objects need to be initialized before phone.js
 echo "	<script language='JavaScript' type='text/javascript'>\n";
 echo "	const time_zone = '".$settings->get('domain', 'time_zone')."';\n";
+echo "	const phone_e2ee_user_uuid = '".escape($user_uuid)."';\n";
+echo "	const phone_e2ee_domain_uuid = '".escape($domain_uuid)."';\n";
+echo "	const phone_can_delete_rooms = ".(permission_exists('xmpp_room_delete') ? 'true' : 'false').";\n";
+echo "	const phone_registered_extension = '".escape($user_extension)."';\n";
+echo "	const phone_registered_display_name = '".escape($user_display_name)."';\n";
+echo "	const phone_sender_extensions = ".json_encode($user_sender_extensions, JSON_UNESCAPED_SLASHES).";\n";
+echo "	const phone_selected_sender_extension_uuid = '".escape($selected_sender_extension_uuid)."';\n";
+echo "	const phone_contacts = ".json_encode($phone_contacts, JSON_UNESCAPED_SLASHES).";\n";
+echo "	const phone_e2ee_default_device_label = '".escape($_SERVER['HTTP_USER_AGENT'] ?? 'Browser Device')."';\n";
+$session_unlock_material = session_id().'|'.$user_uuid.'|'.$domain_uuid.'|'.(string) $config->get('phone.message_encryption_key', '');
+$session_unlock_key = hash('sha256', $session_unlock_material);
+echo "	const phone_e2ee_session_unlock_key = '".escape($session_unlock_key)."';\n";
 echo "\n";
 // Dashboard search configuration
 echo "	const dashboard_enabled = " . (!empty($search_enabled) && $search_enabled == 'true' ? 'true' : 'false') . ";\n";
@@ -130,6 +351,7 @@ echo "	</script>\n";
 echo "	<div class='status_bar' id='status_bar'>\n";
 echo "		<span class='status_icon'><i class='fas fa-circle'></i></span>\n";
 echo "		<span class='status_text' id='status_text'>Ready</span>\n";
+echo "		<span class='status_identity' id='status_identity'><span class='status_identity_name'>".escape($user_display_name)."</span><span class='status_identity_ext'>Ext ".escape($user_extension)."</span></span>\n";
 echo "	</div>\n";
 
 //start the body_content
@@ -178,6 +400,44 @@ echo "		<div class='history_list' id='history_list'>\n";
 echo "		</div>\n";
 echo "	</div>\n";
 
+//define the messages panel (XMPP UI scaffold)
+echo "	<div class='dialpad' id='messages' style='display: none;'>\n";
+echo "		<div class='messages_layout'>\n";
+echo "			<div class='messages_sidebar'>\n";
+echo "				<div class='messages_header'><i class='fas fa-comments'></i> Messages</div>\n";
+echo "				<div class='messages_destination_bar'>\n";
+echo "					<input type='text' id='message_destination' class='message_destination' list='message_room_suggestions' placeholder='Destination (e.g. 102, user@example.com, #ops-room)' autocomplete='off' autocorrect='off' autocapitalize='off' spellcheck='false' data-lpignore='true' data-1p-ignore='true' />\n";
+echo "					<button type='button' id='message_set_destination' class='message_set_destination' onclick='set_message_destination();'><i class='fas fa-location-arrow'></i> Set</button>\n";
+echo "				</div>\n";
+echo "				<datalist id='message_room_suggestions'></datalist>\n";
+echo "				<div class='messages_hint'>Tip: use <strong>/list</strong>, <strong>/create #room</strong> or <strong>/join #room</strong> in the message box.</div>\n";
+echo "				<div class='messages_conversations' id='messages_conversations'></div>\n";
+echo "			</div>\n";
+echo "			<div class='messages_thread'>\n";
+echo "				<div class='thread_header'>\n";
+echo "					<div class='thread_conversation_picker'>\n";
+echo "						<select id='thread_conversation_select' class='thread_conversation_select'>\n";
+echo "							<option value=''>Select a conversation</option>\n";
+echo "						</select>\n";
+echo "					</div>\n";
+echo "					<div class='thread_title' id='thread_title'>Select a conversation</div>\n";
+echo "					<div class='thread_presence' id='thread_presence'>Offline</div>\n";
+echo "				</div>\n";
+echo "				<div class='thread_messages' id='thread_messages'>\n";
+echo "					<div class='thread_empty'>Select a conversation to start messaging.</div>\n";
+echo "				</div>\n";
+echo "				<div class='thread_composer'>\n";
+echo "					<div class='thread_sender_context' id='thread_sender_context' style='display: none;'>\n";
+echo "						<label class='thread_sender_label' for='message_sender_extension'>Send as</label>\n";
+echo "						<select id='message_sender_extension' class='message_sender_extension'></select>\n";
+echo "					</div>\n";
+echo "					<textarea id='message_input' class='message_input' placeholder='Type an XMPP message...' rows='1' autocomplete='off' autocorrect='off' autocapitalize='off' spellcheck='false' data-lpignore='true' data-1p-ignore='true' onkeydown=\"if (event.keyCode === 13 && !event.shiftKey && !event.isComposing) { event.preventDefault(); send_message_mock(); return false; }\"></textarea>\n";
+echo "					<button type='button' id='message_send' class='message_send' onclick='send_message_mock();'><i class='fas fa-paper-plane'></i> Send</button>\n";
+echo "				</div>\n";
+echo "			</div>\n";
+echo "		</div>\n";
+echo "	</div>\n";
+
 //define the ringing control
 echo "	<div class='dialpad' id='ringing' style='display: none;'>\n";
 echo "		<div class='caller_id ringing' id='ringing_caller_id'></div>\n";
@@ -213,6 +473,10 @@ echo "			<span class='action_label'>Contacts</span>\n";
 echo "		</div>\n";
 echo "		<div class='action_item' onclick='show_history();' id='action_history'><i class='fas fa-history'></i>\n";
 echo "			<span class='action_label'>History</span>\n";
+echo "		</div>\n";
+echo "		<div class='action_item' onclick='show_messages();' id='action_messages'><i class='fas fa-comments'></i>\n";
+echo "			<span class='action_label'>Messages</span>\n";
+echo "			<span class='action_badge' id='action_messages_badge' style='display: none;'>0</span>\n";
 echo "		</div>\n";
 echo "		<div class='action_item' id='action_mute' onclick='toggle_audio_mute_action();' style='display: none;'><i id='action_mute_icon' class='fas fa-microphone'></i>\n";
 echo "			<span class='action_label' id='action_mute_label'>".$text['label-mute']."</span>\n";

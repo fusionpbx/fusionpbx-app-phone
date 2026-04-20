@@ -96,3 +96,13 @@ $apps[$x]['permissions'][$y]['groups'][] = "superadmin";
 $apps[$x]['permissions'][$y]['groups'][] = "admin";
 $y++;
 
+$apps[$x]['permissions'][$y]['name'] = "xmpp_room_delete";
+$apps[$x]['permissions'][$y]['menu']['uuid'] = "dff62ee9-f59e-4686-bc57-a4819ea303bf";
+$apps[$x]['permissions'][$y]['groups'][] = "superadmin";
+$y++;
+
+$apps[$x]['permissions'][$y]['name'] = "phone_e2ee_device_manage";
+$apps[$x]['permissions'][$y]['menu']['uuid'] = "8f96f06d-8ae8-4a89-b9b8-f5db3e2df2ad";
+$apps[$x]['permissions'][$y]['groups'][] = "superadmin";
+$y++;
+

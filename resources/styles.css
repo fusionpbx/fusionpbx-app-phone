@@ -8,6 +8,22 @@ body {
 	overflow: hidden;
 }
 
+:root {
+	--surface-base: rgba(0, 0, 0, 0.82);
+	--surface-soft: rgba(35, 35, 35, 0.9);
+	--surface-raised: rgba(55, 55, 55, 0.95);
+	--text-primary: #f6f6f6;
+	--text-secondary: #d0d0d0;
+	--text-muted: #a8a8a8;
+	--accent-call: #1eba00;
+	--accent-danger: #d40000;
+	--accent-xmpp: #00a7c4;
+	--accent-xmpp-soft: rgba(0, 167, 196, 0.2);
+	--presence-online: #18c06a;
+	--presence-away: #f0b429;
+	--presence-offline: #7f7f7f;
+}
+
 .inner {
 	position: absolute;
 }
@@ -174,6 +190,27 @@ video::-webkit-media-controls-start-playback-button {
 	grid-template-columns: repeat(3, 1fr);
 }
 
+#dialpad .destination,
+#dialpad .dialpad_wrapper {
+	width: 100%;
+	max-width: 485px;
+	margin-left: auto;
+	margin-right: auto;
+	box-sizing: border-box;
+}
+
+#dialpad .destination,
+#dialpad .caller_id,
+#ringing .caller_id,
+#active .caller_id {
+	display: block;
+	width: 100%;
+	max-width: 485px;
+	margin-left: auto;
+	margin-right: auto;
+	box-sizing: border-box;
+}
+
 .dialpad_box {
 	background: rgba(0, 0, 0, 0.6);
 	color: #fff;
@@ -289,17 +326,18 @@ sup {
 
 /* Status Bar Styles */
 .status_bar {
-	/*position: fixed;*/
+	position: fixed;
 	top: 0;
 	left: 0;
 	right: 0;
-	height: 50px;
+	min-height: 50px;
 	background: rgba(0, 0, 0, 0.85);
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	gap: 15px;
-	/*z-index: 1000;*/
+	flex-wrap: wrap;
+	z-index: 1000;
 	padding: 0 20px;
 	font-size: 18px;
 	color: #fff;
@@ -317,6 +355,54 @@ sup {
 
 .status_text {
 	font-weight: 600;
+}
+
+.status_identity {
+	position: absolute;
+	left: 20px;
+	top: 50%;
+	transform: translateY(-50%);
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	justify-content: center;
+	gap: 1px;
+	line-height: 1.1;
+	max-width: 42%;
+	overflow: hidden;
+}
+
+.status_identity_name {
+	font-size: 12px;
+	font-weight: 600;
+	color: #d9e5eb;
+	letter-spacing: 0.01em;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 100%;
+}
+
+.status_identity_ext {
+	font-size: 11px;
+	font-weight: 500;
+	color: #9fb0b9;
+	letter-spacing: 0.01em;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 100%;
+}
+
+@media (max-width: 720px) {
+	.status_bar {
+		padding-left: 140px;
+	}
+
+	.status_identity {
+		left: 10px;
+		max-width: 120px;
+	}
 }
 
 /* Action Bar Styles */
@@ -342,6 +428,7 @@ sup {
 	align-items: center;
 	gap: 1px;
 	padding: 4px 6px;
+	position: relative;
 	cursor: pointer;
 	-webkit-user-select: none;
 	-moz-user-select: none;
@@ -398,6 +485,22 @@ sup {
 	color: #9dff90;
 }
 
+.action_badge {
+	position: absolute;
+	top: 3px;
+	right: 7px;
+	min-width: 14px;
+	height: 14px;
+	padding: 0 4px;
+	border-radius: 999px;
+	background: var(--accent-xmpp);
+	color: #fff;
+	font-size: 9px;
+	line-height: 14px;
+	font-weight: bold;
+	text-align: center;
+}
+
 body.audio_call_mode #active #answer_time,
 body.audio_call_mode #active .dialpad_wrapper {
 	display: none !important;
@@ -406,7 +509,8 @@ body.audio_call_mode #active .dialpad_wrapper {
 /* Keypad, Contacts, History Panels */
 #keypad,
 #contacts,
-#history {
+#history,
+#messages {
 	position: fixed;
 	top: 50px;
 	bottom: 38px;
@@ -476,6 +580,77 @@ body.audio_call_mode #active .dialpad_wrapper {
 .contact_info {
 	flex: 1;
 	min-width: 0;
+}
+
+.contact_actions {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-left: 6px;
+}
+
+.contact_action_button {
+	width: 28px;
+	height: 28px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 6px;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	background: rgba(255, 255, 255, 0.08);
+	color: #fff;
+	cursor: pointer;
+	padding: 0;
+	transition: background 0.2s, border-color 0.2s;
+}
+
+.contact_action_button:hover {
+	background: rgba(255, 255, 255, 0.18);
+}
+
+.contact_action_button.contact_call {
+	border-color: rgba(30, 186, 0, 0.5);
+	background: rgba(30, 186, 0, 0.2);
+}
+
+.contact_action_button.contact_message {
+	border-color: rgba(0, 167, 196, 0.6);
+	background: rgba(0, 167, 196, 0.2);
+}
+
+.message_context_menu {
+	position: fixed;
+	z-index: 100002;
+	min-width: 170px;
+	padding: 6px;
+	border-radius: 8px;
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	background: rgba(12, 12, 12, 0.96);
+	box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.message_context_menu_item {
+	width: 100%;
+	padding: 8px 10px;
+	border-radius: 6px;
+	border: 0;
+	background: rgba(255, 255, 255, 0.06);
+	color: var(--text-primary);
+	text-align: left;
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.message_context_menu_item:hover {
+	background: rgba(255, 255, 255, 0.14);
+}
+
+.message_context_menu_item:disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
 }
 
 .contact_extension {
@@ -563,4 +738,507 @@ body.audio_call_mode #active .dialpad_wrapper {
 	color: #aaa;
 	min-width: 80px;
 	text-align: right;
+}
+
+/* Messages Panel (XMPP-ready scaffold) */
+.messages_layout {
+	width: min(1120px, 100%);
+	height: 100%;
+	display: grid;
+	grid-template-columns: minmax(320px, 38%) 1fr;
+	gap: 12px;
+}
+
+.messages_sidebar,
+.messages_thread {
+	background: var(--surface-base);
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	border-radius: 10px;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.messages_header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 14px 16px;
+	background: rgba(0, 0, 0, 0.25);
+	font-weight: 700;
+	font-size: 17px;
+	color: var(--text-primary);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.messages_header i {
+	color: var(--accent-xmpp);
+}
+
+.messages_conversations {
+	flex: 1;
+	overflow-y: auto;
+	padding: 8px;
+	background: rgba(0, 0, 0, 0.14);
+}
+
+.messages_destination_bar {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: 8px;
+	padding: 10px 12px 8px 12px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+	background: rgba(0, 0, 0, 0.2);
+}
+
+.messages_hint {
+	padding: 0 12px 10px 12px;
+	font-size: 11px;
+	color: var(--text-muted);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.messages_hint strong {
+	font-family: inherit;
+	font-size: 14px;
+	line-height: 1.2;
+	padding: 0;
+	color: var(--text-primary);
+	font-weight: 700;
+}
+
+.conversation_item {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: 2px 10px;
+	padding: 12px;
+	border-radius: 8px;
+	background: var(--surface-soft);
+	margin-bottom: 8px;
+	cursor: pointer;
+	transition: background 0.2s;
+	border: 1px solid transparent;
+}
+
+.conversation_item:hover {
+	background: var(--surface-raised);
+}
+
+.conversation_item.active {
+	border-color: var(--accent-xmpp);
+	background: var(--accent-xmpp-soft);
+}
+
+.conversation_name {
+	font-size: 14px;
+	font-weight: 700;
+	color: var(--text-primary);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.conversation_meta {
+	font-size: 11px;
+	color: var(--text-muted);
+	text-align: right;
+}
+
+.conversation_preview {
+	grid-column: 1 / span 2;
+	font-size: 12px;
+	color: var(--text-secondary);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.thread_header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 14px 16px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+	background: rgba(0, 0, 0, 0.25);
+}
+
+.thread_conversation_picker {
+	display: none;
+	flex: 1;
+	min-width: 0;
+}
+
+.thread_conversation_select {
+	width: 100%;
+	padding: 8px 10px;
+	border-radius: 8px;
+	border: 1px solid rgba(255, 255, 255, 0.16);
+	background: rgba(255, 255, 255, 0.05);
+	color: var(--text-primary);
+	font-size: 12px;
+	outline: none;
+}
+
+.thread_conversation_select:focus {
+	border-color: var(--accent-xmpp);
+	box-shadow: 0 0 0 2px rgba(0, 167, 196, 0.2);
+}
+
+.thread_conversation_select option {
+	color: #101316;
+	background: #f5f7f9;
+}
+
+.thread_conversation_select option:checked {
+	color: #ffffff;
+	background: #2b6fd4;
+}
+
+.thread_conversation_select option:disabled {
+	color: #6c757d;
+	background: #eceff2;
+}
+
+.thread_title {
+	font-size: 15px;
+	font-weight: 700;
+	color: var(--text-primary);
+	max-width: 80%;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.thread_presence {
+	font-size: 12px;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+}
+
+.thread_presence.online {
+	color: var(--presence-online);
+}
+
+.thread_presence.away {
+	color: var(--presence-away);
+}
+
+.thread_presence.offline {
+	color: var(--presence-offline);
+}
+
+.thread_presence.room {
+	color: var(--accent-xmpp);
+}
+
+.thread_presence.unknown {
+	color: var(--text-muted);
+}
+
+.thread_messages {
+	flex: 1;
+	overflow-y: auto;
+	padding: 14px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	background: rgba(0, 0, 0, 0.2);
+}
+
+.thread_empty {
+	margin: auto;
+	font-size: 14px;
+	color: var(--text-muted);
+	text-align: center;
+}
+
+.message_row {
+	display: flex;
+	width: 100%;
+}
+
+.message_row.incoming {
+	justify-content: flex-start;
+}
+
+.message_row.outgoing {
+	justify-content: flex-end;
+}
+
+.message_bubble {
+	max-width: min(72%, 560px);
+	padding: 10px 12px;
+	border-radius: 10px;
+	font-size: 14px;
+	line-height: 1.35;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+	word-break: break-word;
+}
+
+.message_row.incoming .message_bubble {
+	background: rgba(255, 255, 255, 0.08);
+	color: var(--text-primary);
+}
+
+.message_row.outgoing .message_bubble {
+	background: rgba(0, 167, 196, 0.22);
+	border: 1px solid rgba(0, 167, 196, 0.45);
+	color: var(--text-primary);
+}
+
+.message_row.outgoing.sending .message_bubble {
+	opacity: 0.78;
+	border-style: dashed;
+}
+
+.message_row.outgoing.failed .message_bubble {
+	background: rgba(212, 0, 0, 0.18);
+	border: 1px solid rgba(212, 0, 0, 0.55);
+}
+
+.message_meta {
+	margin-top: 4px;
+	font-size: 11px;
+	color: var(--text-muted);
+	text-align: right;
+}
+
+.thread_composer {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: 8px;
+	padding: 12px;
+	border-top: 1px solid rgba(255, 255, 255, 0.08);
+	background: rgba(0, 0, 0, 0.35);
+}
+
+.thread_sender_context {
+	grid-column: 1 / span 2;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.thread_sender_label {
+	font-size: 12px;
+	color: var(--text-muted);
+	white-space: nowrap;
+}
+
+.message_sender_extension {
+	min-width: 220px;
+	max-width: 100%;
+	padding: 8px 10px;
+	border-radius: 8px;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	background: rgba(255, 255, 255, 0.05);
+	color: var(--text-primary);
+	outline: none;
+	font-size: 12px;
+}
+
+.message_sender_extension:focus {
+	border-color: var(--accent-xmpp);
+	box-shadow: 0 0 0 2px rgba(0, 167, 196, 0.2);
+}
+
+.message_sender_extension option {
+	color: #101316;
+	background: #f5f7f9;
+}
+
+.message_sender_extension option:checked {
+	color: #ffffff;
+	background: #2b6fd4;
+}
+
+.message_destination {
+	width: 100%;
+	padding: 10px 12px;
+	border-radius: 8px;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	background: rgba(255, 255, 255, 0.05);
+	color: var(--text-primary);
+	outline: none;
+	font-size: 13px;
+}
+
+.message_destination:focus {
+	border-color: var(--accent-xmpp);
+	box-shadow: 0 0 0 2px rgba(0, 167, 196, 0.2);
+}
+
+.message_set_destination {
+	border: 1px solid rgba(0, 167, 196, 0.55);
+	background: rgba(0, 167, 196, 0.16);
+	color: #fff;
+	border-radius: 8px;
+	padding: 10px 12px;
+	font-size: 12px;
+	font-weight: 700;
+	cursor: pointer;
+	transition: background 0.2s;
+	white-space: nowrap;
+}
+
+.message_set_destination:hover {
+	background: rgba(0, 167, 196, 0.3);
+}
+
+.message_input {
+	width: 100%;
+	padding: 10px 12px;
+	border-radius: 8px;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	background: rgba(255, 255, 255, 0.05);
+	color: var(--text-primary);
+	outline: none;
+	font-size: 14px;
+	line-height: 1.35;
+	min-height: 42px;
+	max-height: 140px;
+	resize: none;
+	overflow-y: auto;
+}
+
+.message_input:focus {
+	border-color: var(--accent-xmpp);
+	box-shadow: 0 0 0 2px rgba(0, 167, 196, 0.2);
+}
+
+.message_send {
+	border: 1px solid rgba(0, 167, 196, 0.55);
+	background: rgba(0, 167, 196, 0.2);
+	color: #fff;
+	border-radius: 8px;
+	padding: 10px 14px;
+	font-size: 13px;
+	font-weight: 700;
+	cursor: pointer;
+	transition: background 0.2s;
+}
+
+.message_send:hover {
+	background: rgba(0, 167, 196, 0.33);
+}
+
+@media (max-width: 980px) {
+	.messages_layout {
+		grid-template-columns: minmax(240px, 38%) 1fr;
+	}
+
+	.message_bubble {
+		max-width: min(82%, 520px);
+	}
+}
+
+@media (max-width: 860px) {
+	#messages {
+		padding: 12px;
+		overflow: hidden;
+	}
+
+	.messages_layout {
+		grid-template-columns: 1fr;
+		grid-template-rows: minmax(0, 1fr);
+		gap: 10px;
+		height: 100%;
+		min-height: 0;
+	}
+
+	.messages_sidebar {
+		display: none;
+		min-height: 0;
+	}
+
+	.messages_conversations {
+		display: none;
+		max-height: clamp(100px, 24vh, 190px);
+	}
+
+	.messages_hint {
+		display: none;
+	}
+
+	.messages_thread {
+		min-height: 0;
+	}
+
+	.messages_destination_bar {
+		grid-template-columns: 1fr;
+	}
+
+	.message_set_destination {
+		width: 100%;
+	}
+
+	.thread_header {
+		align-items: flex-start;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.thread_conversation_picker {
+		display: block;
+		width: 100%;
+	}
+
+	.thread_title {
+		display: none;
+		max-width: 100%;
+	}
+
+	.thread_composer {
+		grid-template-columns: 1fr;
+	}
+
+	.thread_sender_context {
+		grid-column: 1;
+		align-items: stretch;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.message_sender_extension {
+		min-width: 0;
+		width: 100%;
+	}
+
+	.message_send {
+		width: 100%;
+	}
+}
+
+@media (max-width: 520px) {
+	#messages {
+		padding: 8px;
+	}
+
+	.messages_layout {
+		gap: 8px;
+	}
+
+	.messages_header,
+	.thread_header {
+		padding: 10px 12px;
+	}
+
+	.messages_destination_bar,
+	.thread_composer {
+		padding: 10px;
+	}
+
+	.messages_hint {
+		font-size: 10px;
+	}
+
+	.messages_conversations {
+		max-height: clamp(84px, 20vh, 140px);
+	}
+
+	.message_bubble {
+		max-width: 92%;
+	}
 }
