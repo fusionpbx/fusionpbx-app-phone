@@ -3,13 +3,13 @@
 //phone icon
 $array['dashboard_widgets'][$x]['dashboard_uuid'] = '3e2cbaa4-2bec-41b2-a626-999a59b8b19c';
 $array['dashboard_widgets'][$x]['dashboard_widget_uuid'] = '2f0ef341-724e-4578-84bb-803e0fc0b14c';
-$array['dashboard_widgets'][$x]['widget_name'] = 'Voicemails';
+$array['dashboard_widgets'][$x]['widget_name'] = 'Phone';
 $array['dashboard_widgets'][$x]['widget_path'] = 'dashboard/icon';
 $array['dashboard_widgets'][$x]['widget_icon'] = 'fa-solid fa-phone';
 $array['dashboard_widgets'][$x]['widget_url'] = '/app/phone/phone.php';
 $array['dashboard_widgets'][$x]['widget_target'] = 'new';
-$array['dashboard_widgets'][$x]['widget_width'] = '';
-$array['dashboard_widgets'][$x]['widget_height'] = '';
+$array['dashboard_widgets'][$x]['widget_width'] = '340';
+$array['dashboard_widgets'][$x]['widget_height'] = '550';
 $array['dashboard_widgets'][$x]['widget_content'] = '';
 $array['dashboard_widgets'][$x]['widget_content_text_align'] = '';
 $array['dashboard_widgets'][$x]['widget_content_details'] = '';
