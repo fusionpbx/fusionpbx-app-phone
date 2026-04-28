@@ -51,8 +51,8 @@ function send_call(use_video) {
 		return;
 	}
 
-	// Add to call history as outgoing
-	add_to_history(destination, 'outgoing', Date.now(), use_video);
+	// Add to call history as outgoing and save entry ID for duration tracking
+	current_history_entry_id = add_to_history(destination, 'outgoing', Date.now(), use_video);
 
 	// Show or hide the panels
 	hide_all_panels();
@@ -198,6 +198,7 @@ let transient_status_timeout;
 let active_call_is_video = false;
 let active_call_display_name = '';
 let active_call_number = '';
+let current_history_entry_id = null;  // Track current call's history entry for duration update
 
 function stop_call_tone() {
 	const ringtone = document.getElementById('ringtone');
@@ -558,6 +559,9 @@ function reset_call_ui_state(show_dialpad) {
 
 	stop_call_tone();
 
+	// Save call duration before clearing answer_time
+	save_call_duration();
+
 	reset_media();
 
 	document.getElementById('dialpad').style.display = show_dialpad ? "grid" : "none";
@@ -592,6 +596,7 @@ function reset_call_ui_state(show_dialpad) {
 	active_call_number = '';
 
 	answer_time = null;
+	current_history_entry_id = null;
 	session_hungup = false;
 	session = null;
 
@@ -640,8 +645,9 @@ function save_call_history(history) {
 
 function add_to_history(number, call_type, timestamp, is_video) {
 	var history = get_call_history();
+	var entry_id = Date.now();
 	var entry = {
-		id: Date.now(),
+		id: entry_id,
 		number: number,
 		call_type: call_type,  // 'outgoing', 'incoming', 'missed'
 		timestamp: timestamp,
@@ -655,7 +661,19 @@ function add_to_history(number, call_type, timestamp, is_video) {
 		history = history.slice(0, 100);
 	}
 	save_call_history(history);
-	return entry;
+	return entry_id;
+}
+
+function update_history_duration(entry_id, duration_seconds) {
+	var history = get_call_history();
+	for (var i = 0; i < history.length; i++) {
+		if (history[i].id === entry_id) {
+			history[i].duration = duration_seconds;
+			save_call_history(history);
+			return true;
+		}
+	}
+	return false;
 }
 
 // Function to generate media options based on use_video parameter
@@ -792,9 +810,9 @@ function answer_call(use_video) {
 		return false;
 	}
 
-	// Record incoming call to history
+	// Record incoming call to history and save entry ID for duration tracking
 	if (session.incoming_number) {
-		add_to_history(session.incoming_number, 'incoming', Date.now(), use_video);
+		current_history_entry_id = add_to_history(session.incoming_number, 'incoming', Date.now(), use_video);
 	}
 
 	// Start the answer time
@@ -976,12 +994,18 @@ function render_history() {
 			hour12: true  // true = 12-hour format, false = 24-hour
 		});
 
+		// Format duration if available
+		var duration_str = '';
+		if (entry.call_type !== 'missed' && entry.duration > 0) {
+			duration_str = ' • ' + format_duration(entry.duration);
+		}
+
 		history_html = '	<div class="history_icon ' + entry.call_type + '">';
 		history_html += '	<i class="fas ' + icon_class + '"></i>';
 		history_html += '	</div>';
 		history_html += '	<div class="history_details">';
 		history_html += '		<div class="history_number">' + sanitize_string(entry.number) + '</div>';
-		history_html += '		<div class="history_meta">' + call_type_name(entry.call_type) + ' • ' + ago_str + '</div>';
+		history_html += '		<div class="history_meta">' + call_type_name(entry.call_type) + duration_str + ' • ' + ago_str + '</div>';
 		history_html += '	</div>';
 		history_html += '	<div class="history_time">';
 		history_html += '		' + time_str;
@@ -989,6 +1013,21 @@ function render_history() {
 		historyDiv.innerHTML = history_html;
 		container.appendChild(historyDiv);
 	});
+}
+
+// Format duration in seconds to human-readable string (e.g., "2m 34s" or "1h 5m")
+function format_duration(seconds) {
+	if (seconds < 60) {
+		return seconds + 's';
+	}
+	var minutes = Math.floor(seconds / 60);
+	var remaining_seconds = seconds % 60;
+	if (minutes < 60) {
+		return minutes + 'm' + (remaining_seconds > 0 ? ' ' + remaining_seconds + 's' : '');
+	}
+	var hours = Math.floor(minutes / 60);
+	remaining_minutes = minutes % 60;
+	return hours + 'h' + (remaining_minutes > 0 ? ' ' + remaining_minutes + 'm' : '');
 }
 
 // Helper functions
@@ -1051,15 +1090,36 @@ function get_session_time() {
 	}
 }
 
+// Function to save the final call duration to history when call ends
+function save_call_duration() {
+	if (answer_time && current_history_entry_id !== null) {
+		var elapsed_time = Date.now() - answer_time;
+		var duration_seconds = Math.floor(elapsed_time / 1000);
+		if (duration_seconds > 0) {
+			update_history_duration(current_history_entry_id, duration_seconds);
+		}
+	}
+}
+
 // Update elapsed time every second
 setInterval(get_session_time, 1000);
 
 // Function to reset media after a call ends
+// Properly stops all media tracks to prevent camera/microphone from remaining active
 function reset_media() {
-	const videoElements = [document.getElementById('remote_video'), document.getElementById('local_video')];
-	videoElements.forEach(video => {
-		video.srcObject = null;
-		video.pause();
+	var videoElements = [document.getElementById('remote_video'), document.getElementById('local_video')];
+	videoElements.forEach(function(video) {
+		if (video && video.srcObject) {
+			// Stop all tracks in the media stream (prevents camera/mic staying active)
+			var tracks = video.srcObject.getTracks();
+			tracks.forEach(function(track) {
+				track.stop();
+			});
+		}
+		if (video) {
+			video.srcObject = null;
+			video.pause();
+		}
 	});
 }
 
@@ -1075,6 +1135,9 @@ function hangup() {
 			session.terminate();
 		}
 	}
+
+	// Save call duration to history before resetting UI
+	save_call_duration();
 
 	reset_call_ui_state(true);
 }
@@ -1143,6 +1206,39 @@ function unmute_video(destination) {
 	document.getElementById('mute_video').style.display = "inline";
 	document.getElementById('unmute_video').style.display = "none";
 	sync_call_action_controls();
+}
+
+// Transfer the current call to another number (blind/attended transfer via SIP REFER)
+function transfer_call(target_number) {
+	if (!session) { return; }
+	if (!target_number || target_number.trim() === '') { return; }
+	
+	// Create REFER request to transfer current call
+	var refer_to = 'sip:' + target_number.trim() + '@' + '<?php echo $domain_name; ?>';
+	
+	// Use session.refer() if available, otherwise use session.ua.request()
+	if (session.refer) {
+		session.refer(refer_to).send();
+		show_temporary_status('Transferring to ' + target_number, 'fas fa-phone-square');
+	} else {
+		// Fallback: try using the UA's invite capability for transfer
+		show_temporary_status('Transfer not supported', 'fas fa-exclamation-triangle');
+	}
+}
+
+// Show transfer dialog/prompt
+function show_transfer_prompt() {
+	if (!session) { return; }
+	
+	// Get current destination value
+	var current_value = document.getElementById('destination').value || '';
+	
+	// Use a custom prompt for transfer
+	var transfer_number = prompt('Enter extension/number to transfer to:', current_value);
+	
+	if (transfer_number && transfer_number.trim() !== '') {
+		transfer_call(transfer_number);
+	}
 }
 
 function decline() {
