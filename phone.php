@@ -197,7 +197,6 @@ echo "			<div class='dialpad_box mute' id='mute_audio' onclick='mute_audio();'><
 echo "			<div class='dialpad_box' id='unmute_audio' style='color: #ba0000; display: none;' onclick='unmute_audio();'><i class='fas fa-microphone-slash' title=\"".$text['label-unmute']."\"></i><br><sup>".$text['label-unmute']."</sup></div>\n";
 echo "			<div class='dialpad_box hold' id='hold' onclick='hold();'><i class='fas fa-pause' title=\"".$text['label-hold']."\"></i><br><sup>".$text['label-hold']."</sup></div>\n";
 echo "			<div class='dialpad_box' id='unhold' style='color: #1ba800; display: none;' onclick='unhold();'><i class='fas fa-play' title=\"".$text['label-resume']."\"></i><br><sup>".$text['label-resume']."</sup></div>\n";
-
 echo "			<div class='dialpad_box' id='mute_video' style='display: none;' onclick='mute_video();'>&nbsp;</div>\n";
 echo "			<div class='dialpad_box' id='unmute_video' style='display: none;' onclick='unmute_video();'>&nbsp;</div>\n";
 echo "		</div>\n";
@@ -222,6 +221,9 @@ echo "			<span class='action_label' id='action_hold_label'>".$text['label-hold']
 echo "		</div>\n";
 echo "		<div class='action_item' id='action_video_mute' onclick='toggle_video_mute_action();' style='display: none;'><i id='action_video_mute_icon' class='fas fa-video'></i>\n";
 echo "			<span class='action_label' id='action_video_mute_label'>Local</span>\n";
+echo "		</div>\n";
+echo "		<div class='action_item' id='action_transfer' onclick='show_transfer_prompt();' style='display: none;'><i id='action_transfer_icon' class='fas fa-arrow-right-arrow-left'></i>\n";
+echo "			<span class='action_label' id='action_transfer_label'>Transfer</span>\n";
 echo "		</div>\n";
 echo "		<div class='action_item action_item_hangup' id='hangup' onclick='hangup();' style='display: none;'><i class='fas fa-phone-slash' title=\"".$text['label-end']."\"></i>\n";
 echo "			<span class='action_label'>".$text['label-end']."</span>\n";

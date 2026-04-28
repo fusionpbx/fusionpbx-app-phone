@@ -373,6 +373,7 @@ function set_call_action_mode(enabled, use_video) {
 	var action_mute = document.getElementById('action_mute');
 	var action_hold = document.getElementById('action_hold');
 	var action_video_mute = document.getElementById('action_video_mute');
+	var action_transfer = document.getElementById('action_transfer');
 	if (action_mute) {
 		action_mute.style.display = enabled ? 'flex' : 'none';
 	}
@@ -381,6 +382,9 @@ function set_call_action_mode(enabled, use_video) {
 	}
 	if (action_video_mute) {
 		action_video_mute.style.display = enabled && use_video ? 'flex' : 'none';
+	}
+	if (action_transfer) {
+		action_transfer.style.display = enabled ? 'flex' : 'none';
 	}
 
 	if (enabled) {

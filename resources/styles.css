@@ -174,6 +174,11 @@ video::-webkit-media-controls-start-playback-button {
 	grid-template-columns: repeat(3, 1fr);
 }
 
+/* Active call control wrapper - different grid layout for call controls */
+#active .dialpad_wrapper {
+	grid-template-columns: repeat(3, 1fr);
+}
+
 .dialpad_box {
 	background: rgba(0, 0, 0, 0.6);
 	color: #fff;
@@ -226,12 +231,17 @@ video::-webkit-media-controls-start-playback-button {
 .dialpad_box.clear,
 .dialpad_box.mute,
 .dialpad_box.hold,
-.dialpad_box.toggle_video {
+.dialpad_box.toggle_video,
+.dialpad_box.transfer {
 	background: #333;
 }
 
 .dialpad_box.toggle_video.active {
 	background: #1eba00;
+}
+
+.dialpad_box.transfer:hover {
+	background: rgba(50, 100, 150, 0.8);
 }
 
 .dialpad_box.delete:hover,
