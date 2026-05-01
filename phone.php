@@ -178,6 +178,29 @@ echo "		<div class='history_list' id='history_list'>\n";
 echo "		</div>\n";
 echo "	</div>\n";
 
+//define the messages panel (conversations list)
+echo "	<div class='dialpad' id='messages' style='display: none;'>\n";
+echo "		<div class='keypad_header'><i class='fas fa-comment'></i> Messages\n";
+echo "			<a href='javascript:void(0)' onclick='new_conversation();' style='margin-left: 10px; color: #1eba00;' title='New Message'><i class='fas fa-plus'></i></a>\n";
+echo "		</div>\n";
+echo "		<div class='messages_list' id='messages_list'>\n";
+echo "		</div>\n";
+echo "	</div>\n";
+
+//define the conversation panel (chat view)
+echo "	<div class='dialpad' id='conversation' style='display: none;'>\n";
+echo "		<div class='conversation_header'>\n";
+echo "			<a href='javascript:void(0)' onclick='show_messages();' style='color: #fff;'><i class='fas fa-arrow-left'></i></a>\n";
+echo "			<span class='conversation_title' id='conversation_title'></span>\n";
+echo "		</div>\n";
+echo "		<div class='messages_container' id='messages_container'>\n";
+echo "		</div>\n";
+echo "		<div class='message_input_container'>\n";
+echo "			<input type='text' id='message_input' placeholder='Type a message...' />\n";
+echo "			<button id='send_message_btn' onclick='send_current_message();'><i class='fas fa-paper-plane'></i></button>\n";
+echo "		</div>\n";
+echo "	</div>\n";
+
 //define the ringing control
 echo "	<div class='dialpad' id='ringing' style='display: none;'>\n";
 echo "		<div class='caller_id ringing' id='ringing_caller_id'></div>\n";
@@ -212,6 +235,9 @@ echo "			<span class='action_label'>Contacts</span>\n";
 echo "		</div>\n";
 echo "		<div class='action_item' onclick='show_history();' id='action_history'><i class='fas fa-history'></i>\n";
 echo "			<span class='action_label'>History</span>\n";
+echo "		</div>\n";
+echo "		<div class='action_item' onclick='show_messages();' id='action_messages'><i class='fas fa-comment'></i>\n";
+echo "			<span class='action_label'>".$text['label-messages']."</span>\n";
 echo "		</div>\n";
 echo "		<div class='action_item' id='action_mute' onclick='toggle_audio_mute_action();' style='display: none;'><i id='action_mute_icon' class='fas fa-microphone'></i>\n";
 echo "			<span class='action_label' id='action_mute_label'>".$text['label-mute']."</span>\n";

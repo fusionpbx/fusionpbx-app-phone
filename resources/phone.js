@@ -199,6 +199,7 @@ let active_call_is_video = false;
 let active_call_display_name = '';
 let active_call_number = '';
 let current_history_entry_id = null;  // Track current call's history entry for duration update
+let current_conversation_partner = null;  // Current active conversation partner
 
 function stop_call_tone() {
 	const ringtone = document.getElementById('ringtone');
@@ -680,6 +681,91 @@ function update_history_duration(entry_id, duration_seconds) {
 	return false;
 }
 
+// Messages storage functions
+function get_messages() {
+	try {
+		var stored = localStorage.getItem('messages');
+		return stored ? JSON.parse(stored) : [];
+	} catch(e) {
+		return [];
+	}
+}
+
+function save_messages(messages) {
+	try {
+		localStorage.setItem('messages', JSON.stringify(messages));
+	} catch(e) {
+		console.log('Could not save messages');
+	}
+}
+
+function add_message(partner_number, message_text, direction, timestamp) {
+	var messages = get_messages();
+	var msg = {
+		id: Date.now() + Math.random(),
+		partner_number: partner_number,
+		text: message_text,
+		direction: direction,  // 'outgoing' or 'incoming'
+		timestamp: timestamp
+	};
+	messages.push(msg);
+	
+	// Keep only last 1000 messages
+	if (messages.length > 1000) {
+		messages = messages.slice(messages.length - 1000);
+	}
+	save_messages(messages);
+	return msg;
+}
+
+function get_conversations() {
+	var messages = get_messages();
+	var partners = {};
+	
+	messages.forEach(function(msg) {
+		if (!partners[msg.partner_number]) {
+			partners[msg.partner_number] = {
+				number: msg.partner_number,
+				last_message: msg.text,
+				last_timestamp: msg.timestamp,
+				unread_count: 0
+			};
+		}
+		if (msg.timestamp > partners[msg.partner_number].last_timestamp) {
+			partners[msg.partner_number].last_message = msg.text;
+			partners[msg.partner_number].last_timestamp = msg.timestamp;
+		}
+		if (msg.direction === 'incoming') {
+			partners[msg.partner_number].unread_count++;
+		}
+	});
+	
+	// Convert to array and sort by last message time
+	var conversations = Object.values(partners);
+	conversations.sort(function(a, b) {
+		return b.last_timestamp - a.last_timestamp;
+	});
+	return conversations;
+}
+
+function get_conversation_messages(partner_number) {
+	var messages = get_messages();
+	return messages.filter(function(msg) {
+		return msg.partner_number === partner_number;
+	});
+}
+
+function mark_conversation_read(partner_number) {
+	var messages = get_messages();
+	messages.forEach(function(msg) {
+		if (msg.partner_number === partner_number && msg.direction === 'incoming') {
+			msg.read = true;
+		}
+	});
+	save_messages(messages);
+}
+
+
 // Function to generate media options based on use_video parameter
 function get_media_options(use_video) {
 	return {
@@ -779,6 +865,49 @@ user_agent.on('invite', function (s) {
 		reset_call_ui_state(true);
 	});
 
+});
+
+// SIP Message handler - receive incoming messages
+user_agent.on('message', function (message) {
+	// Extract sender information
+	var sender_name = message.remoteIdentity ? message.remoteIdentity.displayName : '';
+	var sender_number = message.remoteIdentity ? message.remoteIdentity.uri.user : '';
+	var partner_number = sender_number || sender_name || 'Unknown';
+	
+	// Extract message body - message.body is the raw string content
+	var message_body = message.body || '';
+	
+	// Log for debugging
+	console.log('Received SIP MESSAGE:');
+	console.log('  Partner:', partner_number);
+	console.log('  Body:', message_body);
+	console.log('  Message object:', message);
+	
+	// Verify we have valid data
+	if (!message_body || message_body.trim() === '') {
+		console.log('Warning: Empty message body received');
+		return;
+	}
+	
+	// Save to local storage
+	add_message(partner_number, message_body.trim(), 'incoming', Date.now());
+	
+	// Update UI if on messages tab
+	if (document.getElementById('messages').style.display === 'flex') {
+		render_conversations();
+	}
+	
+	// If in an active conversation with this partner, refresh the view
+	if (document.getElementById('conversation').style.display === 'flex' && 
+	    current_conversation_partner === partner_number) {
+		render_conversation(partner_number);
+	}
+	
+	// Show notification if not in messages
+	if (document.getElementById('messages').style.display !== 'flex' && 
+	    document.getElementById('conversation').style.display !== 'flex') {
+		show_temporary_status('New message from ' + partner_number, 'fas fa-comment');
+	}
 });
 
 // Answer incoming call with audio only
@@ -899,6 +1028,8 @@ function hide_all_panels() {
 	//document.getElementById('keypad').style.display = 'none';
 	document.getElementById('contacts').style.display = 'none';
 	document.getElementById('history').style.display = 'none';
+	document.getElementById('messages').style.display = 'none';
+	document.getElementById('conversation').style.display = 'none';
 	document.getElementById('ringing').style.display = 'none';
 	document.getElementById('active').style.display = 'none';
 }
@@ -923,6 +1054,13 @@ function show_history() {
 	update_action_bar_state('history');
 }
 
+function show_messages() {
+	hide_all_panels();
+	render_conversations();
+	document.getElementById('messages').style.display = 'flex';
+	update_action_bar_state('messages');
+}
+
 function update_action_bar_state(active_panel) {
 	// Remove active class from all action items
 	document.querySelectorAll('.action_item').forEach(function(item) {
@@ -936,6 +1074,8 @@ function update_action_bar_state(active_panel) {
 		document.getElementById('action_contacts').classList.add('active');
 	} else if (active_panel === 'history') {
 		document.getElementById('action_history').classList.add('active');
+	} else if (active_panel === 'messages' || active_panel === 'conversation') {
+		document.getElementById('action_messages').classList.add('active');
 	}
 }
 
@@ -1052,6 +1192,26 @@ function call_type_name(type) {
 	}
 }
 
+// Message formatting helper
+function format_message_time(timestamp) {
+	var date = new Date(timestamp);
+	var time_str = date.toLocaleTimeString([], {
+		timeZone: time_zone,
+		hour: '2-digit',
+		minute: '2-digit',
+		hour12: true
+	});
+	return time_str;
+}
+
+// Format message preview (truncate long messages)
+function format_message_preview(text) {
+	if (text.length > 30) {
+		return text.substring(0, 30) + '...';
+	}
+	return text;
+}
+
 // Call functions
 function call_contact(extension) {
 	document.getElementById('destination').value = extension;
@@ -1109,7 +1269,7 @@ function save_call_duration() {
 setInterval(get_session_time, 1000);
 
 // Function to reset media after a call ends
-// Properly stops all media tracks to prevent camera/microphone from remaining active
+// Stops all media tracks to prevent camera/microphone from remaining active
 function reset_media() {
 	var videoElements = [document.getElementById('remote_video'), document.getElementById('local_video')];
 	videoElements.forEach(function(video) {
@@ -1255,6 +1415,180 @@ function decline() {
 	hangup();
 }
 
+// Send a SIP MESSAGE to a target
+function send_message(partner_number, message_text) {
+	if (!partner_number || !partner_number.trim()) {
+		console.log('send_message: Invalid partner number');
+		return false;
+	}
+	if (!message_text || !message_text.trim()) {
+		console.log('send_message: Invalid message text');
+		return false;
+	}
+	
+	var target_uri = 'sip:' + partner_number.trim() + '@' + '<?php echo $domain_name; ?>';
+	var body = message_text.trim();
+	
+	console.log('send_message: Sending to', target_uri, 'body:', body);
+	console.log('send_message: User agent object:', user_agent);
+	console.log('send_message: User agent methods:', Object.keys(user_agent));
+	
+	// Use SIP.UA to send MESSAGE - correct syntax for sipjs 0.7.8
+	// UA.prototype.message(target, body, options)
+	var msg = user_agent.message(target_uri, body);
+	
+	console.log('send_message: Message object created:', msg);
+	console.log('send_message: Message type:', typeof msg);
+	console.log('send_message: Message methods:', msg ? Object.keys(msg) : 'null');
+	
+	// Set up response handlers BEFORE sending
+	if (msg) {
+		msg.on('accepted', function(response) {
+			console.log('send_message: Message accepted (200 OK)', response);
+		});
+		
+		msg.on('failed', function(data) {
+			console.log('send_message: Message failed to send', data);
+		});
+		
+		msg.on('rejected', function(response) {
+			console.log('send_message: Message rejected:', response ? response.status_code : 'unknown', response);
+		});
+		
+		msg.on('progress', function(data) {
+			console.log('send_message: Progress:', data);
+		});
+		
+		// Send the message
+		console.log('send_message: Calling msg.send()...');
+		msg.send();
+		console.log('send_message: msg.send() completed');
+	} else {
+		console.log('send_message: ERROR - msg object is null!');
+		return false;
+	}
+	
+	// Save as outgoing message optimistically
+	add_message(partner_number, message_text.trim(), 'outgoing', Date.now());
+	
+	return true;
+}
+
+// Send current message from input
+function send_current_message() {
+	var input = document.getElementById('message_input');
+	if (!input) return;
+	
+	var message_text = input.value.trim();
+	if (!message_text || !current_conversation_partner) {
+		return;
+	}
+	
+	// Send the message
+	send_message(current_conversation_partner, message_text);
+	
+	// Clear input and focus
+	input.value = '';
+	input.focus();
+	
+	// Refresh conversation view
+	render_conversation(current_conversation_partner);
+}
+
+// Open conversation with a partner
+function open_conversation(partner_number) {
+	current_conversation_partner = partner_number;
+	hide_all_panels();
+	document.getElementById('conversation').style.display = 'flex';
+	update_action_bar_state('conversation');
+	render_conversation(partner_number);
+	
+	// Clear input and focus
+	var input = document.getElementById('message_input');
+	if (input) {
+		input.value = '';
+		input.focus();
+	}
+}
+
+// Open new conversation prompt
+function new_conversation() {
+	var partner_number = prompt('Enter extension or number to message:');
+	if (partner_number && partner_number.trim()) {
+		open_conversation(partner_number.trim());
+	}
+}
+
+// Render conversations list
+function render_conversations() {
+	var container = document.getElementById('messages_list');
+	if (!container) return;
+	container.innerHTML = '';
+	
+	var conversations = get_conversations();
+	
+	if (conversations.length === 0) {
+		container.innerHTML = '<div style="text-align: center; color: #ccc; padding: 40px; font-size: 16px;">No messages yet</div>';
+		return;
+	}
+	
+	conversations.forEach(function(conv) {
+		var convDiv = document.createElement('div');
+		convDiv.className = 'message_conversation_item';
+		convDiv.onclick = function() { open_conversation(conv.number); };
+		
+		var preview = format_message_preview(conv.last_message);
+		var time_str = format_message_time(conv.last_timestamp);
+		
+		var html = '<div class="conv_icon">';
+		html += '<i class="fas fa-user"></i>';
+		html += '</div>';
+		html += '<div class="conv_info">';
+		html += '<div class="conv_name">' + sanitize_string(conv.number) + '</div>';
+		html += '<div class="conv_preview">' + sanitize_string(preview) + '</div>';
+		html += '</div>';
+		html += '<div class="conv_meta">';
+		html += '<div class="conv_time">' + time_str + '</div>';
+		html += '</div>';
+		
+		convDiv.innerHTML = html;
+		container.appendChild(convDiv);
+	});
+}
+
+// Render single conversation
+function render_conversation(partner_number) {
+	var messages_container = document.getElementById('messages_container');
+	var title_element = document.getElementById('conversation_title');
+	if (!messages_container || !title_element) return;
+	
+	// Set title
+	title_element.textContent = partner_number;
+	
+	// Get and render messages
+	var messages = get_conversation_messages(partner_number);
+	messages_container.innerHTML = '';
+	
+	if (messages.length === 0) {
+		messages_container.innerHTML = '<div style="text-align: center; color: #ccc; padding: 40px; font-size: 16px;">No messages yet. Start the conversation!</div>';
+		return;
+	}
+	
+	messages.forEach(function(msg) {
+		var msgDiv = document.createElement('div');
+		msgDiv.className = 'message_bubble ' + (msg.direction === 'outgoing' ? 'outgoing' : 'incoming');
+		
+		var bubble_content = '<div class="bubble_text">' + sanitize_string(msg.text) + '</div>';
+		bubble_content += '<div class="bubble_time">' + format_message_time(msg.timestamp) + '</div>';
+		
+		msgDiv.innerHTML = bubble_content;
+		messages_container.appendChild(msgDiv);
+	});
+	
+	// Scroll to bottom
+	messages_container.scrollTop = messages_container.scrollHeight;
+}
+
 // Function to center entered digits until full, then right-align and change text direction so last entered digits are always visible
 function correct_alignment() {
 	if (document.getElementById('destination').scrollWidth > document.getElementById('destination').clientWidth) {
@@ -1318,6 +1652,12 @@ document.addEventListener('keydown', function(e) {
 
 	if (e.key === 'Enter') {
 		e.preventDefault();
+		// Check if we're in conversation view - send message if so
+		if (document.getElementById('conversation').style.display === 'flex') {
+			send_current_message();
+			return;
+		}
+		// Otherwise, make a call
 		if (last_call_type === 'video') {
 			call_video();
 		} else {
