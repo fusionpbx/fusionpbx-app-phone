@@ -783,7 +783,7 @@ function reset_call_ui_state(show_dialpad) {
 
 	reset_media();
 
-	document.getElementById('dialpad').style.display = show_dialpad ? "grid" : "none";
+	document.getElementById('dialpad').style.display = show_dialpad ? "flex" : "none";
 	document.getElementById('ringing').style.display = "none";
 	document.getElementById('active').style.display = "none";
 	document.getElementById('dtmf_keypad').style.display = "none";
@@ -1266,18 +1266,18 @@ function hide_all_panels() {
 }
 
 function show_dialpad() {
-  // Check if dialpad is currently shown (and not in a call)
-  var dialpad = document.getElementById('dialpad');
-  if (dialpad.style.display === 'grid' && !is_session_active()) {
-    // Hide the dialpad
-    dialpad.style.display = 'none';
-    document.getElementById('action_keypad').classList.remove('active');
-  } else {
-    // Show the dialpad
-    hide_all_panels();
-    dialpad.style.display = 'grid';
-    update_action_bar_state('dialpad');
-  }
+	// Check if dialpad is currently shown (and not in a call)
+	var dialpad = document.getElementById('dialpad');
+	if (dialpad.style.display === 'grid' && !is_session_active()) {
+		// Hide the dialpad
+		dialpad.style.display = 'none';
+		document.getElementById('action_keypad').classList.remove('active');
+	} else {
+		// Show the dialpad
+		hide_all_panels();
+		dialpad.style.display = 'flex';
+		update_action_bar_state('dialpad');
+	}
 }
 
 function show_contacts() {
@@ -1881,7 +1881,7 @@ function show_keypad() {
 		// Hide DTMF keypad, show active call panel
 		dtmf_keypad.style.display = 'none';
 		dtmf_keypad_shown = false;
-		document.getElementById('active').style.display = 'grid';
+		document.getElementById('active').style.display = 'flex';
 
 		// Switch action bar icons back to dialpad
 		document.getElementById('action_keypad').style.display = 'flex';

@@ -137,27 +137,29 @@ echo "	<div class='body_content'>\n";
 
 //define the dialpad control
 echo "		<div class='dialpad' id='dialpad'>\n";
-echo "			<input type='text' class='destination' id='destination' name='destination' onkeypress=\"event.preventDefault();\"/>\n";
-echo "			<div class='dialpad_wrapper keypad_3col'>\n";
-echo "				<div class='dialpad_box' onclick=\"digit_add('1');\"><strong>1</strong><br><sup>&nbsp;</sup></div>\n";
-echo "				<div class='dialpad_box' onclick=\"digit_add('2');\"><strong>2</strong><br><sup>ABC</sup></div>\n";
-echo "				<div class='dialpad_box' onclick=\"digit_add('3');\"><strong>3</strong><br><sup>DEF</sup></div>\n";
+echo "			<div class='dialpad_content'>\n"; // Added wrapper
+echo "				<input type='text' class='destination' id='destination' name='destination' onkeypress=\"event.preventDefault();\"/>\n";
+echo "				<div class='dialpad_wrapper'>\n";
+echo "					<div class='dialpad_box' onclick=\"digit_add('1');\"><strong>1</strong><br><sup>&nbsp;</sup></div>\n";
+echo "					<div class='dialpad_box' onclick=\"digit_add('2');\"><strong>2</strong><br><sup>ABC</sup></div>\n";
+echo "					<div class='dialpad_box' onclick=\"digit_add('3');\"><strong>3</strong><br><sup>DEF</sup></div>\n";
 
-echo "				<div class='dialpad_box' onclick=\"digit_add('4');\"><strong>4</strong><br><sup>GHI</sup></div>\n";
-echo "				<div class='dialpad_box' onclick=\"digit_add('5');\"><strong>5</strong><br><sup>JKL</sup></div>\n";
-echo "				<div class='dialpad_box' onclick=\"digit_add('6');\"><strong>6</strong><br><sup>MNO</sup></div>\n";
+echo "					<div class='dialpad_box' onclick=\"digit_add('4');\"><strong>4</strong><br><sup>GHI</sup></div>\n";
+echo "					<div class='dialpad_box' onclick=\"digit_add('5');\"><strong>5</strong><br><sup>JKL</sup></div>\n";
+echo "					<div class='dialpad_box' onclick=\"digit_add('6');\"><strong>6</strong><br><sup>MNO</sup></div>\n";
 
-echo "				<div class='dialpad_box' onclick=\"digit_add('7');\"><strong>7</strong><br><sup>PQRS</sup></div>\n";
-echo "				<div class='dialpad_box' onclick=\"digit_add('8');\"><strong>8</strong><br><sup>TUV</sup></div>\n";
-echo "				<div class='dialpad_box' onclick=\"digit_add('9');\"><strong>9</strong><br><sup>WXYZ</sup></div>\n";
+echo "					<div class='dialpad_box' onclick=\"digit_add('7');\"><strong>7</strong><br><sup>PQRS</sup></div>\n";
+echo "					<div class='dialpad_box' onclick=\"digit_add('8');\"><strong>8</strong><br><sup>TUV</sup></div>\n";
+echo "					<div class='dialpad_box' onclick=\"digit_add('9');\"><strong>9</strong><br><sup>WXYZ</sup></div>\n";
 
-echo "				<div class='dialpad_box' onclick=\"digit_add('*');\" style='margin-bottom: 8px; padding-top: 20px; padding-bottom: 0;'><strong>*</strong></div>\n";
-echo "				<div class='dialpad_box' onclick=\"digit_add('0');\" style='margin-bottom: 8px; padding-top: 15px; padding-bottom: 5px;'><strong>0</strong></div>\n";
-echo "				<div class='dialpad_box' onclick=\"digit_add('#');\" style='margin-bottom: 8px; padding-top: 15px; padding-bottom: 5px;'><strong>#</strong></div>\n";
+echo "					<div class='dialpad_box' onclick=\"digit_add('*');\"><strong>*</strong><br><sup></sup></div>\n";
+echo "					<div class='dialpad_box' onclick=\"digit_add('0');\"><strong>0</strong><br><sup></sup></div>\n";
+echo "					<div class='dialpad_box' onclick=\"digit_add('#');\"><strong>#</strong><br><sup></sup></div>\n";
 
-echo "				<div class='dialpad_box video_call' onclick='call_video();' title='Video Call'><i class='fas fa-video'></i><br><sup>Video Call</sup></div>\n";
-echo "				<div class='dialpad_box audio_call' onclick='call_audio();' title='Audio Call'><i class='fa-solid fa-phone'></i><br><sup>Audio Call</sup></div>\n";
-echo "				<div class='dialpad_box delete' onclick='digit_delete();' title=\"".$text['label-delete']."\"><i class='fas fa-chevron-left'></i><br><sup>".$text['label-delete']."</sup></div>\n";
+echo "					<div class='dialpad_box video_call' onclick='call_video();' title='Video Call'><i class='fas fa-video'></i><br><sup>Video Call</sup></div>\n";
+echo "					<div class='dialpad_box audio_call' onclick='call_audio();' title='Audio Call'><i class='fa-solid fa-phone'></i><br><sup>Audio Call</sup></div>\n";
+echo "					<div class='dialpad_box delete' onclick='digit_delete();' title=\"".$text['label-delete']."\"><i class='fas fa-chevron-left'></i><br><sup>".$text['label-delete']."</sup></div>\n";
+echo "				</div>\n";
 echo "			</div>\n";
 echo "		</div>\n";
 
@@ -165,21 +167,21 @@ echo "		</div>\n";
 echo "	<div>\n";
 
 //define the contacts panel
-echo "	<div class='dialpad' id='contacts' style='display: none;'>\n";
+echo "	<div class='contacts' id='contacts' style='display: none;'>\n";
 echo "		<div class='keypad_header'><i class='fas fa-address-book'></i> Contacts</div>\n";
 echo "		<div class='contacts_list' id='contacts_list'>\n";
 echo "		</div>\n";
 echo "	</div>\n";
 
 //define the history panel
-echo "	<div class='dialpad' id='history' style='display: none;'>\n";
+echo "	<div class='history' id='history' style='display: none;'>\n";
 echo "		<div class='keypad_header'><i class='fas fa-history'></i> Call History</div>\n";
 echo "		<div class='history_list' id='history_list'>\n";
 echo "		</div>\n";
 echo "	</div>\n";
 
 //define the messages panel (conversations list)
-echo "	<div class='dialpad' id='messages' style='display: none;'>\n";
+echo "	<div class='messages' id='messages' style='display: none;'>\n";
 echo "		<div class='keypad_header'><i class='fas fa-comment'></i> Messages\n";
 echo "			<a href='javascript:void(0)' onclick='new_conversation();' style='margin-left: 10px; color: #1eba00;' title='New Message'><i class='fas fa-plus'></i></a>\n";
 echo "		</div>\n";
@@ -188,7 +190,7 @@ echo "		</div>\n";
 echo "	</div>\n";
 
 //define the conversation panel (chat view)
-echo "	<div class='dialpad' id='conversation' style='display: none;'>\n";
+echo "	<div class='conversation' id='conversation' style='display: none;'>\n";
 echo "		<div class='conversation_header'>\n";
 echo "			<a href='javascript:void(0)' onclick='show_messages();' style='color: #fff;'><i class='fas fa-arrow-left'></i></a>\n";
 echo "			<span class='conversation_title' id='conversation_title'></span>\n";
@@ -196,13 +198,13 @@ echo "		</div>\n";
 echo "		<div class='messages_container' id='messages_container'>\n";
 echo "		</div>\n";
 echo "		<div class='message_input_container'>\n";
-echo "			<input type='text' id='message_input' placeholder='Type a message...' />\n";
+echo "			<input type='text' id='message_input' placeholder='Message' />\n";
 echo "			<button id='send_message_btn' onclick='send_current_message();'><i class='fas fa-paper-plane'></i></button>\n";
 echo "		</div>\n";
 echo "	</div>\n";
 
 //define the ringing control
-echo "	<div class='dialpad' id='ringing' style='display: none;'>\n";
+echo "	<div class='ringing' id='ringing' style='display: none;'>\n";
 echo "		<div class='caller_id ringing' id='ringing_caller_id'></div>\n";
 echo "		<div class='dialpad_wrapper' style='grid-template-columns: repeat(3, 1fr);'>\n";
 echo "			<div class='dialpad_box' id='decline' onclick='decline();' style='background-color: #ba0000;'><i class='fas fa-phone-slash' title=\"".$text['label-decline']."\"></i><br><sup>".$text['label-decline']."</sup></div>\n";
@@ -212,7 +214,7 @@ echo "		</div>\n";
 echo "	</div>\n";
 
 //define the active call control
-echo "	<div class='dialpad' id='active' style='display: none;'>\n";
+echo "	<div class='active' id='active' style='display: none;'>\n";
 echo "		<div class='caller_id' id='active_caller_id'></div>\n";
 echo "		<div id='answer_time' class='answer_time'>00:00:00</div>\n";
 echo "		<div class='dialpad_wrapper'>\n";
@@ -226,7 +228,7 @@ echo "		</div>\n";
 echo "	</div>\n";
 
 //define the DTMF keypad panel - shown during active calls for sending DTMF
-echo "	<div class='dialpad' id='dtmf_keypad' style='display: none;'>\n";
+echo "	<div class='dtmf_keypad' id='dtmf_keypad' style='display: none;'>\n";
 echo "		<div class='keypad_header'><i class='fas fa-keyboard'></i> Keypad</div>\n";
 echo "		<input type='text' class='destination dtmf_destination' id='dtmf_destination' readonly />\n";
 echo "		<div class='dialpad_wrapper keypad_3col'>\n";
