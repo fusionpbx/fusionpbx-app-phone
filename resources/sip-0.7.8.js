@@ -11365,6 +11365,10 @@ MediaHandler.prototype = Object.create(SIP.MediaHandler.prototype, {
       this.logger.warn('peerConnection is closed, getLocalStreams returning []');
       return [];
     }
+    // Modern browsers: use getSenders() instead of deprecated getLocalStreams()
+    if (pc.getSenders) {
+      return pc.getSenders().map(function(sender) { return sender.stream; }).filter(function(s) { return s; });
+    }
     return (pc.getLocalStreams && pc.getLocalStreams()) ||
       pc.localStreams || [];
   }},
@@ -11374,6 +11378,10 @@ MediaHandler.prototype = Object.create(SIP.MediaHandler.prototype, {
     if (pc && pc.signalingState === 'closed') {
       this.logger.warn('peerConnection is closed, getRemoteStreams returning this._remoteStreams');
       return this._remoteStreams;
+    }
+    // Modern browsers: use getReceivers() instead of deprecated getRemoteStreams()
+    if (pc.getReceivers) {
+      return pc.getReceivers().map(function(receiver) { return receiver.stream; }).filter(function(s) { return s; });
     }
     return(pc.getRemoteStreams && pc.getRemoteStreams()) ||
       pc.remoteStreams || [];
@@ -11459,9 +11467,13 @@ MediaHandler.prototype = Object.create(SIP.MediaHandler.prototype, {
     // MediaHandler.prototype.getRemoteStreams work, keep track of them manually
     this._remoteStreams = [];
 
-    this.peerConnection.onaddstream = function(e) {
-      self.logger.log('stream added: '+ e.stream.id);
-      self._remoteStreams.push(e.stream);
+    // Use ontrack instead of deprecated onaddstream
+    this.peerConnection.ontrack = function(e) {
+      self.logger.log('stream added: '+ e.streams[0].id);
+      // Avoid adding duplicate streams
+      if (self._remoteStreams.indexOf(e.streams[0]) === -1) {
+        self._remoteStreams.push(e.streams[0]);
+      }
       self.render();
       self.emit('addStream', e);
     };
