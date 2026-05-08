@@ -1007,7 +1007,7 @@ function get_media_options(use_video) {
 				remote: document.getElementById('remote_video'),
 				local: document.getElementById('local_video')
 			},
-			autoAnswer: true,  // Allow remote media to play (including ringback)
+			autoAnswer: false,  // Disabled - autoAnswer prevents remote video from playing on outgoing calls
 			autoAccept: false,  // Don't auto-accept the call
 			RTCConstraints: {
 				"optional": [{ 'DtlsSrtpKeyAgreement': 'true'} ]
