@@ -127,7 +127,7 @@ function send_call(use_video) {
 	});
 
 	// Unmute the audio
-	session.unmute({audio: true});
+	audio_muted = false;
 
 	// Wait until the call is answered before starting the timer
 	answer_time = null;
@@ -207,6 +207,7 @@ let dtmf_buffer = '';  // Buffer for DTMF digits (to send as batch)
 let is_screen_sharing = false;  // Track if screen sharing is active
 let screen_share_stream = null;  // Store the screen share stream
 let original_video_track = null;  // Store original camera video track for restoration
+let audio_muted = false;
 
 function stop_call_tone() {
 	const ringtone = document.getElementById('ringtone');
@@ -343,7 +344,7 @@ function sync_call_action_controls() {
 	var action_video_mute_icon = document.getElementById('action_video_mute_icon');
 	var action_video_mute_label = document.getElementById('action_video_mute_label');
 
-	var muted = document.getElementById('unmute_audio').style.display === 'inline';
+	var muted = audio_muted;
 	var on_hold = document.getElementById('unhold').style.display === 'inline';
 
 	if (action_mute_icon) {
@@ -435,7 +436,7 @@ function set_call_action_mode(enabled, use_video) {
 
 function toggle_audio_mute_action() {
 	if (!session) { return; }
-	if (document.getElementById('unmute_audio').style.display === 'inline') {
+	if (audio_muted) {
 		unmute_audio();
 	}
 	else {
@@ -824,6 +825,7 @@ function reset_call_ui_state(show_dialpad) {
 	active_call_is_video = false;
 	active_call_display_name = '';
 	active_call_number = '';
+	audio_muted = false;
 
 	answer_time = null;
 	current_history_entry_id = null;
@@ -1582,7 +1584,20 @@ function send() {
 
 function mute_audio(destination) {
 	if (!session) { return; }
+	audio_muted = true;
 	session.mute({audio: true});
+	if (session.mediaHandler && session.mediaHandler.localStream) {
+		session.mediaHandler.localStream.getAudioTracks().forEach(function(track) {
+			track.enabled = false;
+		});
+	}
+	if (session.mediaHandler && session.mediaHandler.peerConnection && typeof session.mediaHandler.peerConnection.getSenders === 'function') {
+		session.mediaHandler.peerConnection.getSenders().forEach(function(sender) {
+			if (sender.track && sender.track.kind === 'audio') {
+				sender.track.enabled = false;
+			}
+		});
+	}
 	document.getElementById('mute_audio').style.display = "none";
 	document.getElementById('unmute_audio').style.display = "inline";
 	sync_call_action_controls();
@@ -1599,7 +1614,20 @@ function mute_video(destination) {
 
 function unmute_audio(destination) {
 	if (!session) { return; }
+	audio_muted = false;
 	session.unmute({audio: true});
+	if (session.mediaHandler && session.mediaHandler.localStream) {
+		session.mediaHandler.localStream.getAudioTracks().forEach(function(track) {
+			track.enabled = true;
+		});
+	}
+	if (session.mediaHandler && session.mediaHandler.peerConnection && typeof session.mediaHandler.peerConnection.getSenders === 'function') {
+		session.mediaHandler.peerConnection.getSenders().forEach(function(sender) {
+			if (sender.track && sender.track.kind === 'audio') {
+				sender.track.enabled = true;
+			}
+		});
+	}
 	document.getElementById('mute_audio').style.display = "inline";
 	document.getElementById('unmute_audio').style.display = "none";
 	sync_call_action_controls();
