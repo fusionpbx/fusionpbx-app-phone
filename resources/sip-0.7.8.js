@@ -11469,10 +11469,18 @@ MediaHandler.prototype = Object.create(SIP.MediaHandler.prototype, {
 
     // Use ontrack instead of deprecated onaddstream
     this.peerConnection.ontrack = function(e) {
-      self.logger.log('stream added: '+ e.streams[0].id);
+      var stream = (e.streams && e.streams[0]) || null;
+      if (!stream && e.track && SIP.WebRTC.MediaStream) {
+        stream = new SIP.WebRTC.MediaStream([e.track]);
+      }
+      if (!stream) {
+        self.logger.warn('track added without stream');
+        return;
+      }
+      self.logger.log('stream added: '+ stream.id);
       // Avoid adding duplicate streams
-      if (self._remoteStreams.indexOf(e.streams[0]) === -1) {
-        self._remoteStreams.push(e.streams[0]);
+      if (self._remoteStreams.indexOf(stream) === -1) {
+        self._remoteStreams.push(stream);
       }
       self.render();
       self.emit('addStream', e);

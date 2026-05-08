@@ -162,7 +162,7 @@ function detect_video_invite(session) {
 	if (!session || !session.request_data) return false;
 	// Check if the SIP INVITE contains video media type
 	return session.request_data.indexOf('media="video"') !== -1 ||
-		session.request_data.indexOf('a=rtpmap:98') !== -1;
+		session.request_data.indexOf('m=video') !== -1;
 }
 
 // Check if camera permissions are available before attempting video calls
