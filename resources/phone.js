@@ -162,7 +162,7 @@ function detect_video_invite(session) {
 	if (!session || !session.request_data) return false;
 	// Check if the SIP INVITE contains video media type
 	return session.request_data.indexOf('media="video"') !== -1 ||
-			session.request_data.indexOf('a=rtpmap:98') !== -1;
+		session.request_data.indexOf('a=rtpmap:98') !== -1;
 }
 
 // Check if camera permissions are available before attempting video calls
@@ -1054,8 +1054,10 @@ user_agent.on('invite', function (s) {
 	document.getElementById('active_caller_id').innerHTML = "<div>" + sanitize_string(session.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>" + video_indicator;
 	update_video_stream_info(session.display_name, session.uri_user, session.has_video);
 
-	// Show or hide the panels
-	document.getElementById('dialpad').style.display = "none";
+	// Hide all the panels
+	hide_all_panels();
+
+	// Show the ringing panel
 	document.getElementById('ringing').style.display = "inline";
 
 	// Show or hide the buttons
