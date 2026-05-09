@@ -67,6 +67,7 @@ function send_call(use_video) {
 	set_hangup_visibility(true);
 	if (use_video) {
 		document.getElementById('video_container').style.display = "block";
+		document.getElementById('local_video_wrapper').classList.remove('local_preview_hidden');
 		document.getElementById('local_video').style.display = "inline";
 		document.getElementById('remote_video').style.display = "inline";
 	}
@@ -80,11 +81,17 @@ function send_call(use_video) {
 	//make a call using a sip invite
 	session = user_agent.invite('sip:'+destination+'@<?php echo $domain_name; ?>', call_options);
 	var current_session = session;
+	if (use_video) {
+		ensure_local_video_preview(current_session);
+	}
 	current_session.local_ended = false;
 	start_call_tone('outgoing');
 
 	current_session.on('progress', function() {
 		start_call_tone('outgoing');
+		if (use_video) {
+			ensure_local_video_preview(current_session);
+		}
 	});
 
 	current_session.on('accepted', function() {
@@ -105,6 +112,9 @@ function send_call(use_video) {
 		active_call_number = remote_number;
 		update_video_stream_info(remote_display_name, remote_number, use_video);
 		update_active_call_status(use_video, remote_display_name, remote_number);
+		if (use_video) {
+			ensure_local_video_preview(current_session);
+		}
 	});
 
 	current_session.on('bye', function() {
@@ -673,6 +683,57 @@ function update_video_stream_info(display_name, number, show_info) {
 	}
 }
 
+// Ensure local camera preview is bound even when SIP.js render timing varies by browser.
+function ensure_local_video_preview(active_session, attempt) {
+	if (!active_session) {
+		return;
+	}
+
+	if (typeof attempt === 'undefined') {
+		attempt = 0;
+	}
+
+	var local_video = document.getElementById('local_video');
+	if (!local_video) {
+		return;
+	}
+
+	var local_wrapper = document.getElementById('local_video_wrapper');
+	if (local_wrapper) {
+		local_wrapper.classList.remove('local_preview_hidden');
+	}
+
+	var local_stream = null;
+	if (active_session.mediaHandler) {
+		if (active_session.mediaHandler.localStream) {
+			local_stream = active_session.mediaHandler.localStream;
+		}
+		else if (typeof active_session.mediaHandler.getLocalStreams === 'function') {
+			var local_streams = active_session.mediaHandler.getLocalStreams();
+			if (local_streams && local_streams.length > 0) {
+				local_stream = local_streams[0];
+			}
+		}
+	}
+
+	if (local_stream) {
+		if (local_video.srcObject !== local_stream) {
+			local_video.srcObject = local_stream;
+		}
+		var play_promise = local_video.play();
+		if (play_promise && typeof play_promise.catch === 'function') {
+			play_promise.catch(function() {});
+		}
+		return;
+	}
+
+	if (attempt < 10) {
+		setTimeout(function() {
+			ensure_local_video_preview(active_session, attempt + 1);
+		}, 200);
+	}
+}
+
 function clear_transient_status() {
 	if (transient_status_timeout) {
 		clearTimeout(transient_status_timeout);
@@ -1208,6 +1269,9 @@ function answer_call(use_video) {
 		}
 	};
 	session.accept(answer_media);
+	if (use_video) {
+		ensure_local_video_preview(session);
+	}
 
 	// Show the or hide the panels
 	document.getElementById('dialpad').style.display = "none";

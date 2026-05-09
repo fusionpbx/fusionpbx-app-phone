@@ -11082,6 +11082,8 @@ MediaHandler.prototype = Object.create(SIP.MediaHandler.prototype, {
   close: {writable: true, value: function close () {
     this.logger.log('closing PeerConnection');
     this._remoteStreams = [];
+    this._remoteTrackStream = null;
+    this._localSenderStream = null;
     // have to check signalingState since this.close() gets called multiple times
     // TODO figure out why that happens
     if(this.peerConnection && this.peerConnection.signalingState !== 'closed') {
@@ -11365,9 +11367,24 @@ MediaHandler.prototype = Object.create(SIP.MediaHandler.prototype, {
       this.logger.warn('peerConnection is closed, getLocalStreams returning []');
       return [];
     }
-    // Modern browsers: use getSenders() instead of deprecated getLocalStreams()
+    // Modern browsers expose tracks on senders; build a synthetic stream for rendering.
     if (pc.getSenders) {
-      return pc.getSenders().map(function(sender) { return sender.stream; }).filter(function(s) { return s; });
+      var senderTracks = pc.getSenders().map(function(sender) { return sender.track; }).filter(function(t) { return !!t; });
+      if (senderTracks.length && SIP.WebRTC.MediaStream) {
+        if (!this._localSenderStream) {
+          this._localSenderStream = new SIP.WebRTC.MediaStream();
+        }
+        senderTracks.forEach(function(track) {
+          var exists = this._localSenderStream.getTracks().some(function(t) { return t.id === track.id; });
+          if (!exists) {
+            this._localSenderStream.addTrack(track);
+          }
+        }.bind(this));
+        return [this._localSenderStream];
+      }
+    }
+    if (this.localMedia && this.localMedia.length) {
+      return this.localMedia;
     }
     return (pc.getLocalStreams && pc.getLocalStreams()) ||
       pc.localStreams || [];
@@ -11379,11 +11396,17 @@ MediaHandler.prototype = Object.create(SIP.MediaHandler.prototype, {
       this.logger.warn('peerConnection is closed, getRemoteStreams returning this._remoteStreams');
       return this._remoteStreams;
     }
-    // Modern browsers: use getReceivers() instead of deprecated getRemoteStreams()
+    // Modern browsers expose tracks on receivers; prefer receiver streams and fallback to tracked streams.
     if (pc.getReceivers) {
-      return pc.getReceivers().map(function(receiver) { return receiver.stream; }).filter(function(s) { return s; });
+      var receiverStreams = pc.getReceivers().map(function(receiver) { return receiver.stream; }).filter(function(s) { return !!s; });
+      if (receiverStreams.length) {
+        return receiverStreams;
+      }
+      if (this._remoteStreams && this._remoteStreams.length) {
+        return this._remoteStreams;
+      }
     }
-    return(pc.getRemoteStreams && pc.getRemoteStreams()) ||
+    return (pc.getRemoteStreams && pc.getRemoteStreams()) ||
       pc.remoteStreams || [];
   }},
 
@@ -11466,12 +11489,21 @@ MediaHandler.prototype = Object.create(SIP.MediaHandler.prototype, {
     // even if peerConnection.onaddstream was just called. In order to make
     // MediaHandler.prototype.getRemoteStreams work, keep track of them manually
     this._remoteStreams = [];
+    this._remoteTrackStream = null;
+    this._localSenderStream = null;
 
     // Use ontrack instead of deprecated onaddstream
     this.peerConnection.ontrack = function(e) {
       var stream = (e.streams && e.streams[0]) || null;
       if (!stream && e.track && SIP.WebRTC.MediaStream) {
-        stream = new SIP.WebRTC.MediaStream([e.track]);
+        if (!self._remoteTrackStream) {
+          self._remoteTrackStream = new SIP.WebRTC.MediaStream();
+        }
+        var trackExists = self._remoteTrackStream.getTracks().some(function(t) { return t.id === e.track.id; });
+        if (!trackExists) {
+          self._remoteTrackStream.addTrack(e.track);
+        }
+        stream = self._remoteTrackStream;
       }
       if (!stream) {
         self.logger.warn('track added without stream');
