@@ -222,7 +222,6 @@ let original_audio_track = null;  // Store original microphone track for restora
 let screen_share_audio_sender = null;  // Store the audio RTCRtpSender during screen sharing
 let screen_share_audio_enabled = true;  // User toggle for sharing system/tab audio
 let audio_muted = false;
-let speaker_muted = false;
 
 function stop_call_tone() {
 	const ringtone = document.getElementById('ringtone');
@@ -352,18 +351,8 @@ function should_use_speaker_mute_mode() {
 	return !!(is_screen_sharing && has_screen_share_audio_track());
 }
 
-function apply_speaker_mute_state(muted) {
-	var remote_video = document.getElementById('remote_video');
-	if (!remote_video) {
-		return;
-	}
-
-	remote_video.muted = !!muted;
-	remote_video.volume = muted ? 0 : 1;
-}
-
 function is_audio_action_muted_state() {
-	return should_use_speaker_mute_mode() ? speaker_muted : audio_muted;
+	return audio_muted;
 }
 
 async function apply_screen_share_audio_routing(enable_audio) {
@@ -395,20 +384,21 @@ async function apply_screen_share_audio_routing(enable_audio) {
 		}
 
 		await audio_sender.replaceTrack(screen_audio_track);
+		if (audio_sender.track) {
+			audio_sender.track.enabled = !audio_muted;
+		}
 		return true;
 	}
 
 	await audio_sender.replaceTrack(original_audio_track || null);
+	if (audio_sender.track) {
+		audio_sender.track.enabled = !audio_muted;
+	}
 	return true;
 }
 
 async function toggle_screen_share_audio() {
 	screen_share_audio_enabled = !screen_share_audio_enabled;
-
-	if (!screen_share_audio_enabled) {
-		speaker_muted = false;
-		apply_speaker_mute_state(false);
-	}
 
 	if (is_screen_sharing) {
 		try {
@@ -503,8 +493,9 @@ function sync_call_action_controls() {
 	var action_screen_share_audio_icon = document.getElementById('action_screen_share_audio_icon');
 	var action_screen_share_audio_label = document.getElementById('action_screen_share_audio_label');
 	if (action_screen_share_audio && action_screen_share_audio_icon && action_screen_share_audio_label) {
-		action_screen_share_audio_icon.className = screen_share_audio_enabled ? 'fas fa-volume-up' : 'fas fa-volume-mute';
-		action_screen_share_audio_label.textContent = screen_share_audio_enabled ? 'Share Aud' : 'No Aud';
+		action_screen_share_audio.style.display = active_call_is_video && is_screen_sharing ? 'flex' : 'none';
+		action_screen_share_audio_icon.className = 'fas fa-desktop';
+		action_screen_share_audio_label.textContent = 'Audio';
 		action_screen_share_audio.classList.toggle('action_item_toggle_active', screen_share_audio_enabled);
 	}
 }
@@ -535,8 +526,8 @@ function set_call_action_mode(enabled, use_video) {
 		action_screen_share.style.display = enabled && use_video ? 'flex' : 'none';
 	}
 	if (action_screen_share_audio) {
-		// Screen share audio toggle shown during video calls
-		action_screen_share_audio.style.display = enabled && use_video ? 'flex' : 'none';
+		// Screen share audio toggle shown only while actively sharing screen
+		action_screen_share_audio.style.display = enabled && use_video && is_screen_sharing ? 'flex' : 'none';
 	}
 	if (action_transfer) {
 		action_transfer.style.display = enabled ? 'flex' : 'none';
@@ -805,6 +796,9 @@ async function stop_screen_share() {
 	if (peer_connection && audio_sender) {
 		try {
 			await audio_sender.replaceTrack(original_audio_track || null);
+			if (audio_sender.track) {
+				audio_sender.track.enabled = !audio_muted;
+			}
 			console.log('stop_screen_share: Restored microphone track successfully');
 		} catch (err) {
 			console.error('stop_screen_share: Error restoring microphone track:', err);
@@ -847,8 +841,6 @@ async function stop_screen_share() {
 	screen_share_audio_sender = null;
 	original_video_track = null;
 	original_audio_track = null;
-	speaker_muted = false;
-	apply_speaker_mute_state(false);
 
 	// Update action bar icon
 	sync_call_action_controls();
@@ -1094,8 +1086,6 @@ function reset_call_ui_state(show_dialpad) {
 	active_call_display_name = '';
 	active_call_number = '';
 	audio_muted = false;
-	speaker_muted = false;
-	apply_speaker_mute_state(false);
 
 	answer_time = null;
 	current_history_entry_id = null;
@@ -1857,14 +1847,6 @@ function send() {
 
 function mute_audio(destination) {
 	if (!session) { return; }
-	if (should_use_speaker_mute_mode()) {
-		speaker_muted = true;
-		apply_speaker_mute_state(true);
-		document.getElementById('mute_audio').style.display = "none";
-		document.getElementById('unmute_audio').style.display = "inline";
-		sync_call_action_controls();
-		return;
-	}
 	audio_muted = true;
 	session.mute({audio: true});
 	if (session.mediaHandler && session.mediaHandler.localStream) {
@@ -1895,14 +1877,6 @@ function mute_video(destination) {
 
 function unmute_audio(destination) {
 	if (!session) { return; }
-	if (should_use_speaker_mute_mode()) {
-		speaker_muted = false;
-		apply_speaker_mute_state(false);
-		document.getElementById('mute_audio').style.display = "inline";
-		document.getElementById('unmute_audio').style.display = "none";
-		sync_call_action_controls();
-		return;
-	}
 	audio_muted = false;
 	session.unmute({audio: true});
 	if (session.mediaHandler && session.mediaHandler.localStream) {
