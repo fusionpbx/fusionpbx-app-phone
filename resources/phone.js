@@ -217,6 +217,7 @@ let dtmf_buffer = '';  // Buffer for DTMF digits (to send as batch)
 let is_screen_sharing = false;  // Track if screen sharing is active
 let screen_share_stream = null;  // Store the screen share stream
 let original_video_track = null;  // Store original camera video track for restoration
+let screen_share_sender = null;  // Store the RTCRtpSender used for screen share replacement
 let audio_muted = false;
 
 function stop_call_tone() {
@@ -495,6 +496,10 @@ async function toggle_screen_share() {
 async function start_screen_share() {
 	try {
 		console.log('start_screen_share: Initiating screen share...');
+		if (is_screen_sharing) {
+			console.log('start_screen_share: Already active, skipping');
+			return;
+		}
 
 		// Check if getDisplayMedia is supported
 		if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
@@ -523,11 +528,8 @@ async function start_screen_share() {
 		// Get the screen share video track
 		var screen_share_video_track = screen_share_stream.getVideoTracks()[0];
 
-		// Store original camera stream for restoration
-		if (session && session.mediaHandler && session.mediaHandler.localStream) {
-			original_video_track = session.mediaHandler.localStream.getVideoTracks()[0];
-			console.log('start_screen_share: Stored original video track:', original_video_track.id);
-		}
+		// Reset previous sender reference for a fresh share cycle
+		screen_share_sender = null;
 
 		// Add screen share indicator to local video
 		var local_video_wrapper = document.getElementById('local_video_wrapper');
@@ -552,6 +554,18 @@ async function start_screen_share() {
 
 			if (camera_sender) {
 				console.log('start_screen_share: Found camera sender:', camera_sender);
+				screen_share_sender = camera_sender;
+				if (camera_sender.track && camera_sender.track.kind === 'video') {
+					original_video_track = camera_sender.track;
+					console.log('start_screen_share: Stored original video track from sender:', original_video_track.id);
+				}
+				else if (session && session.mediaHandler && session.mediaHandler.localStream) {
+					var local_video_tracks = session.mediaHandler.localStream.getVideoTracks();
+					if (local_video_tracks.length > 0) {
+						original_video_track = local_video_tracks[0];
+						console.log('start_screen_share: Stored original video track from localStream:', original_video_track.id);
+					}
+				}
 				// Replace the camera track with the screen share track
 				camera_sender.replaceTrack(screen_share_video_track).then(function() {
 					console.log('start_screen_share: Track replaced successfully');
@@ -593,7 +607,7 @@ async function start_screen_share() {
 }
 
 // Stop screen sharing - restore camera video
-function stop_screen_share() {
+async function stop_screen_share() {
 	console.log('stop_screen_share: Stopping screen share...');
 
 	// Get the screen share video track if it exists
@@ -602,22 +616,54 @@ function stop_screen_share() {
 		screen_share_video_track = screen_share_stream.getVideoTracks()[0];
 	}
 
-	// Remove screen share track from peer connection
+	// Restore camera track in peer connection
 	var peer_connection = session ? session.mediaHandler ? session.mediaHandler.peerConnection : null : null;
-	if (peer_connection && screen_share_video_track) {
-		console.log('stop_screen_share: Removing screen share track from peer connection');
-		var sender = peer_connection.getSenders().find(function(s) {
-			return s.track && s.track.id === screen_share_video_track.id;
+	var sender = screen_share_sender;
+	if (!sender && peer_connection) {
+		sender = peer_connection.getSenders().find(function(s) {
+			return s.track && s.track.kind === 'video';
 		});
-		if (sender) {
-			sender.replaceTrack(original_video_track).then(function() {
-				console.log('stop_screen_share: Track replaced successfully');
-			}).catch(function(err) {
-				console.error('stop_screen_share: Error replacing track:', err);
-			});
-		} else {
-			console.error('stop_screen_share: Track sender not found in peer connection');
+	}
+
+	var restore_track = original_video_track;
+	if ((!restore_track || restore_track.readyState === 'ended') && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+		try {
+			console.log('stop_screen_share: Original camera track unavailable, reacquiring camera');
+			var camera_stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+			var camera_tracks = camera_stream.getVideoTracks();
+			if (camera_tracks.length > 0) {
+				restore_track = camera_tracks[0];
+				original_video_track = restore_track;
+
+				if (session && session.mediaHandler && session.mediaHandler.localStream) {
+					var local_stream = session.mediaHandler.localStream;
+					local_stream.getVideoTracks().forEach(function(track) {
+						if (track.id !== restore_track.id) {
+							local_stream.removeTrack(track);
+						}
+					});
+					if (!local_stream.getVideoTracks().some(function(track) { return track.id === restore_track.id; })) {
+						local_stream.addTrack(restore_track);
+					}
+				}
+				else if (session && session.mediaHandler) {
+					session.mediaHandler.localStream = camera_stream;
+				}
+			}
+		} catch (err) {
+			console.error('stop_screen_share: Failed to reacquire camera track:', err);
 		}
+	}
+
+	if (peer_connection && sender && restore_track) {
+		try {
+			await sender.replaceTrack(restore_track);
+			console.log('stop_screen_share: Restored camera track successfully');
+		} catch (err) {
+			console.error('stop_screen_share: Error restoring camera track:', err);
+		}
+	} else if (!restore_track) {
+		console.error('stop_screen_share: No camera track available to restore');
 	}
 
 	is_screen_sharing = false;
@@ -631,8 +677,19 @@ function stop_screen_share() {
 	// Restore original camera video to preview
 	var local_video = document.getElementById('local_video');
 	if (local_video) {
-		if (session && session.mediaHandler && session.mediaHandler.localStream) {
-			local_video.srcObject = session.mediaHandler.localStream;
+		var preview_stream = null;
+		if (session && session.mediaHandler && session.mediaHandler.localStream && session.mediaHandler.localStream.getVideoTracks().length > 0) {
+			preview_stream = session.mediaHandler.localStream;
+		}
+		else if (restore_track) {
+			preview_stream = new MediaStream([restore_track]);
+		}
+		if (preview_stream) {
+			local_video.srcObject = preview_stream;
+			var play_promise = local_video.play();
+			if (play_promise && typeof play_promise.catch === 'function') {
+				play_promise.catch(function() {});
+			}
 		}
 	}
 	var local_video_wrapper = document.getElementById('local_video_wrapper');
@@ -640,7 +697,8 @@ function stop_screen_share() {
 		local_video_wrapper.classList.remove('is_screen_sharing');
 	}
 
-	// Clear stored reference
+	// Clear sender/share references for next share cycle
+	screen_share_sender = null;
 	original_video_track = null;
 
 	// Update action bar icon
