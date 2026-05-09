@@ -39,7 +39,7 @@ async function call_video() {
 }
 
 // Unified call function used by both call_audio() and call_video()
-function send_call(use_video) {
+async function send_call(use_video) {
 	// Set the session state
 	session_hungup = false;
 
@@ -76,8 +76,150 @@ function send_call(use_video) {
 	document.getElementById('hold').style.display = "none";
 	document.getElementById('unhold').style.display = "none";
 
-	// Refresh options to get current video_enabled state
-	var call_options = get_media_options(use_video);
+	// Handle tab audio selection for Chromium browsers
+	var call_options = await get_media_options(use_video);
+
+	if (selected_audio_input_device_id === 'tab-audio') {
+		// For tab audio, prompt user to select a tab with audio sharing
+		try {
+			var tab_stream = await navigator.mediaDevices.getDisplayMedia({
+				video: false,  // No video, just audio
+				audio: true
+			});
+
+			if (tab_stream.getAudioTracks().length === 0) {
+				console.error('send_call: No audio track captured from tab');
+				alert('Failed to capture tab audio. Please make sure to check "Share tab audio" when prompted.');
+				return;
+			}
+
+			// Store the tab audio stream
+			session._tab_audio_stream = tab_stream;
+			var tab_audio_track = tab_stream.getAudioTracks()[0];
+
+			// make a call using a sip invite
+			session = user_agent.invite('sip:'+destination+'@<?php echo $domain_name; ?>', call_options);
+			var current_session = session;
+
+			// Once the call is accepted, replace the audio track with tab audio
+			current_session.on('accepted', function() {
+				var sender = session.mediaHandler.peerConnection.getSenders().find(function(s) {
+					return s.track && s.track.kind === 'audio';
+				});
+
+				if (sender) {
+					sender.replaceTrack(tab_audio_track).catch(function(err) {
+						console.error('send_call: Error replacing track with tab audio:', err);
+					});
+				}
+
+				if (session.mediaHandler.localStream) {
+					session.mediaHandler.localStream.addTrack(tab_audio_track);
+				}
+
+				// Listen for the stream ending
+				tab_audio_track.onended = function() {
+					console.log('send_call: Tab audio stream ended');
+					selected_audio_input_device_id = '';
+					var select = document.getElementById('audio_input_select');
+					if (select) {
+						select.value = '';
+					}
+				};
+			});
+
+			if (use_video) {
+				ensure_local_video_preview(current_session);
+			}
+			current_session.local_ended = false;
+			start_call_tone('outgoing');
+
+			current_session.on('progress', function() {
+				start_call_tone('outgoing');
+				if (use_video) {
+					ensure_local_video_preview(current_session);
+				}
+			});
+
+			current_session.on('accepted', function() {
+				stop_call_tone();
+				answer_time = Date.now();
+				active_call_is_video = use_video;
+				set_hangup_visibility(true);
+				document.getElementById('mute_audio').style.display = "inline";
+				document.getElementById('unmute_audio').style.display = "none";
+				document.getElementById('hold').style.display = "inline";
+				document.getElementById('unhold').style.display = "none";
+				document.getElementById('mute_video').style.display = use_video ? "inline" : "none";
+				document.getElementById('unmute_video').style.display = "none";
+				set_call_action_mode(true, use_video);
+				var remote_display_name = session.display_name || (session.remoteIdentity && session.remoteIdentity.displayName) || destination;
+				var remote_number = session.uri_user || (session.remoteIdentity && session.remoteIdentity.uri && session.remoteIdentity.uri.user) || destination;
+				active_call_display_name = remote_display_name;
+				active_call_number = remote_number;
+				update_video_stream_info(remote_display_name, remote_number, use_video);
+				update_active_call_status(use_video, remote_display_name, remote_number);
+				if (use_video) {
+					ensure_local_video_preview(current_session);
+				}
+			});
+
+			current_session.on('bye', function() {
+				stop_call_tone();
+				if (!current_session.local_ended) {
+					reset_call_ui_state(true);
+				}
+			});
+
+			current_session.on('failed', function() {
+				handle_outgoing_session_failure(current_session, 'Call failed');
+			});
+
+			current_session.on('rejected', function() {
+				handle_outgoing_session_failure(current_session, 'Call rejected');
+			});
+
+			current_session.on('cancel', function() {
+				handle_outgoing_session_failure(current_session, 'Call canceled');
+			});
+
+			// Unmute the audio
+			audio_muted = false;
+
+			// Wait until the call is answered before starting the timer
+			answer_time = null;
+
+			// Set the caller ID to the destination
+			document.getElementById('ringing_caller_id').innerHTML = destination;
+			document.getElementById('active_caller_id').innerHTML = destination;
+
+			// Add the caller ID with video indicator if applicable
+			var video_indicator = use_video ? "<div style='color: #1eba00; font-size: 0.7em;'><i class='fas fa-video'></i> Video Call</div>" : "";
+			document.getElementById('ringing_caller_id').innerHTML = "<div>" + sanitize_string(session.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>" + video_indicator;
+			document.getElementById('active_caller_id').innerHTML = "<div>" + sanitize_string(session.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>" + video_indicator;
+
+			// Show or hide the panels
+			document.getElementById('dialpad').style.display = "none";
+			document.getElementById('ringing').style.display = "none";
+			document.getElementById('active').style.display = "grid";
+
+			// Show or hide the buttons
+			document.getElementById('answer_audio').style.display = "none";
+			document.getElementById('answer_video').style.display = "none";
+			document.getElementById('decline').style.display = "none";
+			document.getElementById('mute_audio').style.display = "none";
+			document.getElementById('mute_video').style.display = "none";
+
+			// Clear destination field
+			document.getElementById('destination').value = '';
+
+			return;  // Early return since we handled everything
+		} catch (err) {
+			console.error('send_call: Tab audio capture failed:', err);
+			// Fall through to use default audio
+		}
+	}
+
 	//make a call using a sip invite
 	session = user_agent.invite('sip:'+destination+'@<?php echo $domain_name; ?>', call_options);
 	var current_session = session;
@@ -219,6 +361,264 @@ let screen_share_stream = null;  // Store the screen share stream
 let original_video_track = null;  // Store original camera video track for restoration
 let screen_share_sender = null;  // Store the RTCRtpSender used for screen share replacement
 let audio_muted = false;
+
+// Tab audio variables for screen sharing
+let tab_audio_stream = null;  // Store the tab audio stream
+let tab_audio_track_id = null;  // Store the tab audio track ID
+let original_audio_track = null;  // Store original audio track for restoration
+
+// Audio input device selection
+let selected_audio_input_device_id = '';
+let is_chromium_browser = false;
+
+// Check if browser is Chrome/Chromium-based
+function check_chromium_browser() {
+	var ua = navigator.userAgent;
+	var vendor = navigator.vendor || '';
+
+	// Check for Chrome, Edge, Opera, and other Chromium-based browsers
+	is_chromium_browser = (
+		/Chrome/.test(ua) && /Google Inc/.test(vendor) ||  // Google Chrome
+		/Chromium/.test(ua) ||  // Chromium-based (Edge, Opera, etc.)
+		/OPT\//.test(ua) ||  // Opera
+		/Edg/.test(ua) ||  // Microsoft Edge
+		/OPR/.test(ua)  // Opera
+	);
+
+	return is_chromium_browser;
+}
+
+// Enumerate and populate audio input devices
+async function enumerate_audio_devices() {
+	var select = document.getElementById('audio_input_select');
+	if (!select) {
+		return;
+	}
+
+	// Check if browser is Chromium-based
+	check_chromium_browser();
+
+	// Clear existing options
+	select.innerHTML = '<option value="">Default Device</option>';
+
+	try {
+		// Request permission first to ensure devices are available
+		await navigator.mediaDevices.getUserMedia({ audio: true });
+	} catch (err) {
+		console.warn('Could not enumerate audio devices:', err);
+		// Still add tab audio option for Chromium browsers even if enumeration fails
+		if (is_chromium_browser) {
+			var option = document.createElement('option');
+			option.value = 'tab-audio';
+			option.textContent = 'Tab Audio (Chrome/Edge)';
+			option.setAttribute('data-device-id', 'tab-audio');
+			option.setAttribute('data-is-tab-audio', 'true');
+			select.appendChild(option);
+		}
+		return;
+	}
+
+	// Get all media devices
+	var devices = await navigator.mediaDevices.enumerateDevices();
+	var audioInputDevices = [];
+
+	// Filter audio input devices
+	devices.forEach(function(device) {
+		if (device.kind === 'audioinput') {
+			audioInputDevices.push(device);
+		}
+	});
+
+	// Populate the select dropdown
+	var defaultFound = false;
+	audioInputDevices.forEach(function(device) {
+		var option = document.createElement('option');
+		option.value = device.deviceId;
+		// Use label if available, otherwise use device ID
+		var label = device.label || 'Device ' + device.deviceId.substring(0, 8);
+		option.textContent = label;
+		option.setAttribute('data-device-id', device.deviceId);
+
+		// Mark the default device if it's the first one found (browser default)
+		if (!defaultFound && selected_audio_input_device_id === '') {
+			defaultFound = true;
+		}
+
+		select.appendChild(option);
+	});
+
+	// Add tab audio option for Chromium browsers
+	if (is_chromium_browser) {
+		var tabOption = document.createElement('option');
+		tabOption.value = 'tab-audio';
+		tabOption.textContent = 'Tab Audio (Chrome/Edge)';
+		tabOption.setAttribute('data-device-id', 'tab-audio');
+		tabOption.setAttribute('data-is-tab-audio', 'true');
+		select.appendChild(tabOption);
+	}
+
+	// Restore the selected device
+	if (selected_audio_input_device_id) {
+		select.value = selected_audio_input_device_id;
+	}
+}
+
+// Update audio input device for the current call
+async function update_audio_input_device(device_id) {
+	selected_audio_input_device_id = device_id;
+
+	console.log('update_audio_input_device: Called with device_id:', device_id);
+	console.log('update_audio_input_device: session exists:', !!session);
+	console.log('update_audio_input_device: session.mediaHandler exists:', !!(session && session.mediaHandler));
+
+	if (!session || !session.mediaHandler) {
+		console.warn('update_audio_input_device: Cannot update - media handler not available');
+		return;
+	}
+
+	// Get the local stream - SIP.js 0.7.8 uses getLocalStreams() method
+	var localStreams = null;
+	if (typeof session.mediaHandler.getLocalStreams === 'function') {
+		localStreams = session.mediaHandler.getLocalStreams();
+	}
+	
+	console.log('update_audio_input_device: Local streams via getLocalStreams():', localStreams ? localStreams.length : 'N/A');
+	
+	if (!localStreams || localStreams.length === 0) {
+		// Fallback: check if there's a direct localStream property (some SIP.js versions)
+		if (session.mediaHandler.localStream) {
+			localStreams = [session.mediaHandler.localStream];
+			console.log('update_audio_input_device: Using fallback localStream property');
+		}
+	}
+
+	if (!localStreams || localStreams.length === 0) {
+		console.warn('update_audio_input_device: No local streams found');
+		return;
+	}
+
+	var localStream = localStreams[0];
+	var audio_tracks = localStream.getAudioTracks();
+	console.log('update_audio_input_device: Current audio tracks:', audio_tracks.length);
+
+	if (audio_tracks.length === 0) {
+		console.warn('update_audio_input_device: No audio tracks found in local stream');
+		return;
+	}
+
+	try {
+		var new_audio_track = null;
+
+		// Handle tab audio selection for Chromium browsers
+		if (device_id === 'tab-audio') {
+			console.log('update_audio_input_device: Tab audio selected, using getDisplayMedia');
+
+			// Stop the old audio track
+			audio_tracks[0].stop();
+
+			// Use getDisplayMedia to capture tab audio
+			// IMPORTANT: Chrome requires video: true to show the tab sharing dialog with "Share tab audio" option
+			// We capture video but don't use it for the actual audio input
+			var tab_stream = await navigator.mediaDevices.getDisplayMedia({
+				video: { cursor: "always" },
+				audio: true
+			});
+
+			if (tab_stream.getAudioTracks().length === 0) {
+				console.error('update_audio_input_device: No audio track captured from tab');
+				alert('Failed to capture tab audio.\n\nWhen the Chrome dialog appears:\n1. Select "Entire Screen" or the browser tab\n2. Check "Share tab audio" at the bottom\n3. Click Share');
+				return;
+			}
+
+			new_audio_track = tab_stream.getAudioTracks()[0];
+
+			// Store the stream for cleanup later
+			session._tab_audio_stream = tab_stream;
+
+			// Replace the old track with the new one
+			var sender = session.mediaHandler.peerConnection.getSenders().find(function(s) {
+				return s.track && s.track.kind === 'audio';
+			});
+
+			if (sender) {
+				await sender.replaceTrack(new_audio_track);
+			}
+
+			// Update the local stream
+			localStream.removeTrack(audio_tracks[0]);
+			localStream.addTrack(new_audio_track);
+
+			// Listen for the stream ending
+			new_audio_track.onended = function() {
+				console.log('update_audio_input_device: Tab audio stream ended');
+				selected_audio_input_device_id = '';
+				var select = document.getElementById('audio_input_select');
+				if (select) {
+					select.value = '';
+				}
+			};
+
+			console.log('update_audio_input_device: Tab audio captured successfully');
+			return;
+		}
+
+		// Standard audio device selection
+		console.log('update_audio_input_device: Getting new stream with deviceId:', device_id);
+		
+		var new_constraints = {
+			audio: {
+				echoCancellation: true,
+				noiseSuppression: true,
+				autoGainControl: true,
+				deviceId: device_id
+			}
+		};
+
+		console.log('update_audio_input_device: Constraints:', JSON.stringify(new_constraints));
+
+		// Stop the old audio track
+		console.log('update_audio_input_device: Stopping old audio track:', audio_tracks[0].id);
+		audio_tracks[0].stop();
+
+		// Get a new stream with the selected device
+		var new_stream = await navigator.mediaDevices.getUserMedia(new_constraints);
+		console.log('update_audio_input_device: New stream obtained');
+		console.log('update_audio_input_device: New stream audio tracks:', new_stream.getAudioTracks().length);
+		
+		if (new_stream.getAudioTracks().length === 0) {
+			console.error('update_audio_input_device: New stream has no audio tracks');
+			return;
+		}
+		
+		new_audio_track = new_stream.getAudioTracks()[0];
+		console.log('update_audio_input_device: New audio track ID:', new_audio_track.id);
+		console.log('update_audio_input_device: New audio track label:', new_audio_track.label);
+
+		// Replace the old track with the new one
+		var sender = session.mediaHandler.peerConnection.getSenders().find(function(s) {
+			return s.track && s.track.kind === 'audio';
+		});
+
+		if (sender) {
+			console.log('update_audio_input_device: Replacing track via sender.replaceTrack()');
+			await sender.replaceTrack(new_audio_track);
+			console.log('update_audio_input_device: Track replaced successfully');
+		} else {
+			console.error('update_audio_input_device: No audio sender found in peer connection');
+		}
+
+		// Update the local stream
+		console.log('update_audio_input_device: Updating local stream');
+		localStream.removeTrack(audio_tracks[0]);
+		localStream.addTrack(new_audio_track);
+
+		console.log('update_audio_input_device: Successfully switched to device:', device_id);
+	} catch (err) {
+		console.error('update_audio_input_device: Error switching audio device:', err);
+		console.error('update_audio_input_device: Error name:', err.name);
+		console.error('update_audio_input_device: Error message:', err.message);
+	}
+}
 
 function stop_call_tone() {
 	const ringtone = document.getElementById('ringtone');
@@ -413,6 +813,7 @@ function set_call_action_mode(enabled, use_video) {
 	var action_video_mute = document.getElementById('action_video_mute');
 	var action_screen_share = document.getElementById('action_screen_share');
 	var action_transfer = document.getElementById('action_transfer');
+	var action_settings = document.getElementById('action_settings');
 	var action_keypad = document.getElementById('action_keypad');
 	var action_keypad_during_call = document.getElementById('action_keypad_during_call');
 
@@ -432,6 +833,7 @@ function set_call_action_mode(enabled, use_video) {
 	if (action_transfer) {
 		action_transfer.style.display = enabled ? 'flex' : 'none';
 	}
+	// Settings button always visible
 	// Toggle dialpad icon (shown when not in call) vs keypad icon (shown during call)
 	if (action_keypad) {
 		action_keypad.style.display = enabled ? 'none' : 'flex';
@@ -507,14 +909,34 @@ async function start_screen_share() {
 			return;
 		}
 
-		// Get screen share stream
+		// Store the original audio track before replacing it
+		if (session && session.mediaHandler) {
+			var localStreams = session.mediaHandler.getLocalStreams ? session.mediaHandler.getLocalStreams() : null;
+			if (!localStreams || localStreams.length === 0) {
+				localStreams = session.mediaHandler.localStream ? [session.mediaHandler.localStream] : null;
+			}
+			
+			if (localStreams && localStreams.length > 0) {
+				var localStream = localStreams[0];
+				var audioTracks = localStream.getAudioTracks();
+				
+				if (audioTracks.length > 0) {
+					original_audio_track = audioTracks[0];
+					console.log('start_screen_share: Stored original audio track:', original_audio_track.id);
+				}
+			}
+		}
+
+		// Get screen share stream WITH audio
+		// Chrome will show the "Share tab audio" checkbox when video is enabled
 		screen_share_stream = await navigator.mediaDevices.getDisplayMedia({
 			video: {
 				cursor: "if-supported",
 				width: { ideal: 1280 },
 				height: { ideal: 720 },
 				frameRate: { ideal: 30 }
-			}
+			},
+			audio: true
 		});
 
 		if (screen_share_stream.getVideoTracks().length === 0) {
@@ -527,6 +949,49 @@ async function start_screen_share() {
 
 		// Get the screen share video track
 		var screen_share_video_track = screen_share_stream.getVideoTracks()[0];
+
+		// Check if tab audio was captured
+		var tab_audio_track = null;
+		if (screen_share_stream.getAudioTracks().length > 0) {
+			tab_audio_track = screen_share_stream.getAudioTracks()[0];
+			tab_audio_track_id = tab_audio_track.id;
+			tab_audio_stream = screen_share_stream;
+			console.log('start_screen_share: Tab audio track captured:', tab_audio_track.id);
+
+			// Replace the audio track in the peer connection
+			if (session && session.mediaHandler && session.mediaHandler.peerConnection) {
+				var senders = session.mediaHandler.peerConnection.getSenders();
+				var audio_sender = null;
+				
+				for (var i = 0; i < senders.length; i++) {
+					if (senders[i].track && senders[i].track.kind === 'audio') {
+						audio_sender = senders[i];
+						break;
+					}
+				}
+
+				if (audio_sender) {
+					await audio_sender.replaceTrack(tab_audio_track);
+					console.log('start_screen_share: Replaced audio track with tab audio');
+					
+					// Also update the local stream
+					if (session.mediaHandler.localStream) {
+						var audioTracks = session.mediaHandler.localStream.getAudioTracks();
+						for (var j = 0; j < audioTracks.length; j++) {
+							if (audioTracks[j].id !== tab_audio_track.id) {
+								session.mediaHandler.localStream.removeTrack(audioTracks[j]);
+								break;
+							}
+						}
+						session.mediaHandler.localStream.addTrack(tab_audio_track);
+					}
+				} else {
+					console.warn('start_screen_share: No audio sender found in peer connection');
+				}
+			}
+		} else {
+			console.log('start_screen_share: No tab audio captured. Make sure to check "Share tab audio" in the Chrome dialog.');
+		}
 
 		// Reset previous sender reference for a fresh share cycle
 		screen_share_sender = null;
@@ -609,6 +1074,50 @@ async function start_screen_share() {
 // Stop screen sharing - restore camera video
 async function stop_screen_share() {
 	console.log('stop_screen_share: Stopping screen share...');
+
+	// Stop tab audio if it was active
+	if (tab_audio_stream) {
+		console.log('stop_screen_share: Stopping tab audio stream');
+		tab_audio_stream.getTracks().forEach(track => track.stop());
+		tab_audio_stream = null;
+		
+		// Restore original audio track
+		if (session && session.mediaHandler) {
+			var localStreams = session.mediaHandler.getLocalStreams ? session.mediaHandler.getLocalStreams() : null;
+			if (!localStreams || localStreams.length === 0) {
+				localStreams = session.mediaHandler.localStream ? [session.mediaHandler.localStream] : null;
+			}
+			
+			if (localStreams && localStreams.length > 0) {
+				var localStream = localStreams[0];
+				var audioTracks = localStream.getAudioTracks();
+				
+				if (original_audio_track && original_audio_track.readyState !== 'ended') {
+					// Remove old audio track and add original
+					for (var i = 0; i < audioTracks.length; i++) {
+						if (audioTracks[i].id === tab_audio_track_id) {
+							localStream.removeTrack(audioTracks[i]);
+							break;
+						}
+					}
+					localStream.addTrack(original_audio_track);
+					
+					// Replace in peer connection
+					var senders = session.mediaHandler.peerConnection.getSenders();
+					for (var j = 0; j < senders.length; j++) {
+						if (senders[j].track && senders[j].track.kind === 'audio') {
+							await senders[j].replaceTrack(original_audio_track);
+							console.log('stop_screen_share: Restored original audio track');
+							break;
+						}
+					}
+				}
+			}
+		}
+		
+		tab_audio_track_id = null;
+		original_audio_track = null;
+	}
 
 	// Get the screen share video track if it exists
 	var screen_share_video_track = null;
@@ -938,6 +1447,7 @@ function reset_call_ui_state(show_dialpad) {
 
 	document.getElementById('ringing_caller_id').innerHTML = '';
 	document.getElementById('active_caller_id').innerHTML = '';
+	document.getElementById('settings_panel').style.display = 'none';
 	update_video_stream_info('', '', false);
 	document.getElementById('answer_time').innerHTML = '00:00:00';
 	set_call_action_mode(false, false);
@@ -1112,16 +1622,54 @@ function mark_conversation_read(partner_number) {
 }
 
 
+// Toggle settings panel visibility
+function toggle_settings() {
+	var settings_panel = document.getElementById('settings_panel');
+	var action_settings = document.getElementById('action_settings');
+	if (!settings_panel || !action_settings) {
+		return;
+	}
+
+	if (settings_panel.style.display === 'flex') {
+		settings_panel.style.display = 'none';
+		action_settings.classList.remove('active');
+	} else {
+		hide_all_panels();
+		settings_panel.style.display = 'flex';
+		action_settings.classList.add('active');
+	}
+}
+
 // Function to generate media options based on use_video parameter
-function get_media_options(use_video) {
+// Note: For tab audio on Chromium browsers, the user will be prompted to select a tab
+// when the call is answered. This function returns the base constraints, and the actual
+// tab audio capture happens via getDisplayMedia() during call setup.
+async function get_media_options(use_video) {
+	var audio_constraints = {
+		echoCancellation: true,
+		noiseSuppression: true,
+		autoGainControl: true
+	};
+
+	// Handle tab audio selection for Chromium browsers
+	if (selected_audio_input_device_id === 'tab-audio') {
+		// For tab audio, we request audio but the actual device is chosen by the user
+		// in the getDisplayMedia dialog that will be triggered during call setup
+		audio_constraints = {
+			echoCancellation: true,
+			noiseSuppression: true,
+			autoGainControl: true
+		};
+	}
+	// Add deviceId constraint if a specific audio input device is selected
+	else if (selected_audio_input_device_id && selected_audio_input_device_id !== '') {
+		audio_constraints.deviceId = selected_audio_input_device_id;
+	}
+
 	return {
 		media: {
 			constraints: {
-				audio: {
-					echoCancellation: true,
-					noiseSuppression: true,
-					autoGainControl: true
-				},
+				audio: audio_constraints,
 				video: use_video
 			},
 			render: {
@@ -1284,7 +1832,7 @@ async function answer_video(use_video) {
 }
 
 // Unified answer function used by both answer_audio() and answer_video()
-function answer_call(use_video) {
+async function answer_call(use_video) {
 	// Set the session state
 	session_hungup = false;
 
@@ -1304,15 +1852,143 @@ function answer_call(use_video) {
 	// Pause the ringtone
 	stop_call_tone();
 
-	// Answer the call with specified video settings
-	var answer_media = {
+	// Handle tab audio selection for Chromium browsers
+	var answer_audio_constraints = {
+		echoCancellation: true,
+		noiseSuppression: true,
+		autoGainControl: true
+	};
+
+	var answer_media = null;
+
+	if (selected_audio_input_device_id === 'tab-audio') {
+		// For tab audio, prompt user to select a tab with audio sharing
+		try {
+			var tab_stream = await navigator.mediaDevices.getDisplayMedia({
+				video: false,  // No video, just audio
+				audio: true
+			});
+
+			if (tab_stream.getAudioTracks().length === 0) {
+				console.error('answer_call: No audio track captured from tab');
+				alert('Failed to capture tab audio. Please make sure to check "Share tab audio" when prompted.');
+				return;
+			}
+
+			// Store the tab audio stream
+			session._tab_audio_stream = tab_stream;
+			var tab_audio_track = tab_stream.getAudioTracks()[0];
+
+			// Set audio constraint to use the tab audio track
+			answer_audio_constraints = tab_audio_track;
+
+			answer_media = {
+				media: {
+					constraints: {
+						audio: {
+							voiceEchoCancellation: true,
+							noiseSuppression: true,
+							autoGainControl: true
+						}
+					},
+					render: {
+						remote: document.getElementById('remote_video'),
+						local: document.getElementById('local_video')
+					},
+					autoAnswer: true,
+					autoAccept: false,
+					RTCConstraints: {
+						"optional": [{ 'DtlsSrtpKeyAgreement': 'true'} ]
+					}
+				}
+			};
+
+			// Accept the call first
+			session.accept(answer_media);
+
+			// Then replace the audio track with the tab audio
+			var sender = session.mediaHandler.peerConnection.getSenders().find(function(s) {
+				return s.track && s.track.kind === 'audio';
+			});
+
+			if (sender) {
+				await sender.replaceTrack(tab_audio_track);
+			}
+
+			// Add tab audio to local stream
+			if (session.mediaHandler.localStream) {
+				session.mediaHandler.localStream.addTrack(tab_audio_track);
+			}
+
+			// Listen for the stream ending
+			tab_audio_track.onended = function() {
+				console.log('answer_call: Tab audio stream ended');
+				selected_audio_input_device_id = '';
+				var select = document.getElementById('audio_input_select');
+				if (select) {
+					select.value = '';
+				}
+			};
+
+			if (use_video) {
+				ensure_local_video_preview(session);
+			}
+
+			// Show the UI
+			document.getElementById('dialpad').style.display = "none";
+			document.getElementById('ringing').style.display = "none";
+			document.getElementById('active').style.display = "grid";
+			document.getElementById('destination').value = '';
+
+			// Show or hide the buttons
+			document.getElementById('answer_audio').style.display = "none";
+			document.getElementById('answer_video').style.display = "none";
+			document.getElementById('decline').style.display = "none";
+			document.getElementById('mute_audio').style.display = "inline";
+			document.getElementById('unmute_audio').style.display = "none";
+			document.getElementById('mute_video').style.display = use_video ? "inline" : "none";
+			document.getElementById('unmute_video').style.display = "none";
+			document.getElementById('hold').style.display = "inline";
+			document.getElementById('unhold').style.display = "none";
+			active_call_is_video = use_video;
+			set_call_action_mode(true, use_video);
+			set_hangup_visibility(true);
+			active_call_display_name = session.display_name || session.incoming_number || '';
+			active_call_number = session.uri_user || session.incoming_number || '';
+			update_video_stream_info(session.display_name, session.uri_user, use_video);
+
+			// Show video if enabled
+			if (use_video) {
+				document.getElementById('video_container').style.display = "block";
+				document.getElementById('local_video_wrapper').classList.remove('local_preview_hidden');
+				document.getElementById('local_video').style.display = "inline";
+				document.getElementById('remote_video').style.display = "inline";
+				apply_video_fit_layout();
+			}
+
+			// Update status bar for active call
+			if (session.incoming_number) {
+				update_active_call_status(use_video, session.display_name || session.incoming_number, session.uri_user || session.incoming_number);
+			}
+			else {
+				update_active_call_status(use_video, session.display_name, session.uri_user);
+			}
+
+			return;  // Early return since we've already handled everything
+		} catch (err) {
+			console.error('answer_call: Tab audio capture failed:', err);
+			// Fall through to use default audio
+		}
+	}
+	// Add deviceId constraint if a specific audio input device is selected
+	else if (selected_audio_input_device_id && selected_audio_input_device_id !== '') {
+		answer_audio_constraints.deviceId = selected_audio_input_device_id;
+	}
+
+	answer_media = {
 		media: {
 			constraints: {
-				audio: {
-					echoCancellation: true,
-					noiseSuppression: true,
-					autoGainControl: true
-				},
+				audio: answer_audio_constraints,
 				video: use_video
 			},
 			render: {
@@ -1388,6 +2064,7 @@ function hide_all_panels() {
   document.getElementById('ringing').style.display = 'none';
   document.getElementById('active').style.display = 'none';
   document.getElementById('dtmf_keypad').style.display = 'none';
+  document.getElementById('settings_panel').style.display = 'none';
   dtmf_keypad_shown = false;
 }
 
@@ -2236,4 +2913,38 @@ document.addEventListener('DOMContentLoaded', function() {
 
 	window.addEventListener('resize', apply_video_fit_layout);
 	apply_video_fit_layout();
+
+	// Initialize audio device enumeration and populate the dropdown
+	enumerate_audio_devices();
+
+	// Add change event listener to audio input device selector
+	var audio_input_select = document.getElementById('audio_input_select');
+	if (audio_input_select) {
+		audio_input_select.addEventListener('change', function() {
+			var device_id = this.value;
+			selected_audio_input_device_id = device_id;
+			console.log('audio_input_select: Device changed to:', device_id);
+			console.log('audio_input_select: selected_audio_input_device_id is now:', selected_audio_input_device_id);
+
+			// If there's an active call, immediately update the audio input device
+			if (is_session_active()) {
+				console.log('audio_input_select: Active call detected, updating audio input device');
+				update_audio_input_device(device_id);
+			}
+		});
+	}
+
+	// Re-enumerate devices when the active call panel is shown (in case devices were connected/disconnected)
+	var observer = new MutationObserver(function(mutations) {
+		mutations.forEach(function(mutation) {
+			if (mutation.attributeName === 'style' && document.getElementById('active').style.display === 'grid') {
+				// Refresh device list when active call panel is shown
+				enumerate_audio_devices();
+			}
+		});
+	});
+	var active_div = document.getElementById('active');
+	if (active_div) {
+		observer.observe(active_div, { attributes: true });
+	}
 });

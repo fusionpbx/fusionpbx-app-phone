@@ -227,6 +227,19 @@ echo "			<div class='dialpad_box' id='unmute_video' style='display: none;' oncli
 echo "		</div>\n";
 echo "	</div>\n";
 
+//define the settings panel (audio device selection)
+echo "	<div class='settings_panel' id='settings_panel' style='display: none;'>\n";
+echo "		<div class='settings_header'><i class='fas fa-cog'></i> Settings</div>\n";
+echo "		<div class='settings_content'>\n";
+echo "			<div class='audio_device_selector_container'>\n";
+echo "				<label for='audio_input_select' class='audio_device_label'><i class='fas fa-microphone'></i> Audio Input:</label>\n";
+echo "				<select id='audio_input_select' class='audio_device_select'>\n";
+echo "					<option value=''>Default Device</option>\n";
+echo "				</select>\n";
+echo "			</div>\n";
+echo "		</div>\n";
+echo "	</div>\n";
+
 //define the DTMF keypad panel - shown during active calls for sending DTMF
 echo "	<div class='dtmf_keypad' id='dtmf_keypad' style='display: none;'>\n";
 echo "		<div class='keypad_header'><i class='fas fa-keyboard'></i> Keypad</div>\n";
@@ -281,6 +294,9 @@ echo "			<span class='action_label' id='action_transfer_label'>Transfer</span>\n
 echo "		</div>\n";
 echo "		<div class='action_item action_item_hangup' id='hangup' onclick='hangup();' style='display: none;'><i class='fas fa-phone-slash' title=\"".$text['label-end']."\"></i>\n";
 echo "			<span class='action_label'>".$text['label-end']."</span>\n";
+echo "		</div>\n";
+echo "		<div class='action_item' id='action_settings' onclick='toggle_settings();'><i class='fas fa-cog'></i>\n";
+echo "			<span class='action_label'>Settings</span>\n";
 echo "		</div>\n";
 echo "		<div class='action_item' onclick='show_keypad();' id='action_keypad_during_call' style='display: none;'><i class='fas fa-keyboard'></i>\n";
 echo "			<span class='action_label'>Keypad</span>\n";

@@ -862,7 +862,101 @@ body.audio_call_mode #active .dialpad_wrapper {
 	transition: background 0.15s, transform 0.05s;
 }
 
-.dialpad_box.dtmf_digit:active,
+/* Audio Device Selector Styles */
+.audio_device_selector_container {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	background: rgba(0, 0, 0, 0.5);
+	border-radius: 8px;
+	margin: 8px auto;
+	max-width: 460px;
+	width: 92%;
+	justify-content: center;
+}
+
+.audio_device_label {
+	font-size: 12px;
+	color: #ccc;
+	white-space: nowrap;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.audio_device_label i {
+	font-size: 14px;
+}
+
+.audio_device_select {
+	background: rgba(60, 60, 60, 0.9);
+	border: 2px solid #444;
+	color: #fff;
+	border-radius: 6px;
+	padding: 6px 10px;
+	font-size: 12px;
+	outline: none;
+	cursor: pointer;
+	min-width: 180px;
+}
+
+.audio_device_select:hover {
+	border-color: #1E90FF;
+}
+
+.audio_device_select:focus {
+	border-color: #1eba00;
+}
+
+.audio_device_select option {
+	background: #1a1a2e;
+	color: #fff;
+}
+
+/* Settings Panel Styles */
+.settings_panel {
+	position: fixed;
+	top: 38px;
+	bottom: 38px;
+	left: 0;
+	right: 0;
+	background: #161D28;
+	padding: 20px;
+	overflow-y: auto;
+	display: none;
+	flex-direction: column;
+	align-items: center;
+	z-index: 1500;
+}
+
+.settings_header {
+	text-align: center;
+	font-size: 28px;
+	font-weight: bold;
+	color: #fff;
+	margin-bottom: 30px;
+	font-family: sans-serif;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+}
+
+.settings_header i {
+	color: #1eba00;
+}
+
+.settings_content {
+	width: 100%;
+	max-width: 480px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 20px;
+}
+
 .dialpad_box.dtmf_digit.dtmf_pressed {
 	background: #1eba00;
 	transform: scale(0.95);
+}
