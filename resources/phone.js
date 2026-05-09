@@ -447,24 +447,32 @@ async function toggle_screen_share_audio_source() {
 
 function session_supports_video(active_session) {
 	if (!active_session || !active_session.mediaHandler || !active_session.mediaHandler.peerConnection) {
-		return false;
+		return true;
 	}
 
 	var peer_connection = active_session.mediaHandler.peerConnection;
 	if (peer_connection.remoteDescription && peer_connection.remoteDescription.sdp) {
 		var sdp = peer_connection.remoteDescription.sdp;
-		if (sdp.indexOf('m=video') !== -1 && sdp.indexOf('m=video 0') === -1) {
+		if (sdp.indexOf('m=video 0') !== -1) {
+			return false;
+		}
+		if (sdp.indexOf('m=video') !== -1) {
+			return true;
+		}
+		return false;
+	}
+
+	if (typeof peer_connection.getReceivers === 'function') {
+		var has_video_receiver = peer_connection.getReceivers().some(function(receiver) {
+			return receiver.track && receiver.track.kind === 'video';
+		});
+		if (has_video_receiver) {
 			return true;
 		}
 	}
 
-	if (typeof peer_connection.getReceivers === 'function') {
-		return peer_connection.getReceivers().some(function(receiver) {
-			return receiver.track && receiver.track.kind === 'video';
-		});
-	}
-
-	return false;
+	// If negotiation details are not available yet, keep video UI enabled.
+	return true;
 }
 
 function sync_call_action_controls() {
