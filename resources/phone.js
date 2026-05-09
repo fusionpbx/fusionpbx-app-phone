@@ -22,7 +22,7 @@ async function call_video() {
 	// Check camera permissions first
 	var has_camera = await check_camera_permissions();
 	if (!has_camera) {
-		alert('Camera access is not available.\n\nFalling back to audio call.\n\nThis phone app requires HTTPS to access your camera.\n\nMake sure:\n1. You are accessing this page via HTTPS\n2. Your browser has granted camera permissions');
+		show_temporary_status('Camera not available; calling with audio', 'fas fa-phone');
 		// Fall back to audio call
 		call_audio();
 		return;
@@ -67,6 +67,7 @@ function send_call(use_video) {
 	set_hangup_visibility(true);
 	if (use_video) {
 		document.getElementById('video_container').style.display = "block";
+		document.getElementById('local_video_wrapper').classList.remove('local_preview_hidden');
 		document.getElementById('local_video').style.display = "inline";
 		document.getElementById('remote_video').style.display = "inline";
 	}
@@ -80,31 +81,47 @@ function send_call(use_video) {
 	//make a call using a sip invite
 	session = user_agent.invite('sip:'+destination+'@<?php echo $domain_name; ?>', call_options);
 	var current_session = session;
+	if (use_video) {
+		ensure_local_video_preview(current_session);
+	}
 	current_session.local_ended = false;
 	start_call_tone('outgoing');
 
 	current_session.on('progress', function() {
 		start_call_tone('outgoing');
+		if (use_video) {
+			ensure_local_video_preview(current_session);
+		}
 	});
 
 	current_session.on('accepted', function() {
 		stop_call_tone();
 		answer_time = Date.now();
-		active_call_is_video = use_video;
+		var use_video_for_ui = !!use_video;
+		if (use_video_for_ui && !session_supports_video(current_session)) {
+			use_video_for_ui = false;
+			show_temporary_status('Remote does not support video; switched to audio', 'fas fa-phone');
+			document.getElementById('video_container').style.display = "none";
+		}
+
+		active_call_is_video = use_video_for_ui;
 		set_hangup_visibility(true);
 		document.getElementById('mute_audio').style.display = "inline";
 		document.getElementById('unmute_audio').style.display = "none";
 		document.getElementById('hold').style.display = "inline";
 		document.getElementById('unhold').style.display = "none";
-		document.getElementById('mute_video').style.display = use_video ? "inline" : "none";
+		document.getElementById('mute_video').style.display = use_video_for_ui ? "inline" : "none";
 		document.getElementById('unmute_video').style.display = "none";
-		set_call_action_mode(true, use_video);
+		set_call_action_mode(true, use_video_for_ui);
 		var remote_display_name = session.display_name || (session.remoteIdentity && session.remoteIdentity.displayName) || destination;
 		var remote_number = session.uri_user || (session.remoteIdentity && session.remoteIdentity.uri && session.remoteIdentity.uri.user) || destination;
 		active_call_display_name = remote_display_name;
 		active_call_number = remote_number;
-		update_video_stream_info(remote_display_name, remote_number, use_video);
-		update_active_call_status(use_video, remote_display_name, remote_number);
+		update_video_stream_info(remote_display_name, remote_number, use_video_for_ui);
+		update_active_call_status(use_video_for_ui, remote_display_name, remote_number);
+		if (use_video_for_ui) {
+			ensure_local_video_preview(current_session);
+		}
 	});
 
 	current_session.on('bye', function() {
@@ -162,7 +179,7 @@ function detect_video_invite(session) {
 	if (!session || !session.request_data) return false;
 	// Check if the SIP INVITE contains video media type
 	return session.request_data.indexOf('media="video"') !== -1 ||
-		session.request_data.indexOf('a=rtpmap:98') !== -1;
+		session.request_data.indexOf('m=video') !== -1;
 }
 
 // Check if camera permissions are available before attempting video calls
@@ -207,6 +224,10 @@ let dtmf_buffer = '';  // Buffer for DTMF digits (to send as batch)
 let is_screen_sharing = false;  // Track if screen sharing is active
 let screen_share_stream = null;  // Store the screen share stream
 let original_video_track = null;  // Store original camera video track for restoration
+let screen_share_sender = null;  // Store the RTCRtpSender used for screen share replacement
+let original_audio_track = null;  // Store original microphone track for restoration
+let screen_share_audio_sender = null;  // Store the audio RTCRtpSender during screen sharing
+let screen_share_audio_source = 'mic';  // Selected source while sharing: 'mic' or 'tab'
 let audio_muted = false;
 
 function stop_call_tone() {
@@ -329,6 +350,131 @@ function update_active_call_status(use_video, display_name, number, duration_tex
 	show_status('Call in progress', 'fas fa-phone');
 }
 
+function is_audio_action_muted_state() {
+	return audio_muted;
+}
+
+function using_tab_audio_source() {
+	return screen_share_audio_source === 'tab';
+}
+
+function is_firefox() {
+	return /firefox|fxios/i.test(navigator.userAgent);
+}
+
+async function apply_screen_share_audio_routing(use_tab_audio) {
+	if (!session || !session.mediaHandler || !session.mediaHandler.peerConnection) {
+		return false;
+	}
+
+	var peer_connection = session.mediaHandler.peerConnection;
+	var audio_sender = screen_share_audio_sender;
+	if (!audio_sender) {
+		audio_sender = peer_connection.getSenders().find(function(sender) {
+			return sender.track && sender.track.kind === 'audio';
+		});
+	}
+
+	if (!audio_sender) {
+		return false;
+	}
+
+	if (use_tab_audio) {
+		// Check if desktop audio is available
+		var has_audio_track = screen_share_stream && screen_share_stream.getAudioTracks().length > 0;
+
+		if (!has_audio_track) {
+			return false;
+		}
+
+		var screen_audio_track = screen_share_stream.getAudioTracks()[0];
+		screen_share_audio_sender = audio_sender;
+		if (!original_audio_track && audio_sender.track && audio_sender.track.kind === 'audio') {
+			original_audio_track = audio_sender.track;
+		}
+
+		await audio_sender.replaceTrack(screen_audio_track);
+		if (audio_sender.track) {
+			audio_sender.track.enabled = !audio_muted;
+		}
+		return true;
+	}
+
+	if (!original_audio_track) {
+		// Nothing to restore; microphone was never replaced.
+		return true;
+	}
+
+	await audio_sender.replaceTrack(original_audio_track);
+	if (audio_sender.track) {
+		audio_sender.track.enabled = !audio_muted;
+	}
+	return true;
+}
+
+async function toggle_screen_share_audio_source() {
+	screen_share_audio_source = using_tab_audio_source() ? 'mic' : 'tab';
+
+	if (is_screen_sharing) {
+		try {
+			if (using_tab_audio_source()) {
+				if (!screen_share_stream || screen_share_stream.getAudioTracks().length === 0) {
+					if (is_firefox()) {
+						show_temporary_status('Firefox does not support tab audio; using microphone', 'fas fa-microphone');
+					}
+					else {
+						show_temporary_status('Restart share to use tab audio', 'fas fa-info-circle');
+					}
+				}
+				else {
+					await apply_screen_share_audio_routing(true);
+					show_temporary_status('Using tab audio', 'fas fa-desktop');
+				}
+			}
+			else {
+				await apply_screen_share_audio_routing(false);
+				show_temporary_status('Using microphone audio', 'fas fa-microphone');
+			}
+		}
+		catch (err) {
+			console.error('toggle_screen_share_audio_source: Failed to update audio routing:', err);
+			show_temporary_status('Unable to change audio source', 'fas fa-exclamation-circle');
+		}
+	}
+
+	sync_call_action_controls();
+}
+
+function session_supports_video(active_session) {
+	if (!active_session || !active_session.mediaHandler || !active_session.mediaHandler.peerConnection) {
+		return true;
+	}
+
+	var peer_connection = active_session.mediaHandler.peerConnection;
+	if (peer_connection.remoteDescription && peer_connection.remoteDescription.sdp) {
+		var sdp = peer_connection.remoteDescription.sdp;
+		if (sdp.indexOf('m=video 0') !== -1) {
+			return false;
+		}
+		if (sdp.indexOf('m=video') !== -1) {
+			return true;
+		}
+		return false;
+	}
+
+	if (typeof peer_connection.getReceivers === 'function') {
+		var has_video_receiver = peer_connection.getReceivers().some(function(receiver) {
+			return receiver.track && receiver.track.kind === 'video';
+		});
+		if (has_video_receiver) {
+			return true;
+		}
+	}
+
+	// If negotiation details are not available yet, keep video UI enabled.
+	return true;
+}
+
 function sync_call_action_controls() {
 	var action_mute = document.getElementById('action_mute');
 	var action_hold = document.getElementById('action_hold');
@@ -344,7 +490,7 @@ function sync_call_action_controls() {
 	var action_video_mute_icon = document.getElementById('action_video_mute_icon');
 	var action_video_mute_label = document.getElementById('action_video_mute_label');
 
-	var muted = audio_muted;
+	var muted = is_audio_action_muted_state();
 	var on_hold = document.getElementById('unhold').style.display === 'inline';
 
 	if (action_mute_icon) {
@@ -392,6 +538,16 @@ function sync_call_action_controls() {
 			action_screen_share.classList.remove('action_item_share_active');
 		}
 	}
+
+	var action_audio_source = document.getElementById('action_audio_source');
+	var action_audio_source_icon = document.getElementById('action_audio_source_icon');
+	var action_audio_source_label = document.getElementById('action_audio_source_label');
+	if (action_audio_source && action_audio_source_icon && action_audio_source_label) {
+		action_audio_source.style.display = active_call_is_video ? 'flex' : 'none';
+		action_audio_source_icon.className = using_tab_audio_source() ? 'fas fa-desktop' : 'fas fa-microphone';
+		action_audio_source_label.textContent = using_tab_audio_source() ? 'Tab' : 'Mic';
+		action_audio_source.classList.toggle('action_item_toggle_active', using_tab_audio_source());
+	}
 }
 
 function set_call_action_mode(enabled, use_video) {
@@ -401,6 +557,7 @@ function set_call_action_mode(enabled, use_video) {
 	var action_hold = document.getElementById('action_hold');
 	var action_video_mute = document.getElementById('action_video_mute');
 	var action_screen_share = document.getElementById('action_screen_share');
+	var action_audio_source = document.getElementById('action_audio_source');
 	var action_transfer = document.getElementById('action_transfer');
 	var action_keypad = document.getElementById('action_keypad');
 	var action_keypad_during_call = document.getElementById('action_keypad_during_call');
@@ -417,6 +574,10 @@ function set_call_action_mode(enabled, use_video) {
 	if (action_screen_share) {
 		// Screen share button only shown during video calls
 		action_screen_share.style.display = enabled && use_video ? 'flex' : 'none';
+	}
+	if (action_audio_source) {
+		// Audio source selector shown during video calls so source can be chosen before sharing.
+		action_audio_source.style.display = enabled && use_video ? 'flex' : 'none';
 	}
 	if (action_transfer) {
 		action_transfer.style.display = enabled ? 'flex' : 'none';
@@ -436,7 +597,7 @@ function set_call_action_mode(enabled, use_video) {
 
 function toggle_audio_mute_action() {
 	if (!session) { return; }
-	if (audio_muted) {
+	if (is_audio_action_muted_state()) {
 		unmute_audio();
 	}
 	else {
@@ -485,6 +646,10 @@ async function toggle_screen_share() {
 async function start_screen_share() {
 	try {
 		console.log('start_screen_share: Initiating screen share...');
+		if (is_screen_sharing) {
+			console.log('start_screen_share: Already active, skipping');
+			return;
+		}
 
 		// Check if getDisplayMedia is supported
 		if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
@@ -492,8 +657,15 @@ async function start_screen_share() {
 			return;
 		}
 
+		var request_tab_audio = using_tab_audio_source();
+
 		// Get screen share stream
 		screen_share_stream = await navigator.mediaDevices.getDisplayMedia({
+			audio: request_tab_audio ? {
+				echoCancellation: false,
+				noiseSuppression: false,
+				autoGainControl: false
+			} : false,
 			video: {
 				cursor: "if-supported",
 				width: { ideal: 1280 },
@@ -512,12 +684,12 @@ async function start_screen_share() {
 
 		// Get the screen share video track
 		var screen_share_video_track = screen_share_stream.getVideoTracks()[0];
+		var screen_share_audio_track = screen_share_stream.getAudioTracks().length > 0 ? screen_share_stream.getAudioTracks()[0] : null;
 
-		// Store original camera stream for restoration
-		if (session && session.mediaHandler && session.mediaHandler.localStream) {
-			original_video_track = session.mediaHandler.localStream.getVideoTracks()[0];
-			console.log('start_screen_share: Stored original video track:', original_video_track.id);
-		}
+		// Reset previous sender reference for a fresh share cycle
+		screen_share_sender = null;
+		screen_share_audio_sender = null;
+		original_audio_track = null;
 
 		// Add screen share indicator to local video
 		var local_video_wrapper = document.getElementById('local_video_wrapper');
@@ -542,6 +714,18 @@ async function start_screen_share() {
 
 			if (camera_sender) {
 				console.log('start_screen_share: Found camera sender:', camera_sender);
+				screen_share_sender = camera_sender;
+				if (camera_sender.track && camera_sender.track.kind === 'video') {
+					original_video_track = camera_sender.track;
+					console.log('start_screen_share: Stored original video track from sender:', original_video_track.id);
+				}
+				else if (session && session.mediaHandler && session.mediaHandler.localStream) {
+					var local_video_tracks = session.mediaHandler.localStream.getVideoTracks();
+					if (local_video_tracks.length > 0) {
+						original_video_track = local_video_tracks[0];
+						console.log('start_screen_share: Stored original video track from localStream:', original_video_track.id);
+					}
+				}
 				// Replace the camera track with the screen share track
 				camera_sender.replaceTrack(screen_share_video_track).then(function() {
 					console.log('start_screen_share: Track replaced successfully');
@@ -550,6 +734,27 @@ async function start_screen_share() {
 				});
 			} else {
 				console.error('start_screen_share: No camera sender found in peer connection');
+			}
+
+			if (request_tab_audio) {
+				if (screen_share_audio_track) {
+					apply_screen_share_audio_routing(true).then(function(applied) {
+						if (applied) {
+							console.log('start_screen_share: Tab audio track replaced successfully');
+						}
+						else {
+							console.warn('start_screen_share: Unable to route tab audio track');
+						}
+					}).catch(function(err) {
+						console.error('start_screen_share: Error replacing audio track:', err);
+					});
+				}
+				else if (is_firefox()) {
+					show_temporary_status('Firefox does not support tab audio; using microphone', 'fas fa-microphone');
+				}
+				else {
+					show_temporary_status('Tab audio unavailable; using microphone', 'fas fa-microphone');
+				}
 			}
 		} else {
 			console.error('start_screen_share: No peer connection found!');
@@ -583,7 +788,7 @@ async function start_screen_share() {
 }
 
 // Stop screen sharing - restore camera video
-function stop_screen_share() {
+async function stop_screen_share() {
 	console.log('stop_screen_share: Stopping screen share...');
 
 	// Get the screen share video track if it exists
@@ -592,21 +797,71 @@ function stop_screen_share() {
 		screen_share_video_track = screen_share_stream.getVideoTracks()[0];
 	}
 
-	// Remove screen share track from peer connection
+	// Restore camera track in peer connection
 	var peer_connection = session ? session.mediaHandler ? session.mediaHandler.peerConnection : null : null;
-	if (peer_connection && screen_share_video_track) {
-		console.log('stop_screen_share: Removing screen share track from peer connection');
-		var sender = peer_connection.getSenders().find(function(s) {
-			return s.track && s.track.id === screen_share_video_track.id;
+	var sender = screen_share_sender;
+	var audio_sender = screen_share_audio_sender;
+	if (!sender && peer_connection) {
+		sender = peer_connection.getSenders().find(function(s) {
+			return s.track && s.track.kind === 'video';
 		});
-		if (sender) {
-			sender.replaceTrack(original_video_track).then(function() {
-				console.log('stop_screen_share: Track replaced successfully');
-			}).catch(function(err) {
-				console.error('stop_screen_share: Error replacing track:', err);
-			});
-		} else {
-			console.error('stop_screen_share: Track sender not found in peer connection');
+	}
+	if (!audio_sender && peer_connection) {
+		audio_sender = peer_connection.getSenders().find(function(s) {
+			return s.track && s.track.kind === 'audio';
+		});
+	}
+
+	var restore_track = original_video_track;
+	if ((!restore_track || restore_track.readyState === 'ended') && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+		try {
+			console.log('stop_screen_share: Original camera track unavailable, reacquiring camera');
+			var camera_stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+			var camera_tracks = camera_stream.getVideoTracks();
+			if (camera_tracks.length > 0) {
+				restore_track = camera_tracks[0];
+				original_video_track = restore_track;
+
+				if (session && session.mediaHandler && session.mediaHandler.localStream) {
+					var local_stream = session.mediaHandler.localStream;
+					local_stream.getVideoTracks().forEach(function(track) {
+						if (track.id !== restore_track.id) {
+							local_stream.removeTrack(track);
+						}
+					});
+					if (!local_stream.getVideoTracks().some(function(track) { return track.id === restore_track.id; })) {
+						local_stream.addTrack(restore_track);
+					}
+				}
+				else if (session && session.mediaHandler) {
+					session.mediaHandler.localStream = camera_stream;
+				}
+			}
+		} catch (err) {
+			console.error('stop_screen_share: Failed to reacquire camera track:', err);
+		}
+	}
+
+	if (peer_connection && sender && restore_track) {
+		try {
+			await sender.replaceTrack(restore_track);
+			console.log('stop_screen_share: Restored camera track successfully');
+		} catch (err) {
+			console.error('stop_screen_share: Error restoring camera track:', err);
+		}
+	} else if (!restore_track) {
+		console.error('stop_screen_share: No camera track available to restore');
+	}
+
+	if (peer_connection && audio_sender && original_audio_track) {
+		try {
+			await audio_sender.replaceTrack(original_audio_track);
+			if (audio_sender.track) {
+				audio_sender.track.enabled = !audio_muted;
+			}
+			console.log('stop_screen_share: Restored microphone track successfully');
+		} catch (err) {
+			console.error('stop_screen_share: Error restoring microphone track:', err);
 		}
 	}
 
@@ -621,8 +876,19 @@ function stop_screen_share() {
 	// Restore original camera video to preview
 	var local_video = document.getElementById('local_video');
 	if (local_video) {
-		if (session && session.mediaHandler && session.mediaHandler.localStream) {
-			local_video.srcObject = session.mediaHandler.localStream;
+		var preview_stream = null;
+		if (session && session.mediaHandler && session.mediaHandler.localStream && session.mediaHandler.localStream.getVideoTracks().length > 0) {
+			preview_stream = session.mediaHandler.localStream;
+		}
+		else if (restore_track) {
+			preview_stream = new MediaStream([restore_track]);
+		}
+		if (preview_stream) {
+			local_video.srcObject = preview_stream;
+			var play_promise = local_video.play();
+			if (play_promise && typeof play_promise.catch === 'function') {
+				play_promise.catch(function() {});
+			}
 		}
 	}
 	var local_video_wrapper = document.getElementById('local_video_wrapper');
@@ -630,8 +896,11 @@ function stop_screen_share() {
 		local_video_wrapper.classList.remove('is_screen_sharing');
 	}
 
-	// Clear stored reference
+	// Clear sender/share references for next share cycle
+	screen_share_sender = null;
+	screen_share_audio_sender = null;
 	original_video_track = null;
+	original_audio_track = null;
 
 	// Update action bar icon
 	sync_call_action_controls();
@@ -670,6 +939,57 @@ function update_video_stream_info(display_name, number, show_info) {
 	}
 	else {
 		info.innerHTML = safe_name || safe_number;
+	}
+}
+
+// Ensure local camera preview is bound even when SIP.js render timing varies by browser.
+function ensure_local_video_preview(active_session, attempt) {
+	if (!active_session) {
+		return;
+	}
+
+	if (typeof attempt === 'undefined') {
+		attempt = 0;
+	}
+
+	var local_video = document.getElementById('local_video');
+	if (!local_video) {
+		return;
+	}
+
+	var local_wrapper = document.getElementById('local_video_wrapper');
+	if (local_wrapper) {
+		local_wrapper.classList.remove('local_preview_hidden');
+	}
+
+	var local_stream = null;
+	if (active_session.mediaHandler) {
+		if (active_session.mediaHandler.localStream) {
+			local_stream = active_session.mediaHandler.localStream;
+		}
+		else if (typeof active_session.mediaHandler.getLocalStreams === 'function') {
+			var local_streams = active_session.mediaHandler.getLocalStreams();
+			if (local_streams && local_streams.length > 0) {
+				local_stream = local_streams[0];
+			}
+		}
+	}
+
+	if (local_stream) {
+		if (local_video.srcObject !== local_stream) {
+			local_video.srcObject = local_stream;
+		}
+		var play_promise = local_video.play();
+		if (play_promise && typeof play_promise.catch === 'function') {
+			play_promise.catch(function() {});
+		}
+		return;
+	}
+
+	if (attempt < 10) {
+		setTimeout(function() {
+			ensure_local_video_preview(active_session, attempt + 1);
+		}, 200);
 	}
 }
 
@@ -1151,10 +1471,10 @@ function answer_audio(use_video) {
 // Answer incoming call with video (checks camera first)
 async function answer_video(use_video) {
 	if (arguments.length === 0) { use_video = true; }
-	// Check camera permissions first
+	// Check camera permissions and video support first
 	var has_camera = await check_camera_permissions();
 	if (!has_camera) {
-		alert('Camera access is not available.\n\nFalling back to audio call.\n\nThis phone app requires HTTPS to access your camera.');
+		show_temporary_status('Camera not available; answering with audio', 'fas fa-phone');
 		// Fall back to audio answer
 		answer_call(false);
 		return;
@@ -1208,6 +1528,9 @@ function answer_call(use_video) {
 		}
 	};
 	session.accept(answer_media);
+	if (use_video) {
+		ensure_local_video_preview(session);
+	}
 
 	// Show the or hide the panels
 	document.getElementById('dialpad').style.display = "none";
