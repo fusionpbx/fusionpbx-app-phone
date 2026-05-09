@@ -22,7 +22,7 @@ async function call_video() {
 	// Check camera permissions first
 	var has_camera = await check_camera_permissions();
 	if (!has_camera) {
-		alert('Camera access is not available.\n\nFalling back to audio call.\n\nThis phone app requires HTTPS to access your camera.\n\nMake sure:\n1. You are accessing this page via HTTPS\n2. Your browser has granted camera permissions');
+		show_temporary_status('Camera not available; calling with audio', 'fas fa-phone');
 		// Fall back to audio call
 		call_audio();
 		return;
@@ -355,6 +355,10 @@ function is_audio_action_muted_state() {
 	return audio_muted;
 }
 
+function is_firefox() {
+	return /firefox|fxios/i.test(navigator.userAgent);
+}
+
 async function apply_screen_share_audio_routing(enable_audio) {
 	if (!session || !session.mediaHandler || !session.mediaHandler.peerConnection) {
 		return false;
@@ -373,8 +377,16 @@ async function apply_screen_share_audio_routing(enable_audio) {
 	}
 
 	if (enable_audio) {
-		if (!screen_share_stream || screen_share_stream.getAudioTracks().length === 0) {
-			return false;
+		// Check if desktop audio is available
+		var has_audio_track = screen_share_stream && screen_share_stream.getAudioTracks().length > 0;
+
+		if (!has_audio_track) {
+			// Firefox doesn't support getDisplayMedia audio capture
+			if (is_firefox()) {
+				show_temporary_status('Firefox does not support screen audio; using microphone', 'fas fa-info-circle');
+				return true; // Continue with mic audio instead
+			}
+			return false; // Other browsers: no audio available
 		}
 
 		var screen_audio_track = screen_share_stream.getAudioTracks()[0];
@@ -404,7 +416,11 @@ async function toggle_screen_share_audio() {
 		try {
 			if (screen_share_audio_enabled) {
 				if (!screen_share_stream || screen_share_stream.getAudioTracks().length === 0) {
-					show_temporary_status('No share audio track; restart share with audio', 'fas fa-volume-mute');
+					if (!is_firefox()) {
+						show_temporary_status('No share audio track; restart share with audio', 'fas fa-volume-mute');
+					} else {
+						show_temporary_status('Firefox using microphone audio', 'fas fa-microphone');
+					}
 				}
 				else {
 					await apply_screen_share_audio_routing(true);
@@ -1411,10 +1427,10 @@ function answer_audio(use_video) {
 // Answer incoming call with video (checks camera first)
 async function answer_video(use_video) {
 	if (arguments.length === 0) { use_video = true; }
-	// Check camera permissions first
+	// Check camera permissions and video support first
 	var has_camera = await check_camera_permissions();
 	if (!has_camera) {
-		alert('Camera access is not available.\n\nFalling back to audio call.\n\nThis phone app requires HTTPS to access your camera.');
+		show_temporary_status('Camera not available; answering with audio', 'fas fa-phone');
 		// Fall back to audio answer
 		answer_call(false);
 		return;
