@@ -220,6 +220,7 @@ let original_video_track = null;  // Store original camera video track for resto
 let screen_share_sender = null;  // Store the RTCRtpSender used for screen share replacement
 let original_audio_track = null;  // Store original microphone track for restoration
 let screen_share_audio_sender = null;  // Store the audio RTCRtpSender during screen sharing
+let screen_share_audio_enabled = true;  // User toggle for sharing system/tab audio
 let audio_muted = false;
 let speaker_muted = false;
 
@@ -365,6 +366,75 @@ function is_audio_action_muted_state() {
 	return should_use_speaker_mute_mode() ? speaker_muted : audio_muted;
 }
 
+async function apply_screen_share_audio_routing(enable_audio) {
+	if (!session || !session.mediaHandler || !session.mediaHandler.peerConnection) {
+		return false;
+	}
+
+	var peer_connection = session.mediaHandler.peerConnection;
+	var audio_sender = screen_share_audio_sender;
+	if (!audio_sender) {
+		audio_sender = peer_connection.getSenders().find(function(sender) {
+			return sender.track && sender.track.kind === 'audio';
+		});
+	}
+
+	if (!audio_sender) {
+		return false;
+	}
+
+	if (enable_audio) {
+		if (!screen_share_stream || screen_share_stream.getAudioTracks().length === 0) {
+			return false;
+		}
+
+		var screen_audio_track = screen_share_stream.getAudioTracks()[0];
+		screen_share_audio_sender = audio_sender;
+		if (!original_audio_track && audio_sender.track && audio_sender.track.kind === 'audio') {
+			original_audio_track = audio_sender.track;
+		}
+
+		await audio_sender.replaceTrack(screen_audio_track);
+		return true;
+	}
+
+	await audio_sender.replaceTrack(original_audio_track || null);
+	return true;
+}
+
+async function toggle_screen_share_audio() {
+	screen_share_audio_enabled = !screen_share_audio_enabled;
+
+	if (!screen_share_audio_enabled) {
+		speaker_muted = false;
+		apply_speaker_mute_state(false);
+	}
+
+	if (is_screen_sharing) {
+		try {
+			if (screen_share_audio_enabled) {
+				if (!screen_share_stream || screen_share_stream.getAudioTracks().length === 0) {
+					show_temporary_status('No share audio track; restart share with audio', 'fas fa-volume-mute');
+				}
+				else {
+					await apply_screen_share_audio_routing(true);
+					show_temporary_status('Screen share audio enabled', 'fas fa-volume-up');
+				}
+			}
+			else {
+				await apply_screen_share_audio_routing(false);
+				show_temporary_status('Screen share audio disabled', 'fas fa-volume-mute');
+			}
+		}
+		catch (err) {
+			console.error('toggle_screen_share_audio: Failed to update audio routing:', err);
+			show_temporary_status('Unable to toggle share audio', 'fas fa-exclamation-circle');
+		}
+	}
+
+	sync_call_action_controls();
+}
+
 function sync_call_action_controls() {
 	var action_mute = document.getElementById('action_mute');
 	var action_hold = document.getElementById('action_hold');
@@ -428,6 +498,15 @@ function sync_call_action_controls() {
 			action_screen_share.classList.remove('action_item_share_active');
 		}
 	}
+
+	var action_screen_share_audio = document.getElementById('action_screen_share_audio');
+	var action_screen_share_audio_icon = document.getElementById('action_screen_share_audio_icon');
+	var action_screen_share_audio_label = document.getElementById('action_screen_share_audio_label');
+	if (action_screen_share_audio && action_screen_share_audio_icon && action_screen_share_audio_label) {
+		action_screen_share_audio_icon.className = screen_share_audio_enabled ? 'fas fa-volume-up' : 'fas fa-volume-mute';
+		action_screen_share_audio_label.textContent = screen_share_audio_enabled ? 'Share Aud' : 'No Aud';
+		action_screen_share_audio.classList.toggle('action_item_toggle_active', screen_share_audio_enabled);
+	}
 }
 
 function set_call_action_mode(enabled, use_video) {
@@ -437,6 +516,7 @@ function set_call_action_mode(enabled, use_video) {
 	var action_hold = document.getElementById('action_hold');
 	var action_video_mute = document.getElementById('action_video_mute');
 	var action_screen_share = document.getElementById('action_screen_share');
+	var action_screen_share_audio = document.getElementById('action_screen_share_audio');
 	var action_transfer = document.getElementById('action_transfer');
 	var action_keypad = document.getElementById('action_keypad');
 	var action_keypad_during_call = document.getElementById('action_keypad_during_call');
@@ -453,6 +533,10 @@ function set_call_action_mode(enabled, use_video) {
 	if (action_screen_share) {
 		// Screen share button only shown during video calls
 		action_screen_share.style.display = enabled && use_video ? 'flex' : 'none';
+	}
+	if (action_screen_share_audio) {
+		// Screen share audio toggle shown during video calls
+		action_screen_share_audio.style.display = enabled && use_video ? 'flex' : 'none';
 	}
 	if (action_transfer) {
 		action_transfer.style.display = enabled ? 'flex' : 'none';
@@ -534,11 +618,11 @@ async function start_screen_share() {
 
 		// Get screen share stream
 		screen_share_stream = await navigator.mediaDevices.getDisplayMedia({
-			audio: {
+			audio: screen_share_audio_enabled ? {
 				echoCancellation: false,
 				noiseSuppression: false,
 				autoGainControl: false
-			},
+			} : false,
 			video: {
 				cursor: "if-supported",
 				width: { ideal: 1280 },
@@ -609,23 +693,17 @@ async function start_screen_share() {
 				console.error('start_screen_share: No camera sender found in peer connection');
 			}
 
-			if (screen_share_audio_track) {
-				var mic_sender = senders.find(function(sender) {
-					return sender.track && sender.track.kind === 'audio';
-				});
-				if (mic_sender) {
-					screen_share_audio_sender = mic_sender;
-					if (mic_sender.track && mic_sender.track.kind === 'audio') {
-						original_audio_track = mic_sender.track;
-					}
-					mic_sender.replaceTrack(screen_share_audio_track).then(function() {
+			if (screen_share_audio_enabled && screen_share_audio_track) {
+				apply_screen_share_audio_routing(true).then(function(applied) {
+					if (applied) {
 						console.log('start_screen_share: Audio track replaced successfully');
-					}).catch(function(err) {
-						console.error('start_screen_share: Error replacing audio track:', err);
-					});
-				} else {
-					console.warn('start_screen_share: No microphone sender found for share audio');
-				}
+					}
+					else {
+						console.warn('start_screen_share: No microphone sender found for share audio');
+					}
+				}).catch(function(err) {
+					console.error('start_screen_share: Error replacing audio track:', err);
+				});
 			}
 		} else {
 			console.error('start_screen_share: No peer connection found!');
