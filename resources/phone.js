@@ -1868,11 +1868,11 @@ function toggle_settings() {
 
 	if (settings_panel.style.display === 'flex') {
 		settings_panel.style.display = 'none';
-		action_settings.classList.remove('active');
+		update_action_bar_state(null);  // Clear all active states
 	} else {
 		hide_all_panels();
 		settings_panel.style.display = 'flex';
-		action_settings.classList.add('active');
+		update_action_bar_state('settings');  // Set settings as active
 	}
 }
 
@@ -2355,6 +2355,8 @@ function update_action_bar_state(active_panel) {
 		document.getElementById('action_history').classList.add('active');
 	} else if (active_panel === 'messages' || active_panel === 'conversation') {
 		document.getElementById('action_messages').classList.add('active');
+	} else if (active_panel === 'settings') {
+		document.getElementById('action_settings').classList.add('active');
 	}
 }
 
