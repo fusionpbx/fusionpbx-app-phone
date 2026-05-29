@@ -371,6 +371,12 @@ let original_audio_track = null;  // Store original audio track for restoration
 let selected_audio_input_device_id = '';
 let is_chromium_browser = false;
 
+// Ringback sound selection (for outgoing calls ringing)
+let selected_ringback_sound = 'default.mp3';
+
+// Ringtone selection (for incoming calls ringing)
+let selected_ringtone = 'default.mp3';
+
 // Check if browser is Chrome/Chromium-based
 function check_chromium_browser() {
 	var ua = navigator.userAgent;
@@ -460,6 +466,210 @@ async function enumerate_audio_devices() {
 	// Restore the selected device
 	if (selected_audio_input_device_id) {
 		select.value = selected_audio_input_device_id;
+	}
+}
+
+// Enumerate and populate ringback sounds from directory
+async function enumerate_ringback_sounds() {
+	var select = document.getElementById('ringback_select');
+	if (!select) {
+		return;
+	}
+	
+	// Clear existing options, keep default
+	select.innerHTML = '<option value="default.mp3">Default</option>';
+	
+	try {
+		var response = await fetch('resources/ringback_list.php');
+		var sounds = await response.json();
+		
+		sounds.forEach(function(sound) {
+			// Skip default as it's already added
+			if (sound.value === 'default.mp3') {
+				return;
+			}
+			
+			var option = document.createElement('option');
+			option.value = sound.value;
+			option.textContent = sound.text;
+			select.appendChild(option);
+		});
+		
+		console.log('enumerate_ringback_sounds: Loaded', sounds.length, 'ringback sounds');
+	} catch (err) {
+		console.warn('Could not enumerate ringback sounds:', err);
+	}
+	
+	// Restore selected ringback if previously set
+	if (selected_ringback_sound && select.value !== selected_ringback_sound) {
+		select.value = selected_ringback_sound;
+	}
+}
+
+// Enumerate and populate ringtones from directory
+async function enumerate_ringtones() {
+	var select = document.getElementById('ringtone_select');
+	if (!select) {
+		return;
+	}
+	
+	// Clear existing options, keep default
+	select.innerHTML = '<option value="default.mp3">Default</option>';
+	
+	try {
+		var response = await fetch('resources/ringtone_list.php');
+		var ringtones = await response.json();
+		
+		ringtones.forEach(function(ringtone) {
+			// Skip default as it's already added
+			if (ringtone.value === 'default.mp3') {
+				return;
+			}
+			
+			var option = document.createElement('option');
+			option.value = ringtone.value;
+			option.textContent = ringtone.text;
+			select.appendChild(option);
+		});
+		
+		console.log('enumerate_ringtones: Loaded', ringtones.length, 'ringtones');
+	} catch (err) {
+		console.warn('Could not enumerate ringtones:', err);
+	}
+	
+	// Restore selected ringtone if previously set
+	if (selected_ringtone && select.value !== selected_ringtone) {
+		select.value = selected_ringtone;
+	}
+}
+
+// Update ringback sound source based on selected ringback
+function update_ringback_source(sound_file) {
+	var ringback = document.getElementById('ringback');
+	if (ringback && ringback.querySelector('source')) {
+		var source = ringback.querySelector('source');
+		var ext = sound_file.split('.').pop().toLowerCase();
+		var mime_type = (ext === 'wav') ? 'audio/wav' : 'audio/mpeg';
+		source.src = 'resources/sounds/ringback/' + sound_file;
+		source.type = mime_type;
+		ringback.load();  // Reload the audio element with new source
+		console.log('update_ringback_source: Updated to', sound_file);
+	}
+}
+
+// Update ringtone sound source based on selected ringtone
+function update_ringtone_source(sound_file) {
+	var ringtone = document.getElementById('ringtone');
+	if (ringtone && ringtone.querySelector('source')) {
+		var source = ringtone.querySelector('source');
+		var ext = sound_file.split('.').pop().toLowerCase();
+		var mime_type = (ext === 'wav') ? 'audio/wav' : 'audio/mpeg';
+		source.src = 'resources/sounds/ringtones/' + sound_file;
+		source.type = mime_type;
+		ringtone.load();  // Reload the audio element with new source
+		console.log('update_ringtone_source: Updated to', sound_file);
+	}
+}
+
+// Update audio input device for the current call
+async function enumerate_ringback_sounds() {
+	var select = document.getElementById('ringback_select');
+	if (!select) {
+		return;
+	}
+	
+	// Clear existing options, keep default
+	select.innerHTML = '<option value="default.mp3">Default</option>';
+	
+	try {
+		var response = await fetch('resources/ringback_list.php');
+		var sounds = await response.json();
+		
+		sounds.forEach(function(sound) {
+			// Skip default as it's already added
+			if (sound.value === 'default.mp3') {
+				return;
+			}
+			
+			var option = document.createElement('option');
+			option.value = sound.value;
+			option.textContent = sound.text;
+			select.appendChild(option);
+		});
+		
+		console.log('enumerate_ringback_sounds: Loaded', sounds.length, 'ringback sounds');
+	} catch (err) {
+		console.warn('Could not enumerate ringback sounds:', err);
+	}
+	
+	// Restore selected ringback if previously set
+	if (selected_ringback_sound && select.value !== selected_ringback_sound) {
+		select.value = selected_ringback_sound;
+	}
+}
+
+// Enumerate and populate ringtones from directory
+async function enumerate_ringtones() {
+	var select = document.getElementById('ringtone_select');
+	if (!select) {
+		return;
+	}
+	
+	// Clear existing options, keep default
+	select.innerHTML = '<option value="default.mp3">Default</option>';
+	
+	try {
+		var response = await fetch('resources/ringtone_list.php');
+		var ringtones = await response.json();
+		
+		ringtones.forEach(function(ringtone) {
+			// Skip default as it's already added
+			if (ringtone.value === 'default.mp3') {
+				return;
+			}
+			
+			var option = document.createElement('option');
+			option.value = ringtone.value;
+			option.textContent = ringtone.text;
+			select.appendChild(option);
+		});
+		
+		console.log('enumerate_ringtones: Loaded', ringtones.length, 'ringtones');
+	} catch (err) {
+		console.warn('Could not enumerate ringtones:', err);
+	}
+	
+	// Restore selected ringtone if previously set
+	if (selected_ringtone && select.value !== selected_ringtone) {
+		select.value = selected_ringtone;
+	}
+}
+
+// Update ringback sound source based on selected ringback
+function update_ringback_source(sound_file) {
+	var ringback = document.getElementById('ringback');
+	if (ringback && ringback.querySelector('source')) {
+		var source = ringback.querySelector('source');
+		var ext = sound_file.split('.').pop().toLowerCase();
+		var mime_type = (ext === 'wav') ? 'audio/wav' : 'audio/mpeg';
+		source.src = 'resources/sounds/ringback/' + sound_file;
+		source.type = mime_type;
+		ringback.load();  // Reload the audio element with new source
+		console.log('update_ringback_source: Updated to', sound_file);
+	}
+}
+
+// Update ringtone sound source based on selected ringtone
+function update_ringtone_source(sound_file) {
+	var ringtone = document.getElementById('ringtone');
+	if (ringtone && ringtone.querySelector('source')) {
+		var source = ringtone.querySelector('source');
+		var ext = sound_file.split('.').pop().toLowerCase();
+		var mime_type = (ext === 'wav') ? 'audio/wav' : 'audio/mpeg';
+		source.src = 'resources/sounds/ringtones/' + sound_file;
+		source.type = mime_type;
+		ringtone.load();  // Reload the audio element with new source
+		console.log('update_ringtone_source: Updated to', sound_file);
 	}
 }
 
@@ -626,6 +836,12 @@ function stop_call_tone() {
 		ringtone.pause();
 		ringtone.currentTime = 0;
 	}
+	
+	const ringback = document.getElementById('ringback');
+	if (ringback) {
+		ringback.pause();
+		ringback.currentTime = 0;
+	}
 
 	if (call_tone_timeout) {
 		clearTimeout(call_tone_timeout);
@@ -694,20 +910,40 @@ function start_call_tone(mode) {
 	stop_call_tone();
 	active_call_tone_mode = mode;
 
-	const ringtone = document.getElementById('ringtone');
-	if (ringtone && ringtone.querySelector('source')) {
-		ringtone.loop = true;
-		const play_promise = ringtone.play();
-		if (play_promise && typeof play_promise.catch === 'function') {
-			play_promise.catch(function() {
-				stop_call_tone();
-				active_call_tone_mode = mode;
-				play_generated_tone(mode);
-			});
+	// For outgoing calls, play the selected ringback sound
+	if (mode === 'outgoing') {
+		const ringback = document.getElementById('ringback');
+		if (ringback && ringback.querySelector('source')) {
+			ringback.loop = true;
+			const play_promise = ringback.play();
+			if (play_promise && typeof play_promise.catch === 'function') {
+				play_promise.catch(function() {
+					stop_call_tone();
+					active_call_tone_mode = mode;
+					play_generated_tone(mode);
+				});
+			}
+			return;
 		}
-		return;
+	}
+	// For incoming calls, play the selected ringtone
+	else if (mode === 'incoming') {
+		const ringtone = document.getElementById('ringtone');
+		if (ringtone && ringtone.querySelector('source')) {
+			ringtone.loop = true;
+			const play_promise = ringtone.play();
+			if (play_promise && typeof play_promise.catch === 'function') {
+				play_promise.catch(function() {
+					stop_call_tone();
+					active_call_tone_mode = mode;
+					play_generated_tone(mode);
+				});
+			}
+			return;
+		}
 	}
 
+	// If neither sound is available or unsupported mode, use generated tone
 	play_generated_tone(mode);
 }
 
@@ -2916,6 +3152,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
 	// Initialize audio device enumeration and populate the dropdown
 	enumerate_audio_devices();
+	
+	// Initialize ringback sound enumeration and populate the dropdown
+	enumerate_ringback_sounds();
+	
+	// Initialize ringtone enumeration and populate the dropdown
+	enumerate_ringtones();
 
 	// Add change event listener to audio input device selector
 	var audio_input_select = document.getElementById('audio_input_select');
@@ -2931,6 +3173,26 @@ document.addEventListener('DOMContentLoaded', function() {
 				console.log('audio_input_select: Active call detected, updating audio input device');
 				update_audio_input_device(device_id);
 			}
+		});
+	}
+	
+	// Add change event listener to ringback selector
+	var ringback_select = document.getElementById('ringback_select');
+	if (ringback_select) {
+		ringback_select.addEventListener('change', function() {
+			selected_ringback_sound = this.value;
+			update_ringback_source(selected_ringback_sound);
+			console.log('ringback_select: Ringback changed to:', selected_ringback_sound);
+		});
+	}
+	
+	// Add change event listener to ringtone selector
+	var ringtone_select = document.getElementById('ringtone_select');
+	if (ringtone_select) {
+		ringtone_select.addEventListener('change', function() {
+			selected_ringtone = this.value;
+			update_ringtone_source(selected_ringtone);
+			console.log('ringtone_select: Ringtone changed to:', selected_ringtone);
 		});
 	}
 

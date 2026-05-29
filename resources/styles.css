@@ -914,6 +914,112 @@ body.audio_call_mode #active .dialpad_wrapper {
 	color: #fff;
 }
 
+/* Ringback Selector Styles */
+.ringback_selector_container {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	background: rgba(0, 0, 0, 0.5);
+	border-radius: 8px;
+	margin: 8px auto;
+	max-width: 460px;
+	width: 92%;
+	justify-content: center;
+}
+
+.ringback_select {
+	background: rgba(60, 60, 60, 0.9);
+	border: 2px solid #444;
+	color: #fff;
+	border-radius: 6px;
+	padding: 6px 10px;
+	font-size: 12px;
+	outline: none;
+	cursor: pointer;
+	min-width: 180px;
+}
+
+.ringback_select:hover {
+	border-color: #1E90FF;
+}
+
+.ringback_select:focus {
+	border-color: #1eba00;
+}
+
+.ringback_select option {
+	background: #1a1a2e;
+	color: #fff;
+}
+
+.ringback_label {
+	font-size: 12px;
+	color: #ccc;
+	white-space: nowrap;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.ringback_label i {
+	font-size: 14px;
+	color: #ccc;
+}
+
+/* Ringtone Selector Styles */
+.ringtone_selector_container {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	background: rgba(0, 0, 0, 0.5);
+	border-radius: 8px;
+	margin: 8px auto;
+	max-width: 460px;
+	width: 92%;
+	justify-content: center;
+}
+
+.ringtone_select {
+	background: rgba(60, 60, 60, 0.9);
+	border: 2px solid #444;
+	color: #fff;
+	border-radius: 6px;
+	padding: 6px 10px;
+	font-size: 12px;
+	outline: none;
+	cursor: pointer;
+	min-width: 180px;
+}
+
+.ringtone_select:hover {
+	border-color: #1E90FF;
+}
+
+.ringtone_select:focus {
+	border-color: #1eba00;
+}
+
+.ringtone_select option {
+	background: #1a1a2e;
+	color: #fff;
+}
+
+.ringtone_label {
+	font-size: 12px;
+	color: #ccc;
+	white-space: nowrap;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.ringtone_label i {
+	font-size: 14px;
+	color: #ccc;
+}
+
 /* Settings Panel Styles */
 .settings_panel {
 	position: fixed;

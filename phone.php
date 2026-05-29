@@ -103,9 +103,14 @@ echo "			<video id='local_video' class='local_video' autoplay playsinline muted>
 echo "		</div>\n";
 echo "	</div>\n";
 
+//define the audio ringback
+echo "	<audio id='ringback' preload='auto'>\n";
+echo "		<source src='resources/sounds/ringback/default.mp3' type='audio/mpeg' loop='loop' />\n";
+echo "	</audio>\n";
+
 //define the audio ringtone
 echo "	<audio id='ringtone' preload='auto'>\n";
-echo "		<source src='resources/ringtones/ringtone.mp3' type='audio/mpeg' loop='loop' />\n";
+echo "		<source src='resources/sounds/ringtones/default.mp3' type='audio/mpeg' loop='loop' />\n";
 echo "	</audio>\n";
 
 //audio or video objects need to be initialized before phone.js
@@ -235,6 +240,18 @@ echo "			<div class='audio_device_selector_container'>\n";
 echo "				<label for='audio_input_select' class='audio_device_label'><i class='fas fa-microphone'></i> Audio Input:</label>\n";
 echo "				<select id='audio_input_select' class='audio_device_select'>\n";
 echo "					<option value=''>Default Device</option>\n";
+echo "				</select>\n";
+echo "			</div>\n";
+echo "			<div class='ringback_selector_container'>\n";
+echo "				<label for='ringback_select' class='ringback_label'><i class='fas fa-bell'></i> Ringback:</label>\n";
+echo "				<select id='ringback_select' class='ringback_select'>\n";
+echo "					<option value='default.mp3'>Default</option>\n";
+echo "				</select>\n";
+echo "			</div>\n";
+echo "			<div class='ringtone_selector_container'>\n";
+echo "				<label for='ringtone_select' class='ringtone_label'><i class='fas fa-bell'></i> Ringtone:</label>\n";
+echo "				<select id='ringtone_select' class='ringtone_select'>\n";
+echo "					<option value='default.mp3'>Default</option>\n";
 echo "				</select>\n";
 echo "			</div>\n";
 echo "		</div>\n";
