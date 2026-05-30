@@ -904,20 +904,24 @@ function play_generated_tone(mode) {
 
 function start_call_tone(mode) {
 	if (active_call_tone_mode === mode) {
+		console.log('start_call_tone: Already playing mode:', mode, '- returning early');
 		return;
 	}
 
+	console.log('start_call_tone: Called with mode:', mode);
 	stop_call_tone();
 	active_call_tone_mode = mode;
 
 	// For outgoing calls, play the selected ringback sound
 	if (mode === 'outgoing') {
+		console.log('start_call_tone: Playing RINGBACK for outgoing call');
 		const ringback = document.getElementById('ringback');
 		if (ringback && ringback.querySelector('source')) {
 			ringback.loop = true;
 			const play_promise = ringback.play();
 			if (play_promise && typeof play_promise.catch === 'function') {
-				play_promise.catch(function() {
+				play_promise.catch(function(err) {
+					console.log('start_call_tone: Ringback play failed:', err, '- falling back to generated tone');
 					stop_call_tone();
 					active_call_tone_mode = mode;
 					play_generated_tone(mode);
@@ -925,15 +929,18 @@ function start_call_tone(mode) {
 			}
 			return;
 		}
+		console.log('start_call_tone: Ringback element not found - using generated tone');
 	}
 	// For incoming calls, play the selected ringtone
 	else if (mode === 'incoming') {
+		console.log('start_call_tone: Playing RINGTONE for incoming call');
 		const ringtone = document.getElementById('ringtone');
 		if (ringtone && ringtone.querySelector('source')) {
 			ringtone.loop = true;
 			const play_promise = ringtone.play();
 			if (play_promise && typeof play_promise.catch === 'function') {
-				play_promise.catch(function() {
+				play_promise.catch(function(err) {
+					console.log('start_call_tone: Ringtone play failed:', err, '- falling back to generated tone');
 					stop_call_tone();
 					active_call_tone_mode = mode;
 					play_generated_tone(mode);
@@ -941,9 +948,11 @@ function start_call_tone(mode) {
 			}
 			return;
 		}
+		console.log('start_call_tone: Ringtone element not found - using generated tone');
 	}
 
 	// If neither sound is available or unsupported mode, use generated tone
+	console.log('start_call_tone: Using generated tone for mode:', mode);
 	play_generated_tone(mode);
 }
 
@@ -1588,7 +1597,8 @@ var config = {
 	authorizationUser: '<?php echo $user_extension; ?>',
 	password: atob('<?php echo base64_encode($user_password); ?>'),
 	registerExpires: 120,
-	displayName: "<?php echo $user_extension; ?>"
+	displayName: "<?php echo $user_extension; ?>",
+	autoRingback: false  // Disable auto ringback to prevent duplicate audio on inbound calls
 };
 
 user_agent = new SIP.UA(config);
@@ -1923,8 +1933,12 @@ async function get_media_options(use_video) {
 
 // Answer
 user_agent.on('invite', function (s) {
+	console.log('INVITE received - incoming call from:', s.remoteIdentity);
+	console.log('INVITE remoteIdentity:', s.remoteIdentity);
+	console.log('INVITE uri_user:', s.remoteIdentity ? s.remoteIdentity.uri.user : 'N/A');
 
 	if (is_session_active()) {
+		console.log('INVITE: Rejecting - session already active');
 		s.reject();
 		return;
 	}
