@@ -55,17 +55,18 @@ $search_width = $settings->get('phone', 'search_width', '');
 $search_height = $settings->get('phone', 'search_height', '');
 
 //get the user ID
-$sql = "SELECT d.domain_name,e.extension,e.password FROM ";
-$sql .= "v_extension_users as t, v_extensions as e, v_users as u, v_domains as d ";
+$sql = "SELECT d.domain_name,e.extension,e.password ";
+$sql .= "FROM v_extension_users as t, v_extensions as e, v_users as u, v_domains as d ";
 $sql .= "WHERE u.user_uuid = t.user_uuid ";
 $sql .= "AND e.extension_uuid = t.extension_uuid ";
 $sql .= "AND e.domain_uuid = d.domain_uuid ";
-$sql .= "AND u.user_uuid = '" . $user_uuid . "' ";
-$sql .= "AND e.domain_uuid = '" . $domain_uuid . "' LIMIT 1";
-$prep_statement = $db->prepare($sql);
-if ($prep_statement) {
-	$prep_statement->execute();
-	$row = $prep_statement->fetch(PDO::FETCH_ASSOC);
+$sql .= "AND u.user_uuid = :user_uuid ";
+$sql .= "AND e.domain_uuid = :domain_uuid ";
+$sql .= "LIMIT 1 ";
+$parameters['domain_uuid'] = $domain_uuid;
+$parameters['user_uuid'] = $user_uuid;
+$row = $database->select($sql, $parameters ?? null, 'row');
+if ($row) {
 	$domain_name = $row['domain_name'];
 	$user_extension = $row['extension'];
 	$user_password = $row['password'];
