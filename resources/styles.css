@@ -206,6 +206,7 @@ video::-webkit-media-controls-start-playback-button {
 	flex-direction: column;
 	justify-content: center;
 	align-items: center;
+	gap: 2px; /* modern way to space children vs <br> */
 	background: rgba(0, 0, 0, 0.6);
 	color: #fff;
 	border-radius: 15px;
@@ -368,7 +369,7 @@ sup {
 	background: rgba(0, 0, 0, 0.9);
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(56px, 1fr));
-	gap: 2px;
+	gap: 5px;
 	align-items: center;
 	justify-items: center;
 	padding: 2px 8px;
@@ -379,8 +380,8 @@ sup {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 1px;
-	padding: 4px 6px;
+	gap: 3px;
+	padding: 4px 6px 3px 3px;
 	cursor: pointer;
 	-webkit-user-select: none;
 	-moz-user-select: none;

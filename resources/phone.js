@@ -199,7 +199,7 @@ async function send_call(use_video) {
 			document.getElementById('active_caller_id').innerHTML = "<div>" + sanitize_string(session.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>" + video_indicator;
 
 			// Show or hide the panels
-			document.getElementById('dialpad').style.display = "none";
+			//document.getElementById('dialpad').style.display = "none";
 			document.getElementById('ringing').style.display = "none";
 			document.getElementById('active').style.display = "grid";
 
@@ -294,7 +294,7 @@ async function send_call(use_video) {
 	document.getElementById('active_caller_id').innerHTML = "<div>" + sanitize_string(session.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>" + video_indicator;
 
 	// Show or hide the panels
-	document.getElementById('dialpad').style.display = "none";
+	//document.getElementById('dialpad').style.display = "none";
 	document.getElementById('ringing').style.display = "none";
 	document.getElementById('active').style.display = "grid";
 
@@ -352,7 +352,6 @@ let active_call_display_name = '';
 let active_call_number = '';
 let current_history_entry_id = null;  // Track current call's history entry for duration update
 let current_conversation_partner = null;  // Current active conversation partner
-let dtmf_keypad_shown = false;  // Track if DTMF keypad is visible
 let dtmf_display_timer = null;  // Timer for clearing DTMF display
 let dtmf_flush_timer = null;  // Timer for auto-flushing DTMF buffer
 let dtmf_buffer = '';  // Buffer for DTMF digits (to send as batch)
@@ -475,31 +474,31 @@ async function enumerate_ringback_sounds() {
 	if (!select) {
 		return;
 	}
-	
+
 	// Clear existing options, keep default
 	select.innerHTML = '<option value="default.mp3">Default</option>';
-	
+
 	try {
 		var response = await fetch('resources/ringback_list.php');
 		var sounds = await response.json();
-		
+
 		sounds.forEach(function(sound) {
 			// Skip default as it's already added
 			if (sound.value === 'default.mp3') {
 				return;
 			}
-			
+
 			var option = document.createElement('option');
 			option.value = sound.value;
 			option.textContent = sound.text;
 			select.appendChild(option);
 		});
-		
+
 		console.log('enumerate_ringback_sounds: Loaded', sounds.length, 'ringback sounds');
 	} catch (err) {
 		console.warn('Could not enumerate ringback sounds:', err);
 	}
-	
+
 	// Restore selected ringback if previously set
 	if (selected_ringback_sound && select.value !== selected_ringback_sound) {
 		select.value = selected_ringback_sound;
@@ -512,31 +511,31 @@ async function enumerate_ringtones() {
 	if (!select) {
 		return;
 	}
-	
+
 	// Clear existing options, keep default
 	select.innerHTML = '<option value="default.mp3">Default</option>';
-	
+
 	try {
 		var response = await fetch('resources/ringtone_list.php');
 		var ringtones = await response.json();
-		
+
 		ringtones.forEach(function(ringtone) {
 			// Skip default as it's already added
 			if (ringtone.value === 'default.mp3') {
 				return;
 			}
-			
+
 			var option = document.createElement('option');
 			option.value = ringtone.value;
 			option.textContent = ringtone.text;
 			select.appendChild(option);
 		});
-		
+
 		console.log('enumerate_ringtones: Loaded', ringtones.length, 'ringtones');
 	} catch (err) {
 		console.warn('Could not enumerate ringtones:', err);
 	}
-	
+
 	// Restore selected ringtone if previously set
 	if (selected_ringtone && select.value !== selected_ringtone) {
 		select.value = selected_ringtone;
@@ -577,31 +576,31 @@ async function enumerate_ringback_sounds() {
 	if (!select) {
 		return;
 	}
-	
+
 	// Clear existing options, keep default
 	select.innerHTML = '<option value="default.mp3">Default</option>';
-	
+
 	try {
 		var response = await fetch('resources/ringback_list.php');
 		var sounds = await response.json();
-		
+
 		sounds.forEach(function(sound) {
 			// Skip default as it's already added
 			if (sound.value === 'default.mp3') {
 				return;
 			}
-			
+
 			var option = document.createElement('option');
 			option.value = sound.value;
 			option.textContent = sound.text;
 			select.appendChild(option);
 		});
-		
+
 		console.log('enumerate_ringback_sounds: Loaded', sounds.length, 'ringback sounds');
 	} catch (err) {
 		console.warn('Could not enumerate ringback sounds:', err);
 	}
-	
+
 	// Restore selected ringback if previously set
 	if (selected_ringback_sound && select.value !== selected_ringback_sound) {
 		select.value = selected_ringback_sound;
@@ -614,31 +613,31 @@ async function enumerate_ringtones() {
 	if (!select) {
 		return;
 	}
-	
+
 	// Clear existing options, keep default
 	select.innerHTML = '<option value="default.mp3">Default</option>';
-	
+
 	try {
 		var response = await fetch('resources/ringtone_list.php');
 		var ringtones = await response.json();
-		
+
 		ringtones.forEach(function(ringtone) {
 			// Skip default as it's already added
 			if (ringtone.value === 'default.mp3') {
 				return;
 			}
-			
+
 			var option = document.createElement('option');
 			option.value = ringtone.value;
 			option.textContent = ringtone.text;
 			select.appendChild(option);
 		});
-		
+
 		console.log('enumerate_ringtones: Loaded', ringtones.length, 'ringtones');
 	} catch (err) {
 		console.warn('Could not enumerate ringtones:', err);
 	}
-	
+
 	// Restore selected ringtone if previously set
 	if (selected_ringtone && select.value !== selected_ringtone) {
 		select.value = selected_ringtone;
@@ -691,9 +690,9 @@ async function update_audio_input_device(device_id) {
 	if (typeof session.mediaHandler.getLocalStreams === 'function') {
 		localStreams = session.mediaHandler.getLocalStreams();
 	}
-	
+
 	console.log('update_audio_input_device: Local streams via getLocalStreams():', localStreams ? localStreams.length : 'N/A');
-	
+
 	if (!localStreams || localStreams.length === 0) {
 		// Fallback: check if there's a direct localStream property (some SIP.js versions)
 		if (session.mediaHandler.localStream) {
@@ -774,7 +773,7 @@ async function update_audio_input_device(device_id) {
 
 		// Standard audio device selection
 		console.log('update_audio_input_device: Getting new stream with deviceId:', device_id);
-		
+
 		var new_constraints = {
 			audio: {
 				echoCancellation: true,
@@ -794,12 +793,12 @@ async function update_audio_input_device(device_id) {
 		var new_stream = await navigator.mediaDevices.getUserMedia(new_constraints);
 		console.log('update_audio_input_device: New stream obtained');
 		console.log('update_audio_input_device: New stream audio tracks:', new_stream.getAudioTracks().length);
-		
+
 		if (new_stream.getAudioTracks().length === 0) {
 			console.error('update_audio_input_device: New stream has no audio tracks');
 			return;
 		}
-		
+
 		new_audio_track = new_stream.getAudioTracks()[0];
 		console.log('update_audio_input_device: New audio track ID:', new_audio_track.id);
 		console.log('update_audio_input_device: New audio track label:', new_audio_track.label);
@@ -836,7 +835,7 @@ function stop_call_tone() {
 		ringtone.pause();
 		ringtone.currentTime = 0;
 	}
-	
+
 	const ringback = document.getElementById('ringback');
 	if (ringback) {
 		ringback.pause();
@@ -1053,15 +1052,20 @@ function sync_call_action_controls() {
 function set_call_action_mode(enabled, use_video) {
 	document.body.classList.toggle('audio_call_mode', enabled && !use_video);
 
+	var action_history = document.getElementById('action_history');
 	var action_mute = document.getElementById('action_mute');
 	var action_hold = document.getElementById('action_hold');
 	var action_video_mute = document.getElementById('action_video_mute');
 	var action_screen_share = document.getElementById('action_screen_share');
 	var action_transfer = document.getElementById('action_transfer');
+	var action_btransfer = document.getElementById('action_btransfer');
 	var action_settings = document.getElementById('action_settings');
 	var action_keypad = document.getElementById('action_keypad');
 	var action_keypad_during_call = document.getElementById('action_keypad_during_call');
 
+	if (action_history) {
+		action_history.style.display = enabled ? 'none' : 'flex';
+	}
 	if (action_mute) {
 		action_mute.style.display = enabled ? 'flex' : 'none';
 	}
@@ -1078,14 +1082,17 @@ function set_call_action_mode(enabled, use_video) {
 	if (action_transfer) {
 		action_transfer.style.display = enabled ? 'flex' : 'none';
 	}
+	if (action_btransfer) {
+		action_btransfer.style.display = enabled ? 'flex' : 'none';
+	}
 	// Settings button always visible
 	// Toggle dialpad icon (shown when not in call) vs keypad icon (shown during call)
-	if (action_keypad) {
-		action_keypad.style.display = enabled ? 'none' : 'flex';
-	}
-	if (action_keypad_during_call) {
-		action_keypad_during_call.style.display = enabled ? 'flex' : 'none';
-	}
+	// if (action_keypad) {
+	// 	action_keypad.style.display = enabled ? 'none' : 'flex';
+	// }
+	// if (action_keypad_during_call) {
+	// 	action_keypad_during_call.style.display = enabled ? 'flex' : 'none';
+	// }
 
 	if (enabled) {
 		sync_call_action_controls();
@@ -1160,11 +1167,11 @@ async function start_screen_share() {
 			if (!localStreams || localStreams.length === 0) {
 				localStreams = session.mediaHandler.localStream ? [session.mediaHandler.localStream] : null;
 			}
-			
+
 			if (localStreams && localStreams.length > 0) {
 				var localStream = localStreams[0];
 				var audioTracks = localStream.getAudioTracks();
-				
+
 				if (audioTracks.length > 0) {
 					original_audio_track = audioTracks[0];
 					console.log('start_screen_share: Stored original audio track:', original_audio_track.id);
@@ -1207,7 +1214,7 @@ async function start_screen_share() {
 			if (session && session.mediaHandler && session.mediaHandler.peerConnection) {
 				var senders = session.mediaHandler.peerConnection.getSenders();
 				var audio_sender = null;
-				
+
 				for (var i = 0; i < senders.length; i++) {
 					if (senders[i].track && senders[i].track.kind === 'audio') {
 						audio_sender = senders[i];
@@ -1218,7 +1225,7 @@ async function start_screen_share() {
 				if (audio_sender) {
 					await audio_sender.replaceTrack(tab_audio_track);
 					console.log('start_screen_share: Replaced audio track with tab audio');
-					
+
 					// Also update the local stream
 					if (session.mediaHandler.localStream) {
 						var audioTracks = session.mediaHandler.localStream.getAudioTracks();
@@ -1325,18 +1332,18 @@ async function stop_screen_share() {
 		console.log('stop_screen_share: Stopping tab audio stream');
 		tab_audio_stream.getTracks().forEach(track => track.stop());
 		tab_audio_stream = null;
-		
+
 		// Restore original audio track
 		if (session && session.mediaHandler) {
 			var localStreams = session.mediaHandler.getLocalStreams ? session.mediaHandler.getLocalStreams() : null;
 			if (!localStreams || localStreams.length === 0) {
 				localStreams = session.mediaHandler.localStream ? [session.mediaHandler.localStream] : null;
 			}
-			
+
 			if (localStreams && localStreams.length > 0) {
 				var localStream = localStreams[0];
 				var audioTracks = localStream.getAudioTracks();
-				
+
 				if (original_audio_track && original_audio_track.readyState !== 'ended') {
 					// Remove old audio track and add original
 					for (var i = 0; i < audioTracks.length; i++) {
@@ -1346,7 +1353,7 @@ async function stop_screen_share() {
 						}
 					}
 					localStream.addTrack(original_audio_track);
-					
+
 					// Replace in peer connection
 					var senders = session.mediaHandler.peerConnection.getSenders();
 					for (var j = 0; j < senders.length; j++) {
@@ -1359,7 +1366,7 @@ async function stop_screen_share() {
 				}
 			}
 		}
-		
+
 		tab_audio_track_id = null;
 		original_audio_track = null;
 	}
@@ -1661,8 +1668,6 @@ function reset_call_ui_state(show_dialpad) {
 	document.getElementById('dialpad').style.display = show_dialpad ? "flex" : "none";
 	document.getElementById('ringing').style.display = "none";
 	document.getElementById('active').style.display = "none";
-	document.getElementById('dtmf_keypad').style.display = "none";
-	dtmf_keypad_shown = false;
 	if (dtmf_display_timer) {
 		clearTimeout(dtmf_display_timer);
 		dtmf_display_timer = null;
@@ -2047,13 +2052,13 @@ user_agent.on('message', function (message) {
 
 	// If in an active conversation with this partner, refresh the view
 	if (document.getElementById('conversation').style.display === 'flex' &&
-	    current_conversation_partner === partner_number) {
+		current_conversation_partner === partner_number) {
 		render_conversation(partner_number);
 	}
 
 	// Show notification if not in messages
 	if (document.getElementById('messages').style.display !== 'flex' &&
-	    document.getElementById('conversation').style.display !== 'flex') {
+		document.getElementById('conversation').style.display !== 'flex') {
 		show_temporary_status('New message from ' + partner_number, 'fas fa-comment');
 	}
 });
@@ -2258,7 +2263,7 @@ async function answer_call(use_video) {
 	}
 
 	// Show the or hide the panels
-	document.getElementById('dialpad').style.display = "none";
+	//document.getElementById('dialpad').style.display = "none";
 	document.getElementById('ringing').style.display = "none";
 	document.getElementById('active').style.display = "grid";
 	document.getElementById('destination').value = '';
@@ -2306,31 +2311,36 @@ function pad(number, length) {
 // Navigation functions to show different panels
 function hide_all_panels() {
   document.getElementById('dialpad').style.display = 'none';
-  //document.getElementById('keypad').style.display = 'none';
   document.getElementById('contacts').style.display = 'none';
   document.getElementById('history').style.display = 'none';
   document.getElementById('messages').style.display = 'none';
   document.getElementById('conversation').style.display = 'none';
   document.getElementById('ringing').style.display = 'none';
   document.getElementById('active').style.display = 'none';
-  document.getElementById('dtmf_keypad').style.display = 'none';
   document.getElementById('settings_panel').style.display = 'none';
-  dtmf_keypad_shown = false;
 }
 
 function show_dialpad() {
-	// Check if dialpad is currently shown (and not in a call)
+	// Get the dialpad
 	var dialpad = document.getElementById('dialpad');
-	if (dialpad.style.display === 'grid' && !is_session_active()) {
-		// Hide the dialpad
-		dialpad.style.display = 'none';
-		document.getElementById('action_keypad').classList.remove('active');
-	} else {
-		// Show the dialpad
+
+	// Toggle Active call
+	if (is_session_active()) {
+		if (dialpad.style.display === '' || dialpad.style.display === 'flex') {
+			dialpad.style.display = 'none';
+		}
+		else {
+			hide_all_panels();
+			dialpad.style.display = 'flex';
+		}
+	}
+
+	// Show the dialpad
+	if (!is_session_active()) {
 		hide_all_panels();
 		dialpad.style.display = 'flex';
-		update_action_bar_state('dialpad');
 	}
+	//alert(dialpad.style.display);
 }
 
 function show_contacts() {
@@ -2341,10 +2351,19 @@ function show_contacts() {
 }
 
 function show_history() {
-	hide_all_panels();
-	render_history();
-	document.getElementById('history').style.display = 'flex';
-	update_action_bar_state('history');
+	// Get the dialpad
+	var history = document.getElementById('history');
+
+	// Toggle the call history
+	if (history.style.display === '' || history.style.display === 'inline' || history.style.display === 'flex') {
+		history.style.display = 'none';
+	}
+	else {
+		hide_all_panels();
+		render_history();
+		history.style.display = 'flex';
+		update_action_bar_state('history');
+	}
 }
 
 function show_messages() {
@@ -2361,9 +2380,10 @@ function update_action_bar_state(active_panel) {
 	});
 
 	// Add active class based on current panel
-	if (active_panel === 'dialpad' || active_panel === 'keypad') {
-		document.getElementById('action_keypad').classList.add('active');
-	} else if (active_panel === 'contacts') {
+	//if (active_panel === 'dialpad' || active_panel === 'keypad') {
+	//	document.getElementById('action_keypad').classList.add('active');
+	//} else
+	if (active_panel === 'contacts') {
 		document.getElementById('action_contacts').classList.add('active');
 	} else if (active_panel === 'history') {
 		document.getElementById('action_history').classList.add('active');
@@ -2694,7 +2714,7 @@ function unmute_video(destination) {
 }
 
 // Transfer the current call to another number (blind/attended transfer via SIP REFER)
-function transfer_call(target_number) {
+function blind_transfer_call(target_number) {
 	if (!session) { return; }
 	if (!target_number || target_number.trim() === '') { return; }
 
@@ -2712,7 +2732,7 @@ function transfer_call(target_number) {
 }
 
 // Show transfer dialog/prompt
-function show_transfer_prompt() {
+function show_blind_transfer_prompt() {
 	if (!session) { return; }
 
 	// Get current destination value
@@ -2722,7 +2742,22 @@ function show_transfer_prompt() {
 	var transfer_number = prompt('Enter extension/number to transfer to:', current_value);
 
 	if (transfer_number && transfer_number.trim() !== '') {
-		transfer_call(transfer_number);
+		blind_transfer_call(transfer_number);
+	}
+}
+
+// Show attended transfer dialog/prompt
+function show_attended_transfer_prompt() {
+	if (!session) { return; }
+
+	// Get current destination value
+	var current_value = document.getElementById('destination').value || '';
+
+	// Use a custom prompt for transfer
+	var transfer_number = prompt('Enter extension/number to transfer to:', current_value);
+
+	if (transfer_number && transfer_number.trim() !== '') {
+		attended_transfer_call(transfer_number);
 	}
 }
 
@@ -2922,12 +2957,24 @@ function correct_alignment() {
 	}
 }
 
+// Function called when the dialpad key is pressed
+function dialplan_digit_add($digit) {
+	// Active call send DTMF
+	if (session && session.status === SIP.Session.C.STATUS_CONFIRMED || session && session.status === SIP.Session.C.STATUS_ANSWERED) {
+		send_dtmf($digit);
+	}
+
+	// Update the Dialpd Destination
+	document.getElementById('destination').value = document.getElementById('destination').value + $digit;
+	correct_alignment();
+}
+
 function digit_add($digit) {
 	document.getElementById('destination').value = document.getElementById('destination').value + $digit;
 	correct_alignment();
 }
 
-function digit_delete() {
+function dialpad_digit_delete() {
 	destination = document.getElementById('destination').value;
 	document.getElementById('destination').value = destination.substring(0, destination.length -1);
 	correct_alignment();
@@ -2936,41 +2983,6 @@ function digit_delete() {
 function digit_clear() {
 	document.getElementById('destination').value = '';
 	correct_alignment();
-}
-
-// Show DTMF keypad during active call
-function show_dtmf_keypad() {
-	if (!is_session_active()) {
-		return;
-	}
-
-	hide_all_panels();
-	document.getElementById('dtmf_keypad').style.display = 'flex';
-	document.getElementById('dtmf_destination').value = '';
-	dtmf_keypad_shown = true;
-}
-
-// Toggle DTMF keypad during active call - shows it if hidden, hides it if shown
-function show_keypad() {
-	if (!is_session_active()) {
-		return;
-	}
-
-	var dtmf_keypad = document.getElementById('dtmf_keypad');
-
-	if (dtmf_keypad_shown && dtmf_keypad.style.display === 'flex') {
-		// Hide DTMF keypad, show active call panel
-		dtmf_keypad.style.display = 'none';
-		dtmf_keypad_shown = false;
-		document.getElementById('active').style.display = 'flex';
-
-		// Switch action bar icons back to dialpad
-		document.getElementById('action_keypad').style.display = 'flex';
-		document.getElementById('action_keypad_during_call').style.display = 'none';
-	} else {
-		// Show DTMF keypad
-		show_dtmf_keypad();
-	}
 }
 
 // Send DTMF digit through active SIP session (with buffering to beat FreeSWITCH inter-digit timeout)
@@ -3059,14 +3071,14 @@ function flush_dtmf_buffer() {
 		// duration: how long each tone lasts (ms)
 		// interToneGap: delay between tones (ms) - must be > 0 for sequence
 		session.dtmf(digits, {
-			duration: 100,          // 100ms tone duration
-			interToneGap: 100      // 100ms between tones (faster than 3000ms timeout)
+			duration: 100,		  // 100ms tone duration
+			interToneGap: 100	  // 100ms between tones (faster than 3000ms timeout)
 		});
 	} else {
 		// SIP INFO - each digit needs its own request, send as sequence
 		// SIP.js 0.7.8 handles multi-character string by sending each as separate INFO
 		session.dtmf(digits, {
-			duration: 100           // Duration per tone
+			duration: 100		   // Duration per tone
 		});
 	}
 
@@ -3078,59 +3090,28 @@ document.addEventListener('keydown', function(e) {
 		return;
 	}
 
-	// Handle DTMF keypad input when keypad is shown during call
-	if (dtmf_keypad_shown) {
-		if (e.key >= '0' && e.key <= '9' || e.key === '*' || e.key === '#') {
-			e.preventDefault();
-			send_dtmf(e.key);
-			return;
-		}
-
-		if (e.key === 'Backspace' || e.key === 'Delete') {
-			e.preventDefault();
-			// Clear the visual display of last digit
-			var display = document.getElementById('dtmf_destination');
-			if (display) {
-				display.value = display.value.slice(0, -1);
-			}
-			return;
-		}
-
-		// Pressing Enter on DTMF keypad does nothing specific
-		if (e.key === 'Enter') {
-			e.preventDefault();
-			return;
-		}
-
-		if (e.key === 'Escape') {
-			e.preventDefault();
-			show_dialpad();
-			return;
-		}
-	}
-
 	// Regular dialpad input (not in DTMF keypad mode)
 	if (e.key >= '0' && e.key <= '9') {
 		e.preventDefault();
-		digit_add(e.key);
+		dialplan_digit_add(e.key);
 		return;
 	}
 
 	if (e.key === '*' || e.key === '#') {
 		e.preventDefault();
-		digit_add(e.key);
+		dialplan_digit_add(e.key);
 		return;
 	}
 
 	if (e.key === 'Backspace' || e.key === 'Delete') {
 		e.preventDefault();
-		digit_delete();
+		dialplad_digit_delete();
 		return;
 	}
 
 	if (e.key === 'Escape') {
 		e.preventDefault();
-		digit_clear();
+		dialpad_digit_clear();
 		return;
 	}
 
@@ -3168,10 +3149,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
 	// Initialize audio device enumeration and populate the dropdown
 	enumerate_audio_devices();
-	
+
 	// Initialize ringback sound enumeration and populate the dropdown
 	enumerate_ringback_sounds();
-	
+
 	// Initialize ringtone enumeration and populate the dropdown
 	enumerate_ringtones();
 
@@ -3191,7 +3172,7 @@ document.addEventListener('DOMContentLoaded', function() {
 			}
 		});
 	}
-	
+
 	// Add change event listener to ringback selector
 	var ringback_select = document.getElementById('ringback_select');
 	if (ringback_select) {
@@ -3201,7 +3182,7 @@ document.addEventListener('DOMContentLoaded', function() {
 			console.log('ringback_select: Ringback changed to:', selected_ringback_sound);
 		});
 	}
-	
+
 	// Add change event listener to ringtone selector
 	var ringtone_select = document.getElementById('ringtone_select');
 	if (ringtone_select) {
@@ -3226,3 +3207,169 @@ document.addEventListener('DOMContentLoaded', function() {
 		observer.observe(active_div, { attributes: true });
 	}
 });
+
+// Attended Transfer state (SIPJS 0.7.x compatible)
+let attendedTransfer = {
+	state: 'idle', // idle | dialing | target_connected
+	targetSession: null,
+	timeoutId: null,
+	isCleaningUp: false
+};
+
+function show_attended_transfer_prompt() {
+	if (!session || session.status !== SIP.Session.C.STATUS_CONFIRMED) {
+		show_temporary_status('No active call to transfer', 'fas fa-exclamation-circle');
+		return;
+	}
+	if (attendedTransfer.state !== 'idle') {
+		show_temporary_status('Transfer already in progress', 'fas fa-exclamation-triangle');
+		return;
+	}
+
+	let currentVal = document.getElementById('destination').value || '';
+	let target = prompt('Enter extension/number to transfer to:', currentVal);
+
+	if (target && target.trim() !== '') {
+		start_attended_transfer(target.trim());
+	}
+}
+
+function start_attended_transfer(target) {
+	attendedTransfer.state = 'dialing';
+	show_temporary_status('Calling transfer target...', 'fas fa-phone');
+
+	// Hold original caller so they hear silence/ringback during supervision
+	if (session.status === SIP.Session.C.STATUS_CONFIRMED || session.status === SIP.Session.C.STATUS_ANSWERED) {
+		session.hold();
+	}
+
+	toggle_transfer_ui(true); // Switch UI to transfer mode
+
+	// Place secondary call
+	attendedTransfer.targetSession = user_agent.invite('sip:' + target.trim() + '@<?php echo $domain_name; ?>', {
+		media: {
+			constraints: { audio: true, video: false },
+			render: { remote: document.getElementById('remote_video') }
+		}
+	});
+
+	let sec = attendedTransfer.targetSession;
+
+	sec.on('progress', function() {
+		show_temporary_status('Ringing transfer target...', 'fas fa-phone-volume');
+	});
+
+	sec.on('accepted', function() {
+		console.log('[Attended Transfer] Target connected. Ready to bridge.');
+		attendedTransfer.state = 'target_connected';
+		show_temporary_status('Connected to target. Press "Complete Transfer" when ready.', 'fas fa-exchange-alt');
+		toggle_transfer_ui_state(true); // Show complete button
+	});
+
+	sec.on('bye', function() {
+		if (attendedTransfer.isCleaningUp) return; // Prevent recursion
+		console.log('[Attended Transfer] Target hung up.');
+		if (attendedTransfer.timeoutId) clearTimeout(attendedTransfer.timeoutId);
+		attendedTransfer.state = 'idle';
+		reset_call_controls();
+		show_temporary_status('Transfer target disconnected.', 'fas fa-phone-slash');
+	});
+
+	sec.on('failed', function() {
+		console.warn('[Attended Transfer] Call failed.');
+		if (attendedTransfer.timeoutId) clearTimeout(attendedTransfer.timeoutId);
+		attendedTransfer.state = 'idle';
+		reset_call_controls();
+		show_temporary_status('Transfer target unreachable.', 'fas fa-exclamation-triangle');
+	});
+
+	// 30s timeout fallback
+	attendedTransfer.timeoutId = setTimeout(function() {
+		if (attendedTransfer.state === 'dialing' && sec.status !== SIP.Session.C.STATUS_TERMINATED) {
+			console.log('[Attended Transfer] Timeout. Hanging up secondary call.');
+			sec.bye();
+		}
+	}, 30000);
+}
+
+function complete_attended_transfer() {
+	if (attendedTransfer.state !== 'target_connected' || !attendedTransfer.targetSession) return;
+
+	console.log('[Attended Transfer] Cueing PBX bridge...');
+	show_temporary_status('Bridging calls...', 'fas fa-exchange-alt');
+
+	// Send REFER from CURRENT session to target. FusionPBX/Asterisk will merge the held leg.
+	let targetUri = attendedTransfer.targetSession.remoteIdentity.uri.toString();
+	try {
+		session.refer(targetUri).send();
+	} catch (e) {
+		console.error('[Attended Transfer] REFER failed:', e);
+	}
+
+	// After cueing, hang up our original leg. PBX will bridge them automatically.
+	setTimeout(() => {
+		if (session && session.status !== SIP.Session.C.STATUS_TERMINATED) {
+			console.log('[Attended Transfer] Hanging up own leg.');
+			session.bye();
+		}
+		cleanup_attended_transfer();
+	}, 500);
+}
+
+function cleanup_attended_transfer() {
+	if (attendedTransfer.isCleaningUp) return; // Guard against recursion
+	attendedTransfer.isCleaningUp = true;
+
+	if (attendedTransfer.timeoutId) clearTimeout(attendedTransfer.timeoutId);
+
+	let sec = attendedTransfer.targetSession;
+	if (!sec) {
+		attendedTransfer.state = 'idle';
+		reset_call_controls();
+		return;
+	}
+
+	// Clear listeners to prevent stale callbacks
+	try { sec.removeListener('accepted'); } catch(e){}
+	try { sec.removeListener('bye'); } catch(e){}
+	try { sec.removeListener('progress'); } catch(e){}
+	try { sec.removeListener('failed'); } catch(e){}
+
+	// Safely terminate if not already done
+	if (sec.status !== SIP.Session.C.STATUS_TERMINATED) {
+		sec.bye();
+	}
+
+	// Save call duration to history before resetting UI
+	save_call_duration();
+
+	reset_call_ui_state(true);
+
+	attendedTransfer.targetSession = null;
+	attendedTransfer.state = 'idle';
+	reset_call_controls();
+}
+
+function toggle_transfer_ui(isActive) {
+	document.getElementById('complete_transfer').style.display = 'none';
+	document.getElementById('hangup').style.display = isActive ? 'none' : 'flex';
+	document.getElementById('mute_audio').style.display = isActive ? 'none' : 'inline';
+	document.getElementById('hold').style.display = isActive ? 'none' : 'inline';
+}
+
+function toggle_transfer_ui_state(isConnected) {
+	let complete_transfer = document.getElementById('complete_transfer');
+	if (complete_transfer) {
+		complete_transfer.style.display = isConnected ? 'flex' : 'none';
+	}
+}
+
+function reset_call_controls() {
+	set_call_action_mode(true, active_call_is_video);
+	toggle_transfer_ui(false);
+
+	// Unhold original call if PBX still holds it
+	if (session && session.status === SIP.Session.C.STATUS_HOLD) {
+		session.unhold();
+	}
+}

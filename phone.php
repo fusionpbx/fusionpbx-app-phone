@@ -146,25 +146,25 @@ echo "		<div class='dialpad' id='dialpad'>\n";
 echo "			<div class='dialpad_content'>\n"; // Added wrapper
 echo "				<input type='text' class='destination' id='destination' name='destination' onkeypress=\"event.preventDefault();\"/>\n";
 echo "				<div class='dialpad_wrapper'>\n";
-echo "					<div class='dialpad_box' onclick=\"digit_add('1');\"><strong>1</strong><br><sup>&nbsp;</sup></div>\n";
-echo "					<div class='dialpad_box' onclick=\"digit_add('2');\"><strong>2</strong><br><sup>ABC</sup></div>\n";
-echo "					<div class='dialpad_box' onclick=\"digit_add('3');\"><strong>3</strong><br><sup>DEF</sup></div>\n";
+echo "					<div class='dialpad_box' onclick=\"dialplan_digit_add('1');\"><strong>1</strong><sup>&nbsp;</sup></div>\n";
+echo "					<div class='dialpad_box' onclick=\"dialplan_digit_add('2');\"><strong>2</strong><sup>ABC</sup></div>\n";
+echo "					<div class='dialpad_box' onclick=\"dialplan_digit_add('3');\"><strong>3</strong><sup>DEF</sup></div>\n";
 
-echo "					<div class='dialpad_box' onclick=\"digit_add('4');\"><strong>4</strong><br><sup>GHI</sup></div>\n";
-echo "					<div class='dialpad_box' onclick=\"digit_add('5');\"><strong>5</strong><br><sup>JKL</sup></div>\n";
-echo "					<div class='dialpad_box' onclick=\"digit_add('6');\"><strong>6</strong><br><sup>MNO</sup></div>\n";
+echo "					<div class='dialpad_box' onclick=\"dialplan_digit_add('4');\"><strong>4</strong><sup>GHI</sup></div>\n";
+echo "					<div class='dialpad_box' onclick=\"dialplan_digit_add('5');\"><strong>5</strong><sup>JKL</sup></div>\n";
+echo "					<div class='dialpad_box' onclick=\"dialplan_digit_add('6');\"><strong>6</strong><sup>MNO</sup></div>\n";
 
-echo "					<div class='dialpad_box' onclick=\"digit_add('7');\"><strong>7</strong><br><sup>PQRS</sup></div>\n";
-echo "					<div class='dialpad_box' onclick=\"digit_add('8');\"><strong>8</strong><br><sup>TUV</sup></div>\n";
-echo "					<div class='dialpad_box' onclick=\"digit_add('9');\"><strong>9</strong><br><sup>WXYZ</sup></div>\n";
+echo "					<div class='dialpad_box' onclick=\"dialplan_digit_add('7');\"><strong>7</strong><sup>PQRS</sup></div>\n";
+echo "					<div class='dialpad_box' onclick=\"dialplan_digit_add('8');\"><strong>8</strong><sup>TUV</sup></div>\n";
+echo "					<div class='dialpad_box' onclick=\"dialplan_digit_add('9');\"><strong>9</strong><sup>WXYZ</sup></div>\n";
 
-echo "					<div class='dialpad_box' onclick=\"digit_add('*');\"><strong>*</strong><br><sup></sup></div>\n";
-echo "					<div class='dialpad_box' onclick=\"digit_add('0');\"><strong>0</strong><br><sup></sup></div>\n";
-echo "					<div class='dialpad_box' onclick=\"digit_add('#');\"><strong>#</strong><br><sup></sup></div>\n";
+echo "					<div class='dialpad_box' onclick=\"dialplan_digit_add('*');\"><strong>*</strong><sup></sup></div>\n";
+echo "					<div class='dialpad_box' onclick=\"dialplan_digit_add('0');\"><strong>0</strong><sup></sup></div>\n";
+echo "					<div class='dialpad_box' onclick=\"dialplan_digit_add('#');\"><strong>#</strong><sup></sup></div>\n";
 
-echo "					<div class='dialpad_box video_call' onclick='call_video();' title='Video Call'><i class='fas fa-video'></i><br><sup>Video Call</sup></div>\n";
-echo "					<div class='dialpad_box audio_call' onclick='call_audio();' title='Audio Call'><i class='fa-solid fa-phone'></i><br><sup>Audio Call</sup></div>\n";
-echo "					<div class='dialpad_box delete' onclick='digit_delete();' title=\"".$text['label-delete']."\"><i class='fas fa-chevron-left'></i><br><sup>".$text['label-delete']."</sup></div>\n";
+echo "					<div class='dialpad_box video_call' onclick='call_video();' title='Video Call'><i class='fas fa-video'></i><sup>Video Call</sup></div>\n";
+echo "					<div class='dialpad_box audio_call' onclick='call_audio();' title='Audio Call'><i class='fa-solid fa-phone'></i><sup>Audio Call</sup></div>\n";
+echo "					<div class='dialpad_box delete' onclick='dialpad_digit_delete();' title=\"".$text['label-delete']."\"><i class='fas fa-chevron-left'></i><sup>".$text['label-delete']."</sup></div>\n";
 echo "				</div>\n";
 echo "			</div>\n";
 echo "		</div>\n";
@@ -209,13 +209,13 @@ echo "			<button id='send_message_btn' onclick='send_current_message();'><i clas
 echo "		</div>\n";
 echo "	</div>\n";
 
-//define the ringing control
+//define the ringing call control
 echo "	<div class='ringing' id='ringing' style='display: none;'>\n";
 echo "		<div class='caller_id ringing' id='ringing_caller_id'></div>\n";
 echo "		<div class='dialpad_wrapper' style='grid-template-columns: repeat(3, 1fr);'>\n";
-echo "			<div class='dialpad_box' id='decline' onclick='decline();' style='background-color: #ba0000;'><i class='fas fa-phone-slash' title=\"".$text['label-decline']."\"></i><br><sup>".$text['label-decline']."</sup></div>\n";
-echo "			<div class='dialpad_box' id='answer_audio' onclick='answer_audio();' style='background-color: #147e00;'><i class='fas fa-phone' title='Answer Audio'></i><br><sup>Answer Audio</sup></div>\n";
-echo "			<div class='dialpad_box' id='answer_video' onclick='answer_video();' style='background-color: #00b7c3;'><i class='fas fa-video' title='Answer Video'></i><br><sup>Answer Video</sup></div>\n";
+echo "			<div class='dialpad_box' id='decline' onclick='decline();' style='background-color: #ba0000;'><i class='fas fa-phone-slash' title=\"".$text['label-decline']."\"></i><sup>".$text['label-decline']."</sup></div>\n";
+echo "			<div class='dialpad_box' id='answer_audio' onclick='answer_audio();' style='background-color: #1ba800;'><i class='fas fa-phone' title='Answer Audio'></i><sup>Answer Audio</sup></div>\n";
+echo "			<div class='dialpad_box' id='answer_video' onclick='answer_video();' style='background-color: #1E90FF;'><i class='fas fa-video' title='Answer Video'></i><sup>Answer Video</sup></div>\n";
 echo "		</div>\n";
 echo "	</div>\n";
 
@@ -224,10 +224,10 @@ echo "	<div class='active' id='active' style='display: none;'>\n";
 echo "		<div class='caller_id' id='active_caller_id'></div>\n";
 echo "		<div id='answer_time' class='answer_time'>00:00:00</div>\n";
 echo "		<div class='dialpad_wrapper'>\n";
-echo "			<div class='dialpad_box mute' id='mute_audio' onclick='mute_audio();'><i class='fas fa-microphone' title=\"".$text['label-mute']."\"></i><br><sup>".$text['label-mute']."</sup></div>\n";
-echo "			<div class='dialpad_box' id='unmute_audio' style='color: #ba0000; display: none;' onclick='unmute_audio();'><i class='fas fa-microphone-slash' title=\"".$text['label-unmute']."\"></i><br><sup>".$text['label-unmute']."</sup></div>\n";
-echo "			<div class='dialpad_box hold' id='hold' onclick='hold();'><i class='fas fa-pause' title=\"".$text['label-hold']."\"></i><br><sup>".$text['label-hold']."</sup></div>\n";
-echo "			<div class='dialpad_box' id='unhold' style='color: #1ba800; display: none;' onclick='unhold();'><i class='fas fa-play' title=\"".$text['label-resume']."\"></i><br><sup>".$text['label-resume']."</sup></div>\n";
+echo "			<div class='dialpad_box mute' id='mute_audio' onclick='mute_audio();'><i class='fas fa-microphone' title=\"".$text['label-mute']."\"></i><sup>".$text['label-mute']."</sup></div>\n";
+echo "			<div class='dialpad_box' id='unmute_audio' style='color: #ba0000; display: none;' onclick='unmute_audio();'><i class='fas fa-microphone-slash' title=\"".$text['label-unmute']."\"></i><sup>".$text['label-unmute']."</sup></div>\n";
+echo "			<div class='dialpad_box hold' id='hold' onclick='hold();'><i class='fas fa-pause' title=\"".$text['label-hold']."\"></i><sup>".$text['label-hold']."</sup></div>\n";
+echo "			<div class='dialpad_box' id='unhold' style='color: #1ba800; display: none;' onclick='unhold();'><i class='fas fa-play' title=\"".$text['label-resume']."\"></i><sup>".$text['label-resume']."</sup></div>\n";
 echo "			<div class='dialpad_box' id='mute_video' style='display: none;' onclick='mute_video();'>&nbsp;</div>\n";
 echo "			<div class='dialpad_box' id='unmute_video' style='display: none;' onclick='unmute_video();'>&nbsp;</div>\n";
 echo "		</div>\n";
@@ -258,43 +258,20 @@ echo "			</div>\n";
 echo "		</div>\n";
 echo "	</div>\n";
 
-//define the DTMF keypad panel - shown during active calls for sending DTMF
-echo "	<div class='dtmf_keypad' id='dtmf_keypad' style='display: none;'>\n";
-echo "		<div class='keypad_header'><i class='fas fa-keyboard'></i> Keypad</div>\n";
-echo "		<input type='text' class='destination dtmf_destination' id='dtmf_destination' readonly />\n";
-echo "		<div class='dialpad_wrapper keypad_3col'>\n";
-echo "			<div class='dialpad_box dtmf_digit' onclick='send_dtmf(\"1\");'><strong>1</strong><br><sup>&nbsp;</sup></div>\n";
-echo "			<div class='dialpad_box dtmf_digit' onclick='send_dtmf(\"2\");'><strong>2</strong><br><sup>ABC</sup></div>\n";
-echo "			<div class='dialpad_box dtmf_digit' onclick='send_dtmf(\"3\");'><strong>3</strong><br><sup>DEF</sup></div>\n";
-
-echo "			<div class='dialpad_box dtmf_digit' onclick='send_dtmf(\"4\");'><strong>4</strong><br><sup>GHI</sup></div>\n";
-echo "			<div class='dialpad_box dtmf_digit' onclick='send_dtmf(\"5\");'><strong>5</strong><br><sup>JKL</sup></div>\n";
-echo "			<div class='dialpad_box dtmf_digit' onclick='send_dtmf(\"6\");'><strong>6</strong><br><sup>MNO</sup></div>\n";
-
-echo "			<div class='dialpad_box dtmf_digit' onclick='send_dtmf(\"7\");'><strong>7</strong><br><sup>PQRS</sup></div>\n";
-echo "			<div class='dialpad_box dtmf_digit' onclick='send_dtmf(\"8\");'><strong>8</strong><br><sup>TUV</sup></div>\n";
-echo "			<div class='dialpad_box dtmf_digit' onclick='send_dtmf(\"9\");'><strong>9</strong><br><sup>WXYZ</sup></div>\n";
-
-echo "			<div class='dialpad_box dtmf_digit' onclick='send_dtmf(\"*\");' style='margin-bottom: 8px; padding-top: 20px; padding-bottom: 0;'><strong>*</strong></div>\n";
-echo "			<div class='dialpad_box dtmf_digit' onclick='send_dtmf(\"0\");' style='margin-bottom: 8px; padding-top: 15px; padding-bottom: 5px;'><strong>0</strong></div>\n";
-echo "			<div class='dialpad_box dtmf_digit' onclick='send_dtmf(\"#\");' style='margin-bottom: 8px; padding-top: 15px; padding-bottom: 5px;'><strong>#</strong></div>\n";
-echo "		</div>\n";
-echo "	</div>\n";
-
 //define the action bar
 echo "	<div class='action_bar' id='action_bar'>\n";
-echo "		<div class='action_item' onclick='show_dialpad();' id='action_keypad'><i class='fas fa-phone-alt'></i>\n";
+echo "		<div class='action_item' id='action_keypad' onclick='show_dialpad();'><i class='fas fa-phone-alt'></i>\n";
 echo "			<span class='action_label'>Dialpad</span>\n";
 echo "		</div>\n";
-echo "		<div class='action_item' onclick='show_contacts();' id='action_contacts'><i class='fas fa-address-book'></i>\n";
+echo "		<div class='action_item' id='action_contacts' onclick='show_contacts();' style='display: none;'><i class='fas fa-address-book'></i>\n";
 echo "			<span class='action_label'>Contacts</span>\n";
 echo "		</div>\n";
-echo "		<div class='action_item' onclick='show_history();' id='action_history'><i class='fas fa-history'></i>\n";
+echo "		<div class='action_item' id='action_history'onclick='show_history();'><i class='fas fa-history'></i>\n";
 echo "			<span class='action_label'>History</span>\n";
 echo "		</div>\n";
-echo "		<div class='action_item' onclick='show_messages();' id='action_messages'><i class='fas fa-comment'></i>\n";
-echo "			<span class='action_label'>".$text['label-messages']."</span>\n";
-echo "		</div>\n";
+// echo "		<div class='action_item' id='action_messages' onclick='show_messages();'><i class='fas fa-comment'></i>\n";
+// echo "			<span class='action_label'>".$text['label-messages']."</span>\n";
+// echo "		</div>\n";
 echo "		<div class='action_item' id='action_mute' onclick='toggle_audio_mute_action();' style='display: none;'><i id='action_mute_icon' class='fas fa-microphone'></i>\n";
 echo "			<span class='action_label' id='action_mute_label'>".$text['label-mute']."</span>\n";
 echo "		</div>\n";
@@ -307,8 +284,14 @@ echo "		</div>\n";
 echo "		<div class='action_item' id='action_screen_share' onclick='toggle_screen_share();' style='display: none;'><i id='action_screen_share_icon' class='fas fa-desktop'></i>\n";
 echo "			<span class='action_label' id='action_screen_share_label'>Share</span>\n";
 echo "		</div>\n";
-echo "		<div class='action_item' id='action_transfer' onclick='show_transfer_prompt();' style='display: none;'><i id='action_transfer_icon' class='fas fa-arrow-right-arrow-left'></i>\n";
+echo "		<div class='action_item' id='action_transfer' onclick='show_attended_transfer_prompt();' style='display: none;'><i id='action_transfer_icon' class='fas fa-arrow-right-arrow-left'></i>\n";
 echo "			<span class='action_label' id='action_transfer_label'>Transfer</span>\n";
+echo "		</div>\n";
+echo "		<div class='action_item' id='action_btransfer' onclick='show_blind_transfer_prompt();' style='display: none;'><i id='action_transfer_icon' class='fas fa-arrow-right-arrow-left'></i>\n";
+echo "			<span class='action_label' id='action_transfer_label'>BTransfer</span>\n";
+echo "		</div>\n";
+echo "		<div class='action_item' id='complete_transfer' onclick='complete_attended_transfer()' style='display: none;'><i id='action_transfer_icon' class='fas fa-arrow-right-arrow-left'></i>\n";
+echo "			<span class='action_label' id='action_comple_transfer_label'>Complete Transfer</span>\n";
 echo "		</div>\n";
 echo "		<div class='action_item action_item_hangup' id='hangup' onclick='hangup();' style='display: none;'><i class='fas fa-phone-slash' title=\"".$text['label-end']."\"></i>\n";
 echo "			<span class='action_label'>".$text['label-end']."</span>\n";
@@ -316,13 +299,10 @@ echo "		</div>\n";
 echo "		<div class='action_item' id='action_settings' onclick='toggle_settings();'><i class='fas fa-cog'></i>\n";
 echo "			<span class='action_label'>Settings</span>\n";
 echo "		</div>\n";
-echo "		<div class='action_item' onclick='show_keypad();' id='action_keypad_during_call' style='display: none;'><i class='fas fa-keyboard'></i>\n";
-echo "			<span class='action_label'>Keypad</span>\n";
-echo "		</div>\n";
 echo "	</div>\n";
+echo "\n";
 
 echo "</body>\n";
-
 echo "</html>\n";
 
 ?>
