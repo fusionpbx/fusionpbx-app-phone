@@ -35,6 +35,9 @@ if (!permission_exists('phone_view')) {
 	exit;
 }
 
+//define global variables
+global $database;
+
 //add multi-lingual support
 $language = new text;
 $text = $language->get();
@@ -292,6 +295,9 @@ echo "			<span class='action_label' id='action_transfer_label'>BTransfer</span>\
 echo "		</div>\n";
 echo "		<div class='action_item' id='complete_transfer' onclick='complete_attended_transfer()' style='display: none;'><i id='action_transfer_icon' class='fas fa-arrow-right-arrow-left'></i>\n";
 echo "			<span class='action_label' id='action_comple_transfer_label'>Complete Transfer</span>\n";
+echo "		</div>\n";
+echo "		<div class='action_item action_item_hangup' id='cancel_transfer' onclick='cancel_attended_transfer()' style='display: none;'><i class='fas fa-times-circle' title='Cancel Transfer'></i>\n";
+echo "			<span class='action_label'>Cancel Transfer</span>\n";
 echo "		</div>\n";
 echo "		<div class='action_item action_item_hangup' id='hangup' onclick='hangup();' style='display: none;'><i class='fas fa-phone-slash' title=\"".$text['label-end']."\"></i>\n";
 echo "			<span class='action_label'>".$text['label-end']."</span>\n";

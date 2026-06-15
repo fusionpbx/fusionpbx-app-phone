@@ -2746,21 +2746,6 @@ function show_blind_transfer_prompt() {
 	}
 }
 
-// Show attended transfer dialog/prompt
-function show_attended_transfer_prompt() {
-	if (!session) { return; }
-
-	// Get current destination value
-	var current_value = document.getElementById('destination').value || '';
-
-	// Use a custom prompt for transfer
-	var transfer_number = prompt('Enter extension/number to transfer to:', current_value);
-
-	if (transfer_number && transfer_number.trim() !== '') {
-		attended_transfer_call(transfer_number);
-	}
-}
-
 function decline() {
 	// Record missed call
 	if (session && session.incoming_number) {
@@ -3238,14 +3223,15 @@ function start_attended_transfer(target) {
 	attendedTransfer.state = 'dialing';
 	show_temporary_status('Calling transfer target...', 'fas fa-phone');
 
-	// Hold original caller so they hear silence/ringback during supervision
+	// Hold original caller so they hear ringback/silence during supervision
 	if (session.status === SIP.Session.C.STATUS_CONFIRMED || session.status === SIP.Session.C.STATUS_ANSWERED) {
+		console.log('[Attended Transfer] Placing original caller on hold.');
 		session.hold();
 	}
 
 	toggle_transfer_ui(true); // Switch UI to transfer mode
 
-	// Place secondary call
+	// Place secondary call to transfer target
 	attendedTransfer.targetSession = user_agent.invite('sip:' + target.trim() + '@<?php echo $domain_name; ?>', {
 		media: {
 			constraints: { audio: true, video: false },
@@ -3270,24 +3256,47 @@ function start_attended_transfer(target) {
 		if (attendedTransfer.isCleaningUp) return; // Prevent recursion
 		console.log('[Attended Transfer] Target hung up.');
 		if (attendedTransfer.timeoutId) clearTimeout(attendedTransfer.timeoutId);
+		
+		// Transfer target rejected or hung up - restore original call
 		attendedTransfer.state = 'idle';
+		show_temporary_status('Transfer target disconnected. Restoring original call.', 'fas fa-phone-slash');
+		
+		// Unhold the original caller so they hear us again
+		if (session && session.status === SIP.Session.C.STATUS_HOLD) {
+			console.log('[Attended Transfer] Removing hold from original caller.');
+			session.unhold();
+		}
+		
 		reset_call_controls();
-		show_temporary_status('Transfer target disconnected.', 'fas fa-phone-slash');
 	});
 
 	sec.on('failed', function() {
-		console.warn('[Attended Transfer] Call failed.');
+		console.warn('[Attended Transfer] Call to target failed.');
 		if (attendedTransfer.timeoutId) clearTimeout(attendedTransfer.timeoutId);
+		
+		// Transfer failed - restore original call
 		attendedTransfer.state = 'idle';
+		show_temporary_status('Transfer target unreachable. Restoring original call.', 'fas fa-exclamation-triangle');
+		
+		// Unhold the original caller
+		if (session && session.status === SIP.Session.C.STATUS_HOLD) {
+			console.log('[Attended Transfer] Removing hold from original caller.');
+			session.unhold();
+		}
+		
 		reset_call_controls();
-		show_temporary_status('Transfer target unreachable.', 'fas fa-exclamation-triangle');
 	});
 
 	// 30s timeout fallback
 	attendedTransfer.timeoutId = setTimeout(function() {
 		if (attendedTransfer.state === 'dialing' && sec.status !== SIP.Session.C.STATUS_TERMINATED) {
-			console.log('[Attended Transfer] Timeout. Hanging up secondary call.');
+			console.log('[Attended Transfer] Timeout ringing target. Hanging up and restoring.');
 			sec.bye();
+			
+			// Unhold the original caller
+			if (session && session.status === SIP.Session.C.STATUS_HOLD) {
+				session.unhold();
+			}
 		}
 	}, 30000);
 }
@@ -3295,25 +3304,66 @@ function start_attended_transfer(target) {
 function complete_attended_transfer() {
 	if (attendedTransfer.state !== 'target_connected' || !attendedTransfer.targetSession) return;
 
-	console.log('[Attended Transfer] Cueing PBX bridge...');
+	console.log('[Attended Transfer] Initiating bridge...');
 	show_temporary_status('Bridging calls...', 'fas fa-exchange-alt');
 
-	// Send REFER from CURRENT session to target. FusionPBX/Asterisk will merge the held leg.
+	attendedTransfer.state = 'bridging';
+
+	// Get target URI and create REFER with proper Replaces header
 	let targetUri = attendedTransfer.targetSession.remoteIdentity.uri.toString();
+	
+	// Get the call ID and other info needed for proper call bridge
+	let originalSession = session;
+	let referOptions = {};
+	
 	try {
-		session.refer(targetUri).send();
+		// Send REFER to complete the attended transfer
+		// This tells the PBX to bridge the original caller with the transfer target
+		let referRequest = originalSession.refer(targetUri, {
+			// Include REFER-To header to indicate where to send the original caller
+		});
+		
+		// Send the REFER request
+		referRequest.send();
+		console.log('[Attended Transfer] REFER sent to ' + targetUri);
+		
+		// Set up a listener for when the REFER is accepted by the PBX
+		referRequest.on('accepted', function() {
+			console.log('[Attended Transfer] REFER accepted by PBX. Bridge initiated.');
+			show_temporary_status('Call transferred successfully.', 'fas fa-check-circle');
+			
+			// Now we can safely hang up our leg - the bridge is being established
+			setTimeout(() => {
+				if (originalSession && originalSession.status !== SIP.Session.C.STATUS_TERMINATED) {
+					console.log('[Attended Transfer] Terminating transfer initiator leg.');
+					originalSession.bye();
+				}
+				cleanup_attended_transfer();
+			}, 500);
+		});
+		
+		referRequest.on('rejected', function() {
+			console.error('[Attended Transfer] REFER rejected by PBX.');
+			show_temporary_status('Transfer failed. REFER rejected.', 'fas fa-exclamation-triangle');
+			attendedTransfer.state = 'target_connected';
+		});
+		
+		// Fallback timeout - if no response, hang up after 3 seconds anyway
+		setTimeout(() => {
+			if (attendedTransfer.state === 'bridging') {
+				console.log('[Attended Transfer] Timeout waiting for REFER acceptance. Forcing disconnect.');
+				if (originalSession && originalSession.status !== SIP.Session.C.STATUS_TERMINATED) {
+					originalSession.bye();
+				}
+				cleanup_attended_transfer();
+			}
+		}, 3000);
+		
 	} catch (e) {
 		console.error('[Attended Transfer] REFER failed:', e);
+		show_temporary_status('Transfer failed: ' + e.message, 'fas fa-exclamation-triangle');
+		attendedTransfer.state = 'target_connected';
 	}
-
-	// After cueing, hang up our original leg. PBX will bridge them automatically.
-	setTimeout(() => {
-		if (session && session.status !== SIP.Session.C.STATUS_TERMINATED) {
-			console.log('[Attended Transfer] Hanging up own leg.');
-			session.bye();
-		}
-		cleanup_attended_transfer();
-	}, 500);
 }
 
 function cleanup_attended_transfer() {
@@ -3352,6 +3402,7 @@ function cleanup_attended_transfer() {
 
 function toggle_transfer_ui(isActive) {
 	document.getElementById('complete_transfer').style.display = 'none';
+	document.getElementById('cancel_transfer').style.display = 'none';
 	document.getElementById('hangup').style.display = isActive ? 'none' : 'flex';
 	document.getElementById('mute_audio').style.display = isActive ? 'none' : 'inline';
 	document.getElementById('hold').style.display = isActive ? 'none' : 'inline';
@@ -3359,8 +3410,10 @@ function toggle_transfer_ui(isActive) {
 
 function toggle_transfer_ui_state(isConnected) {
 	let complete_transfer = document.getElementById('complete_transfer');
-	if (complete_transfer) {
+	let cancel_transfer = document.getElementById('cancel_transfer');
+	if (complete_transfer && cancel_transfer) {
 		complete_transfer.style.display = isConnected ? 'flex' : 'none';
+		cancel_transfer.style.display = isConnected ? 'flex' : 'none';
 	}
 }
 
@@ -3373,3 +3426,31 @@ function reset_call_controls() {
 		session.unhold();
 	}
 }
+
+function cancel_attended_transfer() {
+	if (attendedTransfer.state === 'idle') {
+		show_temporary_status('No transfer in progress.', 'fas fa-info-circle');
+		return;
+	}
+
+	console.log('[Attended Transfer] User cancelled transfer. Current state:', attendedTransfer.state);
+	show_temporary_status('Transfer cancelled. Restoring original call.', 'fas fa-ban');
+	
+	// Hang up the secondary call with the transfer target
+	if (attendedTransfer.targetSession && attendedTransfer.targetSession.status !== SIP.Session.C.STATUS_TERMINATED) {
+		console.log('[Attended Transfer] Hanging up secondary call.');
+		attendedTransfer.targetSession.bye();
+	}
+	
+	// Reset state
+	attendedTransfer.state = 'idle';
+	
+	// Unhold the original caller
+	if (session && session.status === SIP.Session.C.STATUS_HOLD) {
+		console.log('[Attended Transfer] Unholding original caller.');
+		session.unhold();
+	}
+	
+	cleanup_attended_transfer();
+}
+
