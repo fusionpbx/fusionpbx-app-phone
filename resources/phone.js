@@ -3221,6 +3221,7 @@ function show_attended_transfer_prompt() {
 
 function start_attended_transfer(target) {
 	attendedTransfer.state = 'dialing';
+	attendedTransfer.isCleaningUp = false;
 	show_temporary_status('Calling transfer target...', 'fas fa-phone');
 
 	// Hold original caller so they hear ringback/silence during supervision
@@ -3256,34 +3257,34 @@ function start_attended_transfer(target) {
 		if (attendedTransfer.isCleaningUp) return; // Prevent recursion
 		console.log('[Attended Transfer] Target hung up.');
 		if (attendedTransfer.timeoutId) clearTimeout(attendedTransfer.timeoutId);
-		
+
 		// Transfer target rejected or hung up - restore original call
 		attendedTransfer.state = 'idle';
 		show_temporary_status('Transfer target disconnected. Restoring original call.', 'fas fa-phone-slash');
-		
+
 		// Unhold the original caller so they hear us again
-		if (session && session.status === SIP.Session.C.STATUS_HOLD) {
+		if (session && session.local_hold === true) {
 			console.log('[Attended Transfer] Removing hold from original caller.');
 			session.unhold();
 		}
-		
+
 		reset_call_controls();
 	});
 
 	sec.on('failed', function() {
 		console.warn('[Attended Transfer] Call to target failed.');
 		if (attendedTransfer.timeoutId) clearTimeout(attendedTransfer.timeoutId);
-		
+
 		// Transfer failed - restore original call
 		attendedTransfer.state = 'idle';
 		show_temporary_status('Transfer target unreachable. Restoring original call.', 'fas fa-exclamation-triangle');
-		
+
 		// Unhold the original caller
-		if (session && session.status === SIP.Session.C.STATUS_HOLD) {
+		if (session && session.local_hold === true) {
 			console.log('[Attended Transfer] Removing hold from original caller.');
 			session.unhold();
 		}
-		
+
 		reset_call_controls();
 	});
 
@@ -3292,9 +3293,9 @@ function start_attended_transfer(target) {
 		if (attendedTransfer.state === 'dialing' && sec.status !== SIP.Session.C.STATUS_TERMINATED) {
 			console.log('[Attended Transfer] Timeout ringing target. Hanging up and restoring.');
 			sec.bye();
-			
+
 			// Unhold the original caller
-			if (session && session.status === SIP.Session.C.STATUS_HOLD) {
+			if (session && session.local_hold === true) {
 				session.unhold();
 			}
 		}
@@ -3302,67 +3303,92 @@ function start_attended_transfer(target) {
 }
 
 function complete_attended_transfer() {
-	if (attendedTransfer.state !== 'target_connected' || !attendedTransfer.targetSession) return;
+	if (attendedTransfer.state !== 'target_connected' || !attendedTransfer.targetSession) {
+		show_temporary_status('Transfer target not connected yet', 'fas fa-exclamation-triangle');
+		return;
+	}
 
-	console.log('[Attended Transfer] Initiating bridge...');
-	show_temporary_status('Bridging calls...', 'fas fa-exchange-alt');
+	var originalSession = session;                       // webphone <-> A : the original caller
+	var targetSession = attendedTransfer.targetSession;  // webphone <-> C : the transfer target
+
+	if (!originalSession || !originalSession.dialog || !targetSession.dialog) {
+		show_temporary_status('Transfer failed: call not ready', 'fas fa-exclamation-triangle');
+		return;
+	}
+
+	console.log('[Attended Transfer] Completing attended transfer (REFER with Replaces, no local BYE).');
+	show_temporary_status('Completing transfer...', 'fas fa-exchange-alt');
 
 	attendedTransfer.state = 'bridging';
 
-	// Get target URI and create REFER with proper Replaces header
-	let targetUri = attendedTransfer.targetSession.remoteIdentity.uri.toString();
-	
-	// Get the call ID and other info needed for proper call bridge
-	let originalSession = session;
-	let referOptions = {};
-	
+	// Mark cleanup in progress so the consultation session "bye" handler does not
+	// mistake FreeSWITCH tearing down our leg for the target hanging up on us.
+	attendedTransfer.isCleaningUp = true;
+
+	if (attendedTransfer.timeoutId) {
+		clearTimeout(attendedTransfer.timeoutId);
+		attendedTransfer.timeoutId = null;
+	}
+
 	try {
-		// Send REFER to complete the attended transfer
-		// This tells the PBX to bridge the original caller with the transfer target
-		let referRequest = originalSession.refer(targetUri, {
-			// Include REFER-To header to indicate where to send the original caller
-		});
-		
-		// Send the REFER request
-		referRequest.send();
-		console.log('[Attended Transfer] REFER sent to ' + targetUri);
-		
-		// Set up a listener for when the REFER is accepted by the PBX
-		referRequest.on('accepted', function() {
-			console.log('[Attended Transfer] REFER accepted by PBX. Bridge initiated.');
-			show_temporary_status('Call transferred successfully.', 'fas fa-check-circle');
-			
-			// Now we can safely hang up our leg - the bridge is being established
-			setTimeout(() => {
-				if (originalSession && originalSession.status !== SIP.Session.C.STATUS_TERMINATED) {
-					console.log('[Attended Transfer] Terminating transfer initiator leg.');
-					originalSession.bye();
+		// Build the Refer-To header carrying a Replaces parameter (RFC 3891) that
+		// points at the consultation dialog (webphone <-> C). This is the exact
+		// format SIP.js 0.7.8 uses internally for an attended transfer.
+		var referTo = '"' + targetSession.remoteIdentity.friendlyName + '" <' +
+			targetSession.dialog.remote_target.toString() +
+			'?Replaces=' + targetSession.dialog.id.call_id +
+			'%3Bto-tag%3D' + targetSession.dialog.id.remote_tag +
+			'%3Bfrom-tag%3D' + targetSession.dialog.id.local_tag + '>';
+
+		var extraHeaders = [];
+		extraHeaders.push('Contact: ' + originalSession.contact);
+		extraHeaders.push('Allow: ' + SIP.UA.C.ALLOWED_METHODS.toString());
+		extraHeaders.push('Refer-To: ' + referTo);
+
+		// Send the REFER on the ORIGINAL leg (to A) WITHOUT terminating it locally.
+		//
+		// Important: we deliberately do NOT call session.refer() here. The library's
+		// refer() sends a BYE on this leg the instant FreeSWITCH answers the REFER
+		// with "202 Accepted". When the transferor is the *inbound* party (A called
+		// this phone), that premature BYE tears down caller A before FreeSWITCH can
+		// re-bridge A to C, so A gets dropped and the consultation leg (B<->C) is
+		// left up. By omitting the BYE we let FreeSWITCH complete the bridge (A<->C)
+		// and then hang up our two transferor legs itself. This works correctly for
+		// both inbound and outbound original calls.
+		originalSession.sendRequest(SIP.C.REFER, {
+			extraHeaders: extraHeaders,
+			receiveResponse: function (response) {
+				var code = response && response.status_code;
+				if (/^2[0-9]{2}$/.test(String(code))) {
+					console.log('[Attended Transfer] REFER accepted (' + code + '). FreeSWITCH bridging the two parties.');
+					show_temporary_status('Call transferred', 'fas fa-check-circle');
+
+					// Optimistically return our UI to idle. FreeSWITCH will BYE both
+					// of our transferor legs once the bridge is established; the
+					// existing session "bye" handlers will run harmlessly.
+					save_call_duration();
+					reset_call_ui_state(true);
+
+					attendedTransfer.targetSession = null;
+					attendedTransfer.state = 'idle';
+					toggle_transfer_ui(false);
+					toggle_transfer_ui_state(false);
+				} else if (code && code >= 300) {
+					console.error('[Attended Transfer] REFER rejected (' + code + ').');
+					show_temporary_status('Transfer failed (' + code + ')', 'fas fa-exclamation-triangle');
+					// Stay in consultation so the user can retry or cancel.
+					attendedTransfer.state = 'target_connected';
+					attendedTransfer.isCleaningUp = false;
 				}
-				cleanup_attended_transfer();
-			}, 500);
-		});
-		
-		referRequest.on('rejected', function() {
-			console.error('[Attended Transfer] REFER rejected by PBX.');
-			show_temporary_status('Transfer failed. REFER rejected.', 'fas fa-exclamation-triangle');
-			attendedTransfer.state = 'target_connected';
-		});
-		
-		// Fallback timeout - if no response, hang up after 3 seconds anyway
-		setTimeout(() => {
-			if (attendedTransfer.state === 'bridging') {
-				console.log('[Attended Transfer] Timeout waiting for REFER acceptance. Forcing disconnect.');
-				if (originalSession && originalSession.status !== SIP.Session.C.STATUS_TERMINATED) {
-					originalSession.bye();
-				}
-				cleanup_attended_transfer();
 			}
-		}, 3000);
-		
+		});
+
 	} catch (e) {
 		console.error('[Attended Transfer] REFER failed:', e);
-		show_temporary_status('Transfer failed: ' + e.message, 'fas fa-exclamation-triangle');
+		show_temporary_status('Transfer failed: ' + (e && e.message ? e.message : e), 'fas fa-exclamation-triangle');
+		// Restore so the user can retry or cancel the transfer.
 		attendedTransfer.state = 'target_connected';
+		attendedTransfer.isCleaningUp = false;
 	}
 }
 
@@ -3422,7 +3448,7 @@ function reset_call_controls() {
 	toggle_transfer_ui(false);
 
 	// Unhold original call if PBX still holds it
-	if (session && session.status === SIP.Session.C.STATUS_HOLD) {
+	if (session && session.local_hold === true) {
 		session.unhold();
 	}
 }
@@ -3435,22 +3461,38 @@ function cancel_attended_transfer() {
 
 	console.log('[Attended Transfer] User cancelled transfer. Current state:', attendedTransfer.state);
 	show_temporary_status('Transfer cancelled. Restoring original call.', 'fas fa-ban');
-	
-	// Hang up the secondary call with the transfer target
-	if (attendedTransfer.targetSession && attendedTransfer.targetSession.status !== SIP.Session.C.STATUS_TERMINATED) {
-		console.log('[Attended Transfer] Hanging up secondary call.');
-		attendedTransfer.targetSession.bye();
+
+	// Guard so the target session "bye" handler does not also run restore logic.
+	attendedTransfer.isCleaningUp = true;
+
+	if (attendedTransfer.timeoutId) {
+		clearTimeout(attendedTransfer.timeoutId);
+		attendedTransfer.timeoutId = null;
 	}
-	
-	// Reset state
+
+	// Hang up the consultation call with the transfer target (C).
+	var sec = attendedTransfer.targetSession;
+	if (sec) {
+		try { sec.removeAllListeners('bye'); } catch (e) {}
+		try { sec.removeAllListeners('failed'); } catch (e) {}
+		try { sec.removeAllListeners('accepted'); } catch (e) {}
+		try { sec.removeAllListeners('progress'); } catch (e) {}
+		if (sec.status !== SIP.Session.C.STATUS_TERMINATED) {
+			console.log('[Attended Transfer] Hanging up consultation call.');
+			sec.bye();
+		}
+	}
+
+	// Clear transfer state.
+	attendedTransfer.targetSession = null;
 	attendedTransfer.state = 'idle';
-	
-	// Unhold the original caller
-	if (session && session.status === SIP.Session.C.STATUS_HOLD) {
+
+	// Take the original caller (A) off hold so the agent can talk to them again.
+	if (session && session.local_hold === true) {
 		console.log('[Attended Transfer] Unholding original caller.');
 		session.unhold();
 	}
-	
-	cleanup_attended_transfer();
-}
 
+	// Restore the normal in-call controls. The original call (A <-> B) is still up.
+	reset_call_controls();
+}
