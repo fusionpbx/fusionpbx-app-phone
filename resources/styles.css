@@ -206,12 +206,12 @@ video::-webkit-media-controls-start-playback-button {
 	flex-direction: column;
 	justify-content: center;
 	align-items: center;
-	gap: 2px; /* modern way to space children vs <br> */
+	text-align: center;
+	gap: 5px; /* Space between icon and text */
 	background: rgba(0, 0, 0, 0.6);
 	color: #fff;
 	border-radius: 15px;
-	padding: 5px;
-	text-align: center;
+	padding: 10px;
 	cursor: pointer;
 	-webkit-user-select: none;
 	-moz-user-select: none;
@@ -296,26 +296,83 @@ sup {
 	font-size: 10px;
 }
 
-.caller_id {
-	display: flex;
-	flex-wrap: wrap;
+/* Ringing Panel Container */
+.ringing {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	display: none; /* Controlled by JS */
+	flex-direction: column;
 	justify-content: center;
 	align-items: center;
-	background: rgba(0, 0, 0, 0.7);
-	font-size: 35px;
-	font-weight: bold;
-	font-family: sans-serif;
-	border: 3px solid #333;
-	border-radius: 5px;
-	color: #fff;
-	padding: 20px;
-	margin-bottom: 8px;
-	min-height: 295px;
+	z-index: 2000;
+	background: rgba(22, 29, 40, 0.95);
+	padding: 40px 20px;
+	box-sizing: border-box;
+	gap: 40px;
 }
 
-.caller_id.ringing {
-	font-size: 35px;
-	margin-bottom: 35px;
+.caller_id {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	text-align: center;
+	background: rgba(0, 0, 0, 0.8);
+	font-family: sans-serif;
+	border: 3px solid #333;
+	border-radius: 20px;
+	color: #fff;
+	padding: 40px 20px;
+	width: 100%;
+	max-width: 460px;
+	box-sizing: border-box;
+	box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+	z-index: 1;
+}
+
+.caller_name {
+	font-size: 32px;
+	font-weight: bold;
+	margin: 0 0 10px 0;
+	line-height: 1.2;
+}
+
+.caller_number {
+	font-size: 24px;
+	color: #ccc;
+	margin: 0 0 20px 0;
+	line-height: 1.2;
+}
+
+.caller_number a {
+	color: #ccc;
+	text-decoration: none;
+	transition: color 0.2s;
+}
+
+.caller_number a:hover {
+	color: #fff;
+}
+
+.caller_video {
+	font-size: 16px;
+	color: #1eba00;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	margin: 0;
+}
+
+/* Ensure buttons are on top and clickable */
+.ringing .dialpad_wrapper {
+	position: relative;
+	z-index: 10;
+	pointer-events: auto !important;
 }
 
 .answer_time {
@@ -1066,4 +1123,11 @@ body.audio_call_mode #active .dialpad_wrapper {
 .dialpad_box.dtmf_digit.dtmf_pressed {
 	background: #1eba00;
 	transform: scale(0.95);
+}
+
+.offscreen-div {
+  position: fixed;
+  top: 0;
+  left: 100vw; /* Moves the div 1 screen-width to the right */
+  width: 300px;
 }

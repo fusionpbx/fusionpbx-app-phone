@@ -57,7 +57,7 @@ async function send_call(use_video) {
 	// Show or hide the panels
 	hide_all_panels();
 
-	document.getElementById('active').style.display = "grid";
+	document.getElementById('active').style.display = "none";
 
 	// Update status bar
 	var call_type = use_video ? 'Calling Video ' : 'Calling ';
@@ -1642,7 +1642,30 @@ user_agent.on('failed', function() {
 });
 
 function update_status_bar() {
-	update_idle_status();
+	if (is_session_active()) {
+		var display_name = active_call_display_name || '';
+		var number = active_call_number || '';
+		var duration = document.getElementById('answer_time').textContent;
+
+		var safe_name = display_name ? sanitize_string(display_name) : '';
+		var safe_number = number ? sanitize_string(number) : '';
+
+		var caller_info = '';
+		if (safe_name && safe_number) {
+			caller_info = safe_name + ' (<a href="https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=' + safe_number + '" target="_blank" style="color: #ccc; text-decoration: none;">' + safe_number + '</a>)';
+		} else if (safe_name || safe_number) {
+			if (safe_number) {
+				caller_info = '<a href="https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=' + safe_number + '" target="_blank" style="color: #ccc; text-decoration: none;">' + safe_number + '</a>';
+			} else {
+				caller_info = safe_name;
+			}
+		}
+
+		var status_text = caller_info ? caller_info + ' - ' + duration : duration;
+		document.getElementById('status_text').innerHTML = status_text;
+	} else {
+		update_idle_status();
+	}
 }
 
 function is_session_active() {
@@ -1973,16 +1996,16 @@ user_agent.on('invite', function (s) {
 	}
 
 	// Add the caller ID with video indicator if applicable
-	var video_indicator = session.has_video ? "<div style='color: #1eba00; font-size: 0.7em;'><i class='fas fa-video'></i> Video Call</div>" : "";
-	document.getElementById('ringing_caller_id').innerHTML = "<div>" + sanitize_string(session.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>" + video_indicator;
-	document.getElementById('active_caller_id').innerHTML = "<div>" + sanitize_string(session.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>" + video_indicator;
+	var video_indicator = session.has_video ? "<div class='caller_video'><i class='fas fa-video'></i> Video Call</div>" : "";
+	document.getElementById('ringing_caller_id').innerHTML = "<div class='caller_name'>" + sanitize_string(session.display_name) + "</div><div class='caller_number'><a href='https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>" + video_indicator;
+	document.getElementById('active_caller_id').innerHTML = "<div class='caller_name'>" + sanitize_string(session.display_name) + "</div><div class='caller_number'><a href='https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>" + video_indicator;
 	update_video_stream_info(session.display_name, session.uri_user, session.has_video);
 
 	// Hide all the panels
 	hide_all_panels();
 
 	// Show the ringing panel
-	document.getElementById('ringing').style.display = "inline";
+	document.getElementById('ringing').style.display = "flex";
 
 	// Show or hide the buttons
 	document.getElementById('answer_audio').style.display = "inline";
@@ -2192,10 +2215,7 @@ async function answer_call(use_video) {
 			// Show the UI
 			document.getElementById('dialpad').style.display = "none";
 			document.getElementById('ringing').style.display = "none";
-			document.getElementById('active').style.display = "grid";
-			document.getElementById('destination').value = '';
-
-			// Show or hide the buttons
+			document.getElementById('active').style.display = "none";
 			document.getElementById('answer_audio').style.display = "none";
 			document.getElementById('answer_video').style.display = "none";
 			document.getElementById('decline').style.display = "none";
@@ -2228,6 +2248,9 @@ async function answer_call(use_video) {
 			else {
 				update_active_call_status(use_video, session.display_name, session.uri_user);
 			}
+
+			// Force update status bar to show Caller ID and duration immediately
+			update_status_bar();
 
 			return;  // Early return since we've already handled everything
 		} catch (err) {
@@ -2301,6 +2324,9 @@ async function answer_call(use_video) {
 	else {
 		update_active_call_status(use_video, session.display_name, session.uri_user);
 	}
+
+	// Force update status bar to show Caller ID and duration immediately
+	update_status_bar();
 }
 
 // Function to pad numbers with leading zeros
@@ -2373,23 +2399,23 @@ function show_messages() {
 	update_action_bar_state('messages');
 }
 
-function update_action_bar_state(active_panel) {
+function update_action_bar_state(active) {
 	// Remove active class from all action items
 	document.querySelectorAll('.action_item').forEach(function(item) {
 		item.classList.remove('active');
 	});
 
 	// Add active class based on current panel
-	//if (active_panel === 'dialpad' || active_panel === 'keypad') {
+	//if (active === 'dialpad' || active === 'keypad') {
 	//	document.getElementById('action_keypad').classList.add('active');
 	//} else
-	if (active_panel === 'contacts') {
+	if (active === 'contacts') {
 		document.getElementById('action_contacts').classList.add('active');
-	} else if (active_panel === 'history') {
+	} else if (active === 'history') {
 		document.getElementById('action_history').classList.add('active');
-	} else if (active_panel === 'messages' || active_panel === 'conversation') {
+	} else if (active === 'messages' || active === 'conversation') {
 		document.getElementById('action_messages').classList.add('active');
-	} else if (active_panel === 'settings') {
+	} else if (active === 'settings') {
 		document.getElementById('action_settings').classList.add('active');
 	}
 }
@@ -2556,11 +2582,12 @@ function get_session_time() {
 
 		// Update the element with id="elapsed-time" to display the formatted elapsed time
 		document.getElementById("answer_time").textContent = formatted_time;
-		if (active_call_is_video) {
-			update_active_call_status(true, active_call_display_name, active_call_number, formatted_time);
-		}
-		else {
-			show_status('Call in progress ' + formatted_time, 'fas fa-phone');
+
+		// Update status bar with Caller ID and duration (no longer overwritten by show_status)
+		update_status_bar();
+
+		if (!active_call_is_video) {
+			document.querySelector('#status_bar .status_icon i').className = 'fas fa-phone';
 		}
 	}
 	else {

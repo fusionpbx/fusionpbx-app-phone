@@ -79,6 +79,7 @@ if ($row) {
 $document['title'] = $text['title-phone'];
 
 //send the content
+echo "<!DOCTYPE html>\n";
 echo "<html>\n";
 
 echo "<head>\n";
@@ -224,8 +225,8 @@ echo "	</div>\n";
 
 //define the active call control
 echo "	<div class='active' id='active' style='display: none;'>\n";
-echo "		<div class='caller_id' id='active_caller_id'></div>\n";
-echo "		<div id='answer_time' class='answer_time'>00:00:00</div>\n";
+echo "		<div class='caller_id' id='active_caller_id' style='display: none;'></div>\n";
+echo "		<div id='answer_time' class='answer_time'></div>\n";
 echo "		<div class='dialpad_wrapper'>\n";
 echo "			<div class='dialpad_box mute' id='mute_audio' onclick='mute_audio();'><i class='fas fa-microphone' title=\"".$text['label-mute']."\"></i><sup>".$text['label-mute']."</sup></div>\n";
 echo "			<div class='dialpad_box' id='unmute_audio' style='color: #ba0000; display: none;' onclick='unmute_audio();'><i class='fas fa-microphone-slash' title=\"".$text['label-unmute']."\"></i><sup>".$text['label-unmute']."</sup></div>\n";
