@@ -1,4 +1,3 @@
-
 function sanitize_string(str) {
 	let temp = document.createElement('div');
 	temp.textContent = str;
@@ -22,7 +21,7 @@ async function call_video() {
 	// Check camera permissions first
 	var has_camera = await check_camera_permissions();
 	if (!has_camera) {
-		alert('Camera access is not available.\n\nFalling back to audio call.\n\nThis phone app requires HTTPS to access your camera.\n\nMake sure:\n1. You are accessing this page via HTTPS\n2. Your browser has granted camera permissions');
+		alert('Camera access is not available.\n\nFalling back to audio call.\n\nThis phone app requires HTTPS to access your camera.');
 		// Fall back to audio call
 		call_audio();
 		return;
@@ -368,6 +367,7 @@ let original_audio_track = null;  // Store original audio track for restoration
 
 // Audio input device selection
 let selected_audio_input_device_id = '';
+let selected_video_input_device_id = '';
 let is_chromium_browser = false;
 
 // Ringback sound selection (for outgoing calls ringing)
@@ -468,109 +468,55 @@ async function enumerate_audio_devices() {
 	}
 }
 
+// Enumerate and populate video input devices
+async function enumerate_video_devices() {
+	var select = document.getElementById('video_input_select');
+	if (!select) {
+		return;
+	}
+
+	select.innerHTML = '<option value="">Default Device</option>';
+
+	if (!navigator.mediaDevices || typeof navigator.mediaDevices.enumerateDevices !== 'function') {
+		console.warn('enumerate_video_devices: mediaDevices.enumerateDevices not supported');
+		return;
+	}
+
+	try {
+		var stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+		if (stream) {
+			var tracks = stream.getTracks();
+			tracks.forEach(function(track) {
+				track.stop();
+			});
+		}
+	} catch (err) {
+		console.warn('Could not enumerate video devices:', err);
+		return;
+	}
+
+	var devices = await navigator.mediaDevices.enumerateDevices();
+	var videoInputDevices = devices.filter(function(device) {
+		return device.kind === 'videoinput';
+	});
+
+	if (videoInputDevices.length === 1) {
+		selected_video_input_device_id = videoInputDevices[0].deviceId;
+	}
+
+	videoInputDevices.forEach(function(device) {
+		var option = document.createElement('option');
+		option.value = device.deviceId;
+		option.textContent = device.label || 'Camera ' + device.deviceId.substring(0, 8);
+		select.appendChild(option);
+	});
+
+	if (selected_video_input_device_id) {
+		select.value = selected_video_input_device_id;
+	}
+}
+
 // Enumerate and populate ringback sounds from directory
-async function enumerate_ringback_sounds() {
-	var select = document.getElementById('ringback_select');
-	if (!select) {
-		return;
-	}
-
-	// Clear existing options, keep default
-	select.innerHTML = '<option value="default.mp3">Default</option>';
-
-	try {
-		var response = await fetch('resources/ringback_list.php');
-		var sounds = await response.json();
-
-		sounds.forEach(function(sound) {
-			// Skip default as it's already added
-			if (sound.value === 'default.mp3') {
-				return;
-			}
-
-			var option = document.createElement('option');
-			option.value = sound.value;
-			option.textContent = sound.text;
-			select.appendChild(option);
-		});
-
-		console.log('enumerate_ringback_sounds: Loaded', sounds.length, 'ringback sounds');
-	} catch (err) {
-		console.warn('Could not enumerate ringback sounds:', err);
-	}
-
-	// Restore selected ringback if previously set
-	if (selected_ringback_sound && select.value !== selected_ringback_sound) {
-		select.value = selected_ringback_sound;
-	}
-}
-
-// Enumerate and populate ringtones from directory
-async function enumerate_ringtones() {
-	var select = document.getElementById('ringtone_select');
-	if (!select) {
-		return;
-	}
-
-	// Clear existing options, keep default
-	select.innerHTML = '<option value="default.mp3">Default</option>';
-
-	try {
-		var response = await fetch('resources/ringtone_list.php');
-		var ringtones = await response.json();
-
-		ringtones.forEach(function(ringtone) {
-			// Skip default as it's already added
-			if (ringtone.value === 'default.mp3') {
-				return;
-			}
-
-			var option = document.createElement('option');
-			option.value = ringtone.value;
-			option.textContent = ringtone.text;
-			select.appendChild(option);
-		});
-
-		console.log('enumerate_ringtones: Loaded', ringtones.length, 'ringtones');
-	} catch (err) {
-		console.warn('Could not enumerate ringtones:', err);
-	}
-
-	// Restore selected ringtone if previously set
-	if (selected_ringtone && select.value !== selected_ringtone) {
-		select.value = selected_ringtone;
-	}
-}
-
-// Update ringback sound source based on selected ringback
-function update_ringback_source(sound_file) {
-	var ringback = document.getElementById('ringback');
-	if (ringback && ringback.querySelector('source')) {
-		var source = ringback.querySelector('source');
-		var ext = sound_file.split('.').pop().toLowerCase();
-		var mime_type = (ext === 'wav') ? 'audio/wav' : 'audio/mpeg';
-		source.src = 'resources/sounds/ringback/' + sound_file;
-		source.type = mime_type;
-		ringback.load();  // Reload the audio element with new source
-		console.log('update_ringback_source: Updated to', sound_file);
-	}
-}
-
-// Update ringtone sound source based on selected ringtone
-function update_ringtone_source(sound_file) {
-	var ringtone = document.getElementById('ringtone');
-	if (ringtone && ringtone.querySelector('source')) {
-		var source = ringtone.querySelector('source');
-		var ext = sound_file.split('.').pop().toLowerCase();
-		var mime_type = (ext === 'wav') ? 'audio/wav' : 'audio/mpeg';
-		source.src = 'resources/sounds/ringtones/' + sound_file;
-		source.type = mime_type;
-		ringtone.load();  // Reload the audio element with new source
-		console.log('update_ringtone_source: Updated to', sound_file);
-	}
-}
-
-// Update audio input device for the current call
 async function enumerate_ringback_sounds() {
 	var select = document.getElementById('ringback_select');
 	if (!select) {
@@ -826,6 +772,99 @@ async function update_audio_input_device(device_id) {
 		console.error('update_audio_input_device: Error switching audio device:', err);
 		console.error('update_audio_input_device: Error name:', err.name);
 		console.error('update_audio_input_device: Error message:', err.message);
+	}
+}
+
+async function update_video_input_device(device_id) {
+	selected_video_input_device_id = device_id;
+	console.log('update_video_input_device: Called with device_id:', device_id);
+
+	if (!session || !session.mediaHandler) {
+		console.warn('update_video_input_device: Cannot update - session media handler not available');
+		return;
+	}
+
+	var localStream = null;
+	if (typeof session.mediaHandler.getLocalStreams === 'function') {
+		var local_streams = session.mediaHandler.getLocalStreams();
+		if (local_streams && local_streams.length > 0) {
+			localStream = local_streams[0];
+		}
+	}
+
+	if (!localStream && session.mediaHandler.localStream) {
+		localStream = session.mediaHandler.localStream;
+	}
+
+	if (!localStream) {
+		console.warn('update_video_input_device: No local stream available');
+		return;
+	}
+
+	var oldVideoTracks = localStream.getVideoTracks();
+	if (!oldVideoTracks || oldVideoTracks.length === 0) {
+		console.warn('update_video_input_device: No video tracks available to replace');
+		return;
+	}
+
+	try {
+		var videoConstraints = { video: true };
+		if (device_id && device_id !== '') {
+			videoConstraints = { video: { deviceId: { exact: device_id } } };
+		}
+
+		console.log('update_video_input_device: Requesting new video stream with constraints:', videoConstraints);
+
+		var newStream = await navigator.mediaDevices.getUserMedia(videoConstraints);
+		var newVideoTracks = newStream.getVideoTracks();
+		if (!newVideoTracks || newVideoTracks.length === 0) {
+			console.error('update_video_input_device: New video stream contains no tracks');
+			return;
+		}
+
+		var newVideoTrack = newVideoTracks[0];
+
+		// Replace the sender track in the peer connection first.
+		var videoSender = null;
+		if (session.mediaHandler.peerConnection && typeof session.mediaHandler.peerConnection.getSenders === 'function') {
+			videoSender = session.mediaHandler.peerConnection.getSenders().find(function(s) {
+				return s.track && s.track.kind === 'video';
+			});
+		}
+
+		if (videoSender) {
+			await videoSender.replaceTrack(newVideoTrack);
+			console.log('update_video_input_device: Replaced video sender track');
+		} else {
+			console.warn('update_video_input_device: No video sender found');
+		}
+
+		// Update the local stream preview.
+		oldVideoTracks.forEach(function(track) {
+			if (track !== newVideoTrack) {
+				track.stop();
+				localStream.removeTrack(track);
+			}
+		});
+
+		localStream.addTrack(newVideoTrack);
+
+		if (session.mediaHandler.localStream && session.mediaHandler.localStream !== localStream) {
+			session.mediaHandler.localStream = localStream;
+		}
+
+		var localVideo = document.getElementById('local_video');
+		if (localVideo) {
+			localVideo.srcObject = localStream;
+			var playPromise = localVideo.play();
+			if (playPromise && typeof playPromise.catch === 'function') {
+				playPromise.catch(function() {});
+			}
+		}
+
+		console.log('update_video_input_device: Video source switched successfully');
+	} catch (err) {
+		console.error('update_video_input_device: Error switching video device:', err);
 	}
 }
 
@@ -1909,6 +1948,9 @@ function toggle_settings() {
 		update_action_bar_state(null);  // Clear all active states
 	} else {
 		hide_all_panels();
+		// Refresh device lists when opening settings
+		enumerate_audio_devices();
+		enumerate_video_devices();
 		settings_panel.style.display = 'flex';
 		update_action_bar_state('settings');  // Set settings as active
 	}
@@ -1944,7 +1986,7 @@ async function get_media_options(use_video) {
 		media: {
 			constraints: {
 				audio: audio_constraints,
-				video: use_video
+				video: use_video ? (selected_video_input_device_id ? { deviceId: selected_video_input_device_id } : true) : false
 			},
 			render: {
 				remote: document.getElementById('remote_video'),
@@ -3162,6 +3204,9 @@ document.addEventListener('DOMContentLoaded', function() {
 	// Initialize audio device enumeration and populate the dropdown
 	enumerate_audio_devices();
 
+	// Initialize video device enumeration and populate the dropdown
+	enumerate_video_devices();
+
 	// Initialize ringback sound enumeration and populate the dropdown
 	enumerate_ringback_sounds();
 
@@ -3179,9 +3224,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
 			// If there's an active call, immediately update the audio input device
 			if (is_session_active()) {
-				console.log('audio_input_select: Active call detected, updating audio input device');
+				console.log('audio_input_set_selector: Active call detected, updating audio input device');
 				update_audio_input_device(device_id);
 			}
+		});
+	}
+
+	// Add change event listener to video input device selector
+	var video_input_select = document.getElementById('video_input_select');
+	if (video_input_select) {
+		video_input_select.addEventListener('change', function() {
+			var device_id = this.value;
+			update_video_input_device(device_id);
 		});
 	}
 
