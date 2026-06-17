@@ -365,8 +365,9 @@ let tab_audio_stream = null;  // Store the tab audio stream
 let tab_audio_track_id = null;  // Store the tab audio track ID
 let original_audio_track = null;  // Store original audio track for restoration
 
-// Audio input device selection
+// Audio input/output device selection
 let selected_audio_input_device_id = '';
+let selected_audio_output_device_id = '';
 let selected_video_input_device_id = '';
 let is_chromium_browser = false;
 
@@ -513,6 +514,75 @@ async function enumerate_video_devices() {
 
 	if (selected_video_input_device_id) {
 		select.value = selected_video_input_device_id;
+	}
+}
+
+// Enumerate and populate audio output devices
+async function enumerate_audio_output_devices() {
+	var select = document.getElementById('audio_output_select');
+	if (!select) {
+		return;
+	}
+
+	select.innerHTML = '<option value="">Default Device</option>';
+
+	if (!navigator.mediaDevices || typeof navigator.mediaDevices.enumerateDevices !== 'function') {
+		console.warn('enumerate_audio_output_devices: mediaDevices.enumerateDevices not supported');
+		return;
+	}
+
+	try {
+		await navigator.mediaDevices.getUserMedia({ audio: true });
+	} catch (err) {
+		console.warn('Could not enumerate audio output devices:', err);
+	}
+
+	var devices = await navigator.mediaDevices.enumerateDevices();
+	var audioOutputDevices = devices.filter(function(device) {
+		return device.kind === 'audiooutput';
+	});
+
+	audioOutputDevices.forEach(function(device) {
+		var option = document.createElement('option');
+		option.value = device.deviceId;
+		option.textContent = device.label || 'Output ' + device.deviceId.substring(0, 8);
+		select.appendChild(option);
+	});
+
+	if (selected_audio_output_device_id) {
+		select.value = selected_audio_output_device_id;
+	}
+}
+
+async function update_audio_output_device(device_id) {
+	selected_audio_output_device_id = device_id;
+	console.log('update_audio_output_device: Called with device_id:', device_id);
+
+	var elements = [];
+	var ringback = document.getElementById('ringback');
+	var ringtone = document.getElementById('ringtone');
+	var remote_video = document.getElementById('remote_video');
+
+	if (ringback) elements.push(ringback);
+	if (ringtone) elements.push(ringtone);
+	if (remote_video) elements.push(remote_video);
+
+	for (var i = 0; i < elements.length; i++) {
+		var element = elements[i];
+		if (typeof element.setSinkId !== 'function') {
+			continue;
+		}
+
+		try {
+			if (!device_id || device_id === '') {
+				await element.setSinkId('default');
+			} else {
+				await element.setSinkId(device_id);
+			}
+			console.log('update_audio_output_device: sinkId set on', element.id, device_id || 'default');
+		} catch (err) {
+			console.warn('update_audio_output_device: Failed to set sinkId on', element.id, err);
+		}
 	}
 }
 
@@ -3204,6 +3274,9 @@ document.addEventListener('DOMContentLoaded', function() {
 	// Initialize audio device enumeration and populate the dropdown
 	enumerate_audio_devices();
 
+	// Initialize audio output device enumeration and populate the dropdown
+	enumerate_audio_output_devices();
+
 	// Initialize video device enumeration and populate the dropdown
 	enumerate_video_devices();
 
@@ -3227,6 +3300,15 @@ document.addEventListener('DOMContentLoaded', function() {
 				console.log('audio_input_set_selector: Active call detected, updating audio input device');
 				update_audio_input_device(device_id);
 			}
+		});
+	}
+
+	var audio_output_select = document.getElementById('audio_output_select');
+	if (audio_output_select) {
+		audio_output_select.addEventListener('change', function() {
+			var device_id = this.value;
+			console.log('audio_output_select: Device changed to:', device_id);
+			update_audio_output_device(device_id);
 		});
 	}
 
