@@ -324,6 +324,17 @@ function detect_video_invite(session) {
 // Check if camera permissions are available before attempting video calls
 async function check_camera_permissions() {
 	try {
+		// First, check if any video input devices exist to avoid NotFoundError from getUserMedia
+		if (navigator.mediaDevices && typeof navigator.mediaDevices.enumerateDevices === 'function') {
+			const devices = await navigator.mediaDevices.enumerateDevices();
+			const hasVideoDevice = devices.some(device => device.kind === 'videoinput');
+			if (!hasVideoDevice) {
+				console.log('No video input devices found. Camera unavailable.');
+				camera_available = false;
+				return false;
+			}
+		}
+
 		var constraints = { video: true, audio: false };
 		var stream = await navigator.mediaDevices.getUserMedia(constraints);
 		// Release the stream immediately after checking
@@ -332,7 +343,9 @@ async function check_camera_permissions() {
 		camera_available = true;
 		return true;
 	} catch (err) {
-		console.warn('Camera access not available:', err.name, err.message);
+		if (err.name !== 'NotFoundError') {
+			console.warn('Camera access not available:', err.name, err.message);
+		}
 		camera_available = false;
 		return false;
 	}
@@ -1195,8 +1208,8 @@ function set_call_action_mode(enabled, use_video) {
 		action_video_mute.style.display = enabled && use_video && camera_available ? 'flex' : 'none';
 	}
 	if (action_screen_share) {
-		// Screen share button only shown during video calls and if camera is available to replace
-		action_screen_share.style.display = enabled && use_video && camera_available ? 'flex' : 'none';
+		// Screen share button only shown during video calls
+		action_screen_share.style.display = enabled && use_video ? 'flex' : 'none';
 	}
 	if (action_transfer) {
 		action_transfer.style.display = enabled ? 'flex' : 'none';
@@ -1684,16 +1697,15 @@ function update_idle_status() {
 		return;
 	}
 
-	// Show Camera status
-	// var camera_status = camera_available ? '' : ' Camera unavailable';
-	// if (registration_state === 'registered') {
-	// 	show_status('Ready' + camera_status, 'fas fa-circle');
-	// }
-	// else if (registration_state === 'connecting') {
-	// 	show_status('Connecting' + camera_status, 'fas fa-circle-notch');
-	// } else
-
-	if (registration_state === 'failed') {
+	// Show Camera Status
+	var camera_status = camera_available ? '' : ' Camera unavailable';
+	if (registration_state === 'registered') {
+		show_status('Ready' + camera_status, 'fas fa-circle');
+	}
+	else if (registration_state === 'connecting') {
+		show_status('Connecting' + camera_status, 'fas fa-circle-notch');
+	}
+	else if (registration_state === 'failed') {
 		show_status('Registration failed', 'fas fa-exclamation-circle');
 	}
 	else {
