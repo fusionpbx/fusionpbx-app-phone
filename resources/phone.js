@@ -384,16 +384,35 @@ let tab_audio_track_id = null;  // Store the tab audio track ID
 let original_audio_track = null;  // Store original audio track for restoration
 
 // Audio input/output device selection
-let selected_audio_input_device_id = '';
-let selected_audio_output_device_id = '';
-let selected_video_input_device_id = '';
+let selected_audio_input_device_id = get_phone_setting('audio_input_device', '');
+let selected_audio_output_device_id = get_phone_setting('audio_output_device', '');
+let selected_video_input_device_id = get_phone_setting('video_input_device', '');
 let is_chromium_browser = false;
 
 // Ringback sound selection (for outgoing calls ringing)
-let selected_ringback_sound = 'default.mp3';
+let selected_ringback_sound = get_phone_setting('ringback_sound', 'default.mp3');
 
 // Ringtone selection (for incoming calls ringing)
-let selected_ringtone = 'default.mp3';
+let selected_ringtone = get_phone_setting('ringtone', 'default.mp3');
+
+// Phone settings persistence helpers
+function save_phone_setting(key, value) {
+	try {
+		localStorage.setItem('phone_setting_' + key, value);
+	} catch (e) {
+		console.warn('Could not save phone setting ' + key + ':', e);
+	}
+}
+
+function get_phone_setting(key, defaultValue) {
+	try {
+		var stored = localStorage.getItem('phone_setting_' + key);
+		return stored !== null ? stored : defaultValue;
+	} catch (e) {
+		console.warn('Could not load phone setting ' + key + ':', e);
+		return defaultValue;
+	}
+}
 
 // Check if browser is Chrome/Chromium-based
 function check_chromium_browser() {
@@ -574,6 +593,7 @@ async function enumerate_audio_output_devices() {
 
 async function update_audio_output_device(device_id) {
 	selected_audio_output_device_id = device_id;
+	save_phone_setting('audio_output_device', device_id);
 	console.log('update_audio_output_device: Called with device_id:', device_id);
 
 	var elements = [];
@@ -709,6 +729,7 @@ function update_ringtone_source(sound_file) {
 // Update audio input device for the current call
 async function update_audio_input_device(device_id) {
 	selected_audio_input_device_id = device_id;
+	save_phone_setting('audio_input_device', device_id);
 
 	console.log('update_audio_input_device: Called with device_id:', device_id);
 	console.log('update_audio_input_device: session exists:', !!session);
@@ -865,6 +886,7 @@ async function update_audio_input_device(device_id) {
 
 async function update_video_input_device(device_id) {
 	selected_video_input_device_id = device_id;
+	save_phone_setting('video_input_device', device_id);
 	console.log('update_video_input_device: Called with device_id:', device_id);
 
 	if (!session || !session.mediaHandler) {
@@ -1794,7 +1816,7 @@ function update_status_bar() {
 			}
 		}
 
-		var status_text = caller_info ? caller_info + ' - ' + duration : duration;
+		var status_text = caller_info ? caller_info + ' &nbsp; ' + duration : duration;
 		document.getElementById('status_text').innerHTML = status_text;
 	} else {
 		update_idle_status();
@@ -2378,12 +2400,12 @@ async function answer_call(use_video, receive_only_video) {
 			// Show video if enabled
 			if (use_video) {
 				document.getElementById('video_container').style.display = "block";
-				if (!camera_available) {
-					document.getElementById('local_video_wrapper').classList.add('local_preview_hidden');
-					document.getElementById('local_video').style.display = "none";
-				} else {
+				if (!receive_only_video && camera_available) {
 					document.getElementById('local_video_wrapper').classList.remove('local_preview_hidden');
 					document.getElementById('local_video').style.display = "inline";
+				} else {
+					document.getElementById('local_video_wrapper').classList.add('local_preview_hidden');
+					document.getElementById('local_video').style.display = "none";
 				}
 				document.getElementById('remote_video').style.display = "inline";
 				apply_video_fit_layout();
@@ -3338,15 +3360,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	if (audio_input_select) {
 		audio_input_select.addEventListener('change', function() {
 			var device_id = this.value;
-			selected_audio_input_device_id = device_id;
-			console.log('audio_input_select: Device changed to:', device_id);
-			console.log('audio_input_select: selected_audio_input_device_id is now:', selected_audio_input_device_id);
-
-			// If there's an active call, immediately update the audio input device
-			if (is_session_active()) {
-				console.log('audio_input_set_selector: Active call detected, updating audio input device');
-				update_audio_input_device(device_id);
-			}
+			update_audio_input_device(device_id);
 		});
 	}
 
@@ -3373,6 +3387,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	if (ringback_select) {
 		ringback_select.addEventListener('change', function() {
 			selected_ringback_sound = this.value;
+			save_phone_setting('ringback_sound', selected_ringback_sound);
 			update_ringback_source(selected_ringback_sound);
 			console.log('ringback_select: Ringback changed to:', selected_ringback_sound);
 		});
@@ -3383,6 +3398,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	if (ringtone_select) {
 		ringtone_select.addEventListener('change', function() {
 			selected_ringtone = this.value;
+			save_phone_setting('ringtone', selected_ringtone);
 			update_ringtone_source(selected_ringtone);
 			console.log('ringtone_select: Ringtone changed to:', selected_ringtone);
 		});

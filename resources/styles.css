@@ -415,6 +415,7 @@ sup {
 
 .status_text {
 	font-weight: 600;
+	letter-spacing: 0.5px;
 }
 
 /* Action Bar Styles */
