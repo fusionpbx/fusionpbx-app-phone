@@ -144,7 +144,7 @@ video::-webkit-media-controls-start-playback-button {
 }
 
 .dialpad {
-	z-index: 999;
+	z-index: 2001;
 	position: fixed;
 	top: 48px;
 	bottom: 38px;
@@ -156,6 +156,7 @@ video::-webkit-media-controls-start-playback-button {
 	align-items: center;
 	justify-content: flex-start;
 	padding-top: 15px;
+	background: #161D28;
 }
 
 .dialpad_content {

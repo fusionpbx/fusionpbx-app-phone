@@ -66,8 +66,13 @@ async function send_call(use_video) {
 	set_hangup_visibility(true);
 	if (use_video) {
 		document.getElementById('video_container').style.display = "block";
-		document.getElementById('local_video_wrapper').classList.remove('local_preview_hidden');
-		document.getElementById('local_video').style.display = "inline";
+		if (!camera_available) {
+			document.getElementById('local_video_wrapper').classList.add('local_preview_hidden');
+			document.getElementById('local_video').style.display = "none";
+		} else {
+			document.getElementById('local_video_wrapper').classList.remove('local_preview_hidden');
+			document.getElementById('local_video').style.display = "inline";
+		}
 		document.getElementById('remote_video').style.display = "inline";
 	}
 	document.getElementById('mute_audio').style.display = "none";
@@ -1130,13 +1135,18 @@ function sync_call_action_controls() {
 	if (action_video_mute) {
 		var local_video_wrapper = document.getElementById('local_video_wrapper');
 		var local_video_hidden = !!(local_video_wrapper && local_video_wrapper.classList.contains('local_preview_hidden'));
-		if (action_video_mute_icon) {
-			action_video_mute_icon.className = local_video_hidden ? 'fas fa-video-slash' : 'fas fa-video';
+		if (!camera_available) {
+			action_video_mute.style.display = 'none';
+		} else {
+			action_video_mute.style.display = 'flex';
+			if (action_video_mute_icon) {
+				action_video_mute_icon.className = local_video_hidden ? 'fas fa-video-slash' : 'fas fa-video';
+			}
+			if (action_video_mute_label) {
+				action_video_mute_label.textContent = 'Local';
+			}
+			action_video_mute.classList.toggle('action_item_toggle_active', local_video_hidden);
 		}
-		if (action_video_mute_label) {
-			action_video_mute_label.textContent = 'Local';
-		}
-		action_video_mute.classList.toggle('action_item_toggle_active', local_video_hidden);
 	}
 
 	// Screen share button state
@@ -1182,11 +1192,11 @@ function set_call_action_mode(enabled, use_video) {
 		action_hold.style.display = enabled ? 'flex' : 'none';
 	}
 	if (action_video_mute) {
-		action_video_mute.style.display = enabled && use_video ? 'flex' : 'none';
+		action_video_mute.style.display = enabled && use_video && camera_available ? 'flex' : 'none';
 	}
 	if (action_screen_share) {
-		// Screen share button only shown during video calls
-		action_screen_share.style.display = enabled && use_video ? 'flex' : 'none';
+		// Screen share button only shown during video calls and if camera is available to replace
+		action_screen_share.style.display = enabled && use_video && camera_available ? 'flex' : 'none';
 	}
 	if (action_transfer) {
 		action_transfer.style.display = enabled ? 'flex' : 'none';
@@ -1674,14 +1684,16 @@ function update_idle_status() {
 		return;
 	}
 
-	var camera_status = camera_available ? '' : ' (Camera unavailable)';
-	if (registration_state === 'registered') {
-		show_status('Ready' + camera_status, 'fas fa-circle');
-	}
-	else if (registration_state === 'connecting') {
-		show_status('Connecting' + camera_status, 'fas fa-circle-notch');
-	}
-	else if (registration_state === 'failed') {
+	// Show Camera status
+	// var camera_status = camera_available ? '' : ' Camera unavailable';
+	// if (registration_state === 'registered') {
+	// 	show_status('Ready' + camera_status, 'fas fa-circle');
+	// }
+	// else if (registration_state === 'connecting') {
+	// 	show_status('Connecting' + camera_status, 'fas fa-circle-notch');
+	// } else
+
+	if (registration_state === 'failed') {
 		show_status('Registration failed', 'fas fa-exclamation-circle');
 	}
 	else {
@@ -2211,18 +2223,20 @@ async function answer_video(use_video) {
 	// Check camera permissions first
 	var has_camera = await check_camera_permissions();
 	if (!has_camera) {
-		alert('Camera access is not available.\n\nFalling back to audio call.\n\nThis phone app requires HTTPS to access your camera.');
-		// Fall back to audio answer
-		answer_call(false);
+		console.log('answer_video: Camera unavailable, answering receive-only remote video');
+		answer_call(true, true);
 		return;
 	}
 
 	// Answer the call with video
-	answer_call(true);
+	answer_call(true, false);
 }
 
 // Unified answer function used by both answer_audio() and answer_video()
-async function answer_call(use_video) {
+async function answer_call(use_video, receive_only_video) {
+	if (typeof receive_only_video === 'undefined') {
+		receive_only_video = false;
+	}
 	// Set the session state
 	session_hungup = false;
 
@@ -2272,6 +2286,13 @@ async function answer_call(use_video) {
 			// Set audio constraint to use the tab audio track
 			answer_audio_constraints = tab_audio_track;
 
+			var rtc_constraints = {
+				"optional": [{ 'DtlsSrtpKeyAgreement': 'true'} ]
+			};
+			if (use_video) {
+				rtc_constraints.offerToReceiveVideo = true;
+			}
+
 			answer_media = {
 				media: {
 					constraints: {
@@ -2287,9 +2308,7 @@ async function answer_call(use_video) {
 					},
 					autoAnswer: true,
 					autoAccept: false,
-					RTCConstraints: {
-						"optional": [{ 'DtlsSrtpKeyAgreement': 'true'} ]
-					}
+					RTCConstraints: rtc_constraints
 				}
 			};
 
@@ -2347,8 +2366,13 @@ async function answer_call(use_video) {
 			// Show video if enabled
 			if (use_video) {
 				document.getElementById('video_container').style.display = "block";
-				document.getElementById('local_video_wrapper').classList.remove('local_preview_hidden');
-				document.getElementById('local_video').style.display = "inline";
+				if (!camera_available) {
+					document.getElementById('local_video_wrapper').classList.add('local_preview_hidden');
+					document.getElementById('local_video').style.display = "none";
+				} else {
+					document.getElementById('local_video_wrapper').classList.remove('local_preview_hidden');
+					document.getElementById('local_video').style.display = "inline";
+				}
 				document.getElementById('remote_video').style.display = "inline";
 				apply_video_fit_layout();
 			}
@@ -2375,11 +2399,19 @@ async function answer_call(use_video) {
 		answer_audio_constraints.deviceId = selected_audio_input_device_id;
 	}
 
+	var video_constraints = use_video && !receive_only_video;
+	var rtc_constraints = {
+		"optional": [{ 'DtlsSrtpKeyAgreement': 'true'} ]
+	};
+	if (use_video) {
+		rtc_constraints.offerToReceiveVideo = true;
+	}
+
 	answer_media = {
 		media: {
 			constraints: {
 				audio: answer_audio_constraints,
-				video: use_video
+				video: video_constraints
 			},
 			render: {
 				remote: document.getElementById('remote_video'),
@@ -2387,9 +2419,7 @@ async function answer_call(use_video) {
 			},
 			autoAnswer: true,  // Allow remote media to play (including ringback)
 			autoAccept: false,  // Don't auto-accept the call
-			RTCConstraints: {
-				"optional": [{ 'DtlsSrtpKeyAgreement': 'true'} ]
-			}
+			RTCConstraints: rtc_constraints
 		}
 	};
 	session.accept(answer_media);
@@ -2423,8 +2453,13 @@ async function answer_call(use_video) {
 	// Show video if enabled
 	if (use_video) {
 		document.getElementById('video_container').style.display = "block";
-		document.getElementById('local_video_wrapper').classList.remove('local_preview_hidden');
-		document.getElementById('local_video').style.display = "inline";
+		if (!receive_only_video && camera_available) {
+			document.getElementById('local_video_wrapper').classList.remove('local_preview_hidden');
+			document.getElementById('local_video').style.display = "inline";
+		} else {
+			document.getElementById('local_video_wrapper').classList.add('local_preview_hidden');
+			document.getElementById('local_video').style.display = "none";
+		}
 		document.getElementById('remote_video').style.display = "inline";
 		apply_video_fit_layout();
 	}
@@ -3229,7 +3264,7 @@ document.addEventListener('keydown', function(e) {
 
 	if (e.key === 'Backspace' || e.key === 'Delete') {
 		e.preventDefault();
-		dialplad_digit_delete();
+		dialpad_digit_delete();
 		return;
 	}
 
