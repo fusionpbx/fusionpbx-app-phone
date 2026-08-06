@@ -2199,7 +2199,7 @@ user_agent.on('invite', function (s) {
 		reset_call_ui_state(true);
 	});
 
-	// Helper function to route remote audio to the appropriate elements
+	// Helper function to route remote audio AND video to the appropriate elements
 	// This is called from both 'accepted' and 'stream' events for browser compatibility
 	function route_remote_audio_to_elements() {
 		var remote_video = document.getElementById('remote_video');
@@ -2214,12 +2214,34 @@ user_agent.on('invite', function (s) {
 			var receivers = session.mediaHandler.peerConnection.getReceivers();
 			for (var r = 0; r < receivers.length; r++) {
 				var track = receivers[r].track;
-				if (track && track.kind === 'audio') {
-					// Find or create a stream for this audio track
-					if (!remoteStreams.length) {
-						remoteStreams.push(new MediaStream());
+				if (track) {
+					// Find or create a stream for this track
+					var foundStream = null;
+					for (var rs = 0; rs < remoteStreams.length; rs++) {
+						if (remoteStreams[rs].id === track.streams[0] && remoteStreams[rs].id) {
+							foundStream = remoteStreams[rs];
+							break;
+						}
 					}
-					remoteStreams[0].addTrack(track);
+					if (!foundStream && track.streams && track.streams.length > 0) {
+						// Check if this stream already exists in our array
+						var streamExists = false;
+						for (var es = 0; es < remoteStreams.length; es++) {
+							if (remoteStreams[es].id === track.streams[0].id) {
+								streamExists = true;
+								foundStream = remoteStreams[es];
+								break;
+							}
+						}
+						if (!streamExists) {
+							foundStream = track.streams[0];
+							remoteStreams.push(foundStream);
+						}
+					} else if (!foundStream) {
+						foundStream = new MediaStream();
+						remoteStreams.push(foundStream);
+					}
+					foundStream.addTrack(track);
 				}
 			}
 		}
@@ -2230,14 +2252,17 @@ user_agent.on('invite', function (s) {
 		}
 
 		console.log('route_remote_audio: Found', remoteStreams.length, 'remote streams');
+		for (var si = 0; si < remoteStreams.length; si++) {
+			console.log('route_remote_audio: Stream', si, '- Audio tracks:', remoteStreams[si].getAudioTracks().length, 'Video tracks:', remoteStreams[si].getVideoTracks().length);
+		}
 
 		for (var s = 0; s < remoteStreams.length; s++) {
 			var stream = remoteStreams[s];
-			if (!stream || stream.getAudioTracks().length === 0) {
+			if (!stream) {
 				continue;
 			}
 
-			// Set on remote_video element
+			// Set on remote_video element (includes both audio and video tracks)
 			if (remote_video && remote_video.srcObject !== stream) {
 				remote_video.srcObject = stream;
 				remote_video.play().catch(function(err) {
@@ -2247,7 +2272,7 @@ user_agent.on('invite', function (s) {
 			}
 
 			// Create audio-only stream for remote_audio element (Firefox compatibility)
-			if (remote_audio) {
+			if (remote_audio && stream.getAudioTracks().length > 0) {
 				var audioTracks = stream.getAudioTracks();
 				var audioOnlyStream = new MediaStream(audioTracks);
 
@@ -2265,6 +2290,12 @@ user_agent.on('invite', function (s) {
 						console.warn('route_remote_audio: Remote audio playback blocked (autoplay policy):', err);
 					});
 				}
+			}
+
+			// Log video track info if present
+			if (stream.getVideoTracks().length > 0) {
+				var videoSettings = stream.getVideoTracks()[0].getSettings();
+				console.log('route_remote_audio: Video track found - width:', videoSettings.width, 'height:', videoSettings.height);
 			}
 		}
 	}
@@ -2290,14 +2321,14 @@ user_agent.on('invite', function (s) {
 		}
 	});
 
-	// Add stream event listener for Firefox compatibility
-	// Firefox fires the 'stream' event when remote media is available,
-	// which may happen AFTER the 'accepted' event
+	// Add track event listener for browser compatibility
+	// Some browsers fire 'track' events when remote media tracks arrive,
+	// which may happen AFTER the 'accepted' event (especially with FreeSWITCH re-INVITE pattern)
 	if (session.mediaHandler && session.mediaHandler.peerConnection) {
 		session.mediaHandler.peerConnection.addEventListener('track', function(event) {
-			console.log('peerConnection track event received:', event.track.kind, 'track ID:', event.track.id);
+			console.log('peerConnection track event received:', event.track.kind, 'track ID:', event.track.id, 'enabled:', event.track.enabled, 'readyState:', event.track.readyState);
 
-			// When a new track is received, route remote audio
+			// Handle audio tracks
 			if (event.track.kind === 'audio') {
 				console.log('peerConnection: Audio track received - routing remote audio');
 
@@ -2343,6 +2374,54 @@ user_agent.on('invite', function (s) {
 					} else {
 						remote_video.srcObject = audioStream;
 					}
+				}
+			}
+
+			// Handle video tracks - this is the fix for inbound video delay
+			else if (event.track.kind === 'video') {
+				console.log('peerConnection: Video track received - routing remote video');
+				console.log('peerConnection: Video track width:', event.track.getSettings().width, 'height:', event.track.getSettings().height);
+
+				// Create a MediaStream with this video track
+				var videoStream = new MediaStream();
+				videoStream.addTrack(event.track);
+
+				var remote_video = document.getElementById('remote_video');
+				if (remote_video) {
+					var existingStream = remote_video.srcObject;
+					if (existingStream) {
+						// Check if this video track is already in the stream
+						var videoTracks = existingStream.getVideoTracks();
+						var hasVideoTrack = false;
+						for (var v = 0; v < videoTracks.length; v++) {
+							if (videoTracks[v].id === event.track.id) {
+								hasVideoTrack = true;
+								break;
+							}
+						}
+						if (!hasVideoTrack) {
+							// Add video track to existing stream (which may already have audio)
+							existingStream.addTrack(event.track);
+							console.log('peerConnection: Video track added to existing stream');
+						}
+					} else {
+						// No existing stream, use the video stream
+						remote_video.srcObject = videoStream;
+						console.log('peerConnection: Video stream set on remote_video element');
+					}
+
+					// Ensure the video element is playing
+					var playPromise = remote_video.play();
+					if (playPromise !== undefined) {
+						playPromise.then(function() {
+							console.log('peerConnection: Remote video playback started successfully');
+						}).catch(function(err) {
+							console.warn('peerConnection: Remote video playback blocked:', err);
+						});
+					}
+
+					// Also update route_remote_audio_to_elements to include video
+					route_remote_audio_to_elements();
 				}
 			}
 		});
@@ -2586,15 +2665,23 @@ async function answer_call(use_video, receive_only_video) {
 	var rtc_constraints = {
 		"optional": [{ 'DtlsSrtpKeyAgreement': 'true'} ]
 	};
+
+	// IMPORTANT: For SIP.js 0.7.8, offerToReceiveVideo must be in media.constraints.video
+	// to properly include video in the SDP answer. Setting it in RTCConstraints does NOT
+	// work because RTCConstraints are for WebRTC peer connection optional constraints,
+	// not for SDP negotiation.
+	var answer_video_constraints = video_constraints;
 	if (use_video) {
-		rtc_constraints.offerToReceiveVideo = true;
+		answer_video_constraints = {
+			offerToReceiveVideo: true
+		};
 	}
 
 	answer_media = {
 		media: {
 			constraints: {
 				audio: answer_audio_constraints,
-				video: video_constraints
+				video: answer_video_constraints
 			},
 			render: {
 				remote: document.getElementById('remote_video'),
