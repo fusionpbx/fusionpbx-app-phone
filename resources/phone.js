@@ -2199,6 +2199,155 @@ user_agent.on('invite', function (s) {
 		reset_call_ui_state(true);
 	});
 
+	// Helper function to route remote audio to the appropriate elements
+	// This is called from both 'accepted' and 'stream' events for browser compatibility
+	function route_remote_audio_to_elements() {
+		var remote_video = document.getElementById('remote_video');
+		var remote_audio = document.getElementById('remote_audio');
+
+		// Get remote streams using getReceivers() (modern) or getRemoteStreams() (deprecated but needed for Firefox)
+		var remoteStreams = [];
+
+		// Try modern getReceivers() first
+		if (session.mediaHandler && session.mediaHandler.peerConnection &&
+			typeof session.mediaHandler.peerConnection.getReceivers === 'function') {
+			var receivers = session.mediaHandler.peerConnection.getReceivers();
+			for (var r = 0; r < receivers.length; r++) {
+				var track = receivers[r].track;
+				if (track && track.kind === 'audio') {
+					// Find or create a stream for this audio track
+					if (!remoteStreams.length) {
+						remoteStreams.push(new MediaStream());
+					}
+					remoteStreams[0].addTrack(track);
+				}
+			}
+		}
+
+		// Fallback to getRemoteStreams() if no streams found
+		if (!remoteStreams.length && session.mediaHandler && session.getRemoteStreams) {
+			remoteStreams = session.getRemoteStreams() || [];
+		}
+
+		console.log('route_remote_audio: Found', remoteStreams.length, 'remote streams');
+
+		for (var s = 0; s < remoteStreams.length; s++) {
+			var stream = remoteStreams[s];
+			if (!stream || stream.getAudioTracks().length === 0) {
+				continue;
+			}
+
+			// Set on remote_video element
+			if (remote_video && remote_video.srcObject !== stream) {
+				remote_video.srcObject = stream;
+				remote_video.play().catch(function(err) {
+					console.log('route_remote_audio: Remote video play attempt:', err);
+				});
+				console.log('route_remote_audio: Stream set on remote_video');
+			}
+
+			// Create audio-only stream for remote_audio element (Firefox compatibility)
+			if (remote_audio) {
+				var audioTracks = stream.getAudioTracks();
+				var audioOnlyStream = new MediaStream(audioTracks);
+
+				if (remote_audio.srcObject !== audioOnlyStream) {
+					remote_audio.srcObject = audioOnlyStream;
+					console.log('route_remote_audio: Audio stream set on remote_audio element');
+				}
+
+				// Explicitly play the audio
+				var playPromise = remote_audio.play();
+				if (playPromise !== undefined) {
+					playPromise.then(function() {
+						console.log('route_remote_audio: Remote audio playback started successfully');
+					}).catch(function(err) {
+						console.warn('route_remote_audio: Remote audio playback blocked (autoplay policy):', err);
+					});
+				}
+			}
+		}
+	}
+
+	// When the call is accepted, ensure remote media streams are properly rendered
+	session.on('accepted', function() {
+		console.log('accepted: Incoming call accepted - ensuring remote media renders');
+
+		// Force render of remote media streams
+		if (session.mediaHandler) {
+			session.mediaHandler.render();
+
+			// Log remote streams for debugging
+			var remoteStreams = session.getRemoteStreams ? session.getRemoteStreams() : [];
+			console.log('accepted: Remote streams:', remoteStreams.length);
+			for (var i = 0; i < remoteStreams.length; i++) {
+				var tracks = remoteStreams[i].getTracks();
+				console.log('accepted: Stream', i, '- Audio tracks:', remoteStreams[i].getAudioTracks().length, 'Video tracks:', remoteStreams[i].getVideoTracks().length);
+			}
+
+			// Try to route remote audio immediately (works for Chrome)
+			route_remote_audio_to_elements();
+		}
+	});
+
+	// Add stream event listener for Firefox compatibility
+	// Firefox fires the 'stream' event when remote media is available,
+	// which may happen AFTER the 'accepted' event
+	if (session.mediaHandler && session.mediaHandler.peerConnection) {
+		session.mediaHandler.peerConnection.addEventListener('track', function(event) {
+			console.log('peerConnection track event received:', event.track.kind, 'track ID:', event.track.id);
+
+			// When a new track is received, route remote audio
+			if (event.track.kind === 'audio') {
+				console.log('peerConnection: Audio track received - routing remote audio');
+
+				// Create a MediaStream with just this audio track
+				var audioStream = new MediaStream();
+				audioStream.addTrack(event.track);
+
+				var remote_audio = document.getElementById('remote_audio');
+				if (remote_audio) {
+					if (remote_audio.srcObject !== audioStream) {
+						remote_audio.srcObject = audioStream;
+						console.log('peerConnection: Audio track set on remote_audio element');
+					}
+
+					// Explicitly play the audio
+					var playPromise = remote_audio.play();
+					if (playPromise !== undefined) {
+						playPromise.then(function() {
+							console.log('peerConnection: Remote audio playback started successfully');
+						}).catch(function(err) {
+							console.warn('peerConnection: Remote audio playback blocked (autoplay policy):', err);
+						});
+					}
+				}
+
+				// Also set on remote_video
+				var remote_video = document.getElementById('remote_video');
+				if (remote_video) {
+					var existingStream = remote_video.srcObject;
+					if (existingStream) {
+						// Add the track to existing stream if not already there
+						var tracks = existingStream.getTracks();
+						var hasThisTrack = false;
+						for (var t = 0; t < tracks.length; t++) {
+							if (tracks[t].id === event.track.id) {
+								hasThisTrack = true;
+								break;
+							}
+						}
+						if (!hasThisTrack) {
+							existingStream.addTrack(event.track);
+						}
+					} else {
+						remote_video.srcObject = audioStream;
+					}
+				}
+			}
+		});
+	}
+
 });
 
 // SIP Message handler - receive incoming messages
@@ -2808,6 +2957,17 @@ function reset_media() {
 			video.pause();
 		}
 	});
+
+	// Also stop remote audio tracks
+	var remote_audio = document.getElementById('remote_audio');
+	if (remote_audio && remote_audio.srcObject) {
+		var audioTracks = remote_audio.srcObject.getTracks();
+		audioTracks.forEach(function(track) {
+			track.stop();
+		});
+		remote_audio.srcObject = null;
+		remote_audio.pause();
+	}
 }
 
 // Function used to end the session

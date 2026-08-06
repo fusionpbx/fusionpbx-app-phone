@@ -118,6 +118,9 @@ echo "	<audio id='ringtone' preload='auto'>\n";
 echo "		<source src='resources/sounds/ringtones/default.mp3' type='audio/mpeg' loop='loop' />\n";
 echo "	</audio>\n";
 
+//define the remote audio element for call audio playback
+echo "	<audio id='remote_audio' autoplay style='display:none;'></audio>\n";
+
 //audio or video objects need to be initialized before phone.js
 echo "	<script language='JavaScript' type='text/javascript'>\n";
 echo "	const time_zone = '".$settings->get('domain', 'time_zone')."';\n";
