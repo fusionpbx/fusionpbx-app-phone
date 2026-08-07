@@ -37,25 +37,56 @@ async function call_video() {
 	send_call(true);
 }
 
-// Unified call function used by both call_audio() and call_video()
-async function send_call(use_video) {
-	// Set the session state
-	session_hungup = false;
+// ============================================================
+// MULTI-CALL: Outgoing Call Function (Updated for multi-call)
+// ============================================================
 
+/**
+ * Send an outgoing call - creates a new call session entry
+ * Automatically puts any current active call on hold when making a new call
+ * @param {boolean} use_video - Whether this is a video call
+ */
+async function send_call(use_video) {
 	// Get the destination number
-	destination = document.getElementById('destination').value;
+	let destination = document.getElementById('destination').value;
 
 	// Return immediately if there is no destination
 	if (destination.length == 0) {
 		return;
 	}
 
+	// Check call limit
+	if (!check_call_limit()) {
+		show_temporary_status('Maximum calls reached (' + call_waiting_config.max_concurrent_calls + ')', 'fas fa-exclamation-circle');
+		return;
+	}
+
+	// Set the session state
+	session_hungup = false;
+
+	// ============================================================
+	// MULTI-CALL: Auto-hold current call when initiating new outgoing call
+	// ============================================================
+	let previous_call = get_selected_call_session();
+	if (previous_call && !previous_call.is_on_hold && previous_call.session && previous_call.session.status !== SIP.Session.C.STATUS_TERMINATED) {
+		console.log('[Call Switching] Putting current call on hold before new outgoing call');
+		previous_call.is_on_hold = true;
+		// Use Promise.resolve() to handle cases where hold() returns undefined
+		Promise.resolve(previous_call.session.hold()).catch(function(err) {
+			console.warn('[Call Switching] Failed to hold previous call:', err);
+		});
+	}
+
 	// Add to call history as outgoing and save entry ID for duration tracking
 	current_history_entry_id = add_to_history(destination, 'outgoing', Date.now(), use_video);
 
+	// Create a new call session entry
+	let call_id = create_call_session('outgoing', destination, '', use_video);
+	let call_session = get_call_session(call_id);
+	let current_session = null;
+
 	// Show or hide the panels
 	hide_all_panels();
-
 	document.getElementById('active').style.display = "none";
 
 	// Update status bar
@@ -83,11 +114,120 @@ async function send_call(use_video) {
 	// Handle tab audio selection for Chromium browsers
 	var call_options = await get_media_options(use_video);
 
+	// Define the common session event handlers
+	function setup_outgoing_session_events(current_sess, dest, use_vid) {
+		current_sess.local_ended = false;
+		start_call_tone('outgoing');
+
+		current_sess.on('progress', function() {
+			start_call_tone('outgoing');
+			if (use_vid) {
+				ensure_local_video_preview(current_sess);
+			}
+		});
+
+		current_sess.on('accepted', function() {
+			stop_call_tone();
+			call_session.start_time = Date.now();
+			call_session.is_video = use_vid;
+			call_session.session = current_sess;
+			active_call_is_video = use_vid;
+			set_hangup_visibility(true);
+			document.getElementById('mute_audio').style.display = "inline";
+			document.getElementById('unmute_audio').style.display = "none";
+			document.getElementById('hold').style.display = "inline";
+			document.getElementById('unhold').style.display = "none";
+			document.getElementById('mute_video').style.display = use_vid ? "inline" : "none";
+			document.getElementById('unmute_video').style.display = "none";
+			set_call_action_mode(true, use_vid);
+
+			var remote_display_name = current_sess.display_name || (current_sess.remoteIdentity && current_sess.remoteIdentity.displayName) || dest;
+			var remote_number = current_sess.uri_user || (current_sess.remoteIdentity && current_sess.remoteIdentity.uri && current_sess.remoteIdentity.uri.user) || dest;
+			active_call_display_name = remote_display_name;
+			active_call_number = remote_number;
+			call_session.display_name = remote_display_name;
+			call_session.number = remote_number;
+			update_video_stream_info(remote_display_name, remote_number, use_vid);
+			update_active_call_status(use_vid, remote_display_name, remote_number);
+			if (use_vid) {
+				ensure_local_video_preview(current_sess);
+			}
+
+			// Set the caller ID to the destination
+			document.getElementById('ringing_caller_id').innerHTML = dest;
+			document.getElementById('active_caller_id').innerHTML = dest;
+
+			var video_indicator = use_vid ? "<div style='color: #1eba00; font-size: 0.7em;'><i class='fas fa-video'></i> Video Call</div>" : "";
+			document.getElementById('ringing_caller_id').innerHTML = "<div>" + sanitize_string(current_sess.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=" + sanitize_string(current_sess.uri_user) + "' target='_blank'>" + sanitize_string(current_sess.uri_user) + "</a></div>" + video_indicator;
+			document.getElementById('active_caller_id').innerHTML = document.getElementById('ringing_caller_id').innerHTML;
+
+			// Show or hide the panels
+			document.getElementById('ringing').style.display = "none";
+			document.getElementById('active').style.display = "grid";
+
+			// Show or hide the buttons
+			document.getElementById('answer_audio').style.display = "none";
+			document.getElementById('answer_video').style.display = "none";
+			document.getElementById('decline').style.display = "none";
+			document.getElementById('mute_audio').style.display = "none";
+			document.getElementById('mute_video').style.display = "none";
+
+			// Clear destination field
+			document.getElementById('destination').value = '';
+
+			// Update call switcher
+			update_call_switcher_ui();
+		});
+
+		current_sess.on('bye', function() {
+			stop_call_tone();
+			call_session.local_ended = true;
+			
+			// Remove this call from the registry
+			remove_call_session(call_id);
+			
+			if (!current_sess.local_ended) {
+				// Check if there are other active calls
+				let remaining_calls = get_active_call_sessions();
+				if (remaining_calls.length > 0) {
+					// Switch to another active call
+					select_call_session(remaining_calls[0].id);
+				} else {
+					reset_call_ui_state(true);
+				}
+			}
+		});
+
+		current_sess.on('failed', function() {
+			handle_outgoing_session_failure(current_sess, 'Call failed');
+			call_session.local_ended = true;
+			remove_call_session(call_id);
+		});
+
+		current_sess.on('rejected', function() {
+			handle_outgoing_session_failure(current_sess, 'Call rejected');
+			call_session.local_ended = true;
+			remove_call_session(call_id);
+		});
+
+		current_sess.on('cancel', function() {
+			handle_outgoing_session_failure(current_sess, 'Call canceled');
+			call_session.local_ended = true;
+			remove_call_session(call_id);
+		});
+
+		// Unmute the audio
+		audio_muted = false;
+		call_session.is_muted = false;
+
+		// Wait until the call is answered before starting the timer
+		answer_time = null;
+	}
+
 	if (selected_audio_input_device_id === 'tab-audio') {
-		// For tab audio, prompt user to select a tab with audio sharing
 		try {
 			var tab_stream = await navigator.mediaDevices.getDisplayMedia({
-				video: false,  // No video, just audio
+				video: false,
 				audio: true
 			});
 
@@ -97,17 +237,16 @@ async function send_call(use_video) {
 				return;
 			}
 
-			// Store the tab audio stream
 			session._tab_audio_stream = tab_stream;
 			var tab_audio_track = tab_stream.getAudioTracks()[0];
 
-			// make a call using a sip invite
-			session = user_agent.invite('sip:'+destination+'@<?php echo $domain_name; ?>', call_options);
-			var current_session = session;
+			// Make a call using a sip invite
+			current_session = user_agent.invite('sip:'+destination+'@<?php echo $domain_name; ?>', call_options);
+			call_session.session = current_session;
 
 			// Once the call is accepted, replace the audio track with tab audio
 			current_session.on('accepted', function() {
-				var sender = session.mediaHandler.peerConnection.getSenders().find(function(s) {
+				var sender = current_session.mediaHandler.peerConnection.getSenders().find(function(s) {
 					return s.track && s.track.kind === 'audio';
 				});
 
@@ -117,8 +256,8 @@ async function send_call(use_video) {
 					});
 				}
 
-				if (session.mediaHandler.localStream) {
-					session.mediaHandler.localStream.addTrack(tab_audio_track);
+				if (current_session.mediaHandler.localStream) {
+					current_session.mediaHandler.localStream.addTrack(tab_audio_track);
 				}
 
 				// Listen for the stream ending
@@ -135,183 +274,28 @@ async function send_call(use_video) {
 			if (use_video) {
 				ensure_local_video_preview(current_session);
 			}
-			current_session.local_ended = false;
-			start_call_tone('outgoing');
 
-			current_session.on('progress', function() {
-				start_call_tone('outgoing');
-				if (use_video) {
-					ensure_local_video_preview(current_session);
-				}
-			});
-
-			current_session.on('accepted', function() {
-				stop_call_tone();
-				answer_time = Date.now();
-				active_call_is_video = use_video;
-				set_hangup_visibility(true);
-				document.getElementById('mute_audio').style.display = "inline";
-				document.getElementById('unmute_audio').style.display = "none";
-				document.getElementById('hold').style.display = "inline";
-				document.getElementById('unhold').style.display = "none";
-				document.getElementById('mute_video').style.display = use_video ? "inline" : "none";
-				document.getElementById('unmute_video').style.display = "none";
-				set_call_action_mode(true, use_video);
-				var remote_display_name = session.display_name || (session.remoteIdentity && session.remoteIdentity.displayName) || destination;
-				var remote_number = session.uri_user || (session.remoteIdentity && session.remoteIdentity.uri && session.remoteIdentity.uri.user) || destination;
-				active_call_display_name = remote_display_name;
-				active_call_number = remote_number;
-				update_video_stream_info(remote_display_name, remote_number, use_video);
-				update_active_call_status(use_video, remote_display_name, remote_number);
-				if (use_video) {
-					ensure_local_video_preview(current_session);
-				}
-			});
-
-			current_session.on('bye', function() {
-				stop_call_tone();
-				if (!current_session.local_ended) {
-					reset_call_ui_state(true);
-				}
-			});
-
-			current_session.on('failed', function() {
-				handle_outgoing_session_failure(current_session, 'Call failed');
-			});
-
-			current_session.on('rejected', function() {
-				handle_outgoing_session_failure(current_session, 'Call rejected');
-			});
-
-			current_session.on('cancel', function() {
-				handle_outgoing_session_failure(current_session, 'Call canceled');
-			});
-
-			// Unmute the audio
-			audio_muted = false;
-
-			// Wait until the call is answered before starting the timer
-			answer_time = null;
-
-			// Set the caller ID to the destination
-			document.getElementById('ringing_caller_id').innerHTML = destination;
-			document.getElementById('active_caller_id').innerHTML = destination;
-
-			// Add the caller ID with video indicator if applicable
-			var video_indicator = use_video ? "<div style='color: #1eba00; font-size: 0.7em;'><i class='fas fa-video'></i> Video Call</div>" : "";
-			document.getElementById('ringing_caller_id').innerHTML = "<div>" + sanitize_string(session.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>" + video_indicator;
-			document.getElementById('active_caller_id').innerHTML = "<div>" + sanitize_string(session.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>" + video_indicator;
-
-			// Show or hide the panels
-			//document.getElementById('dialpad').style.display = "none";
-			document.getElementById('ringing').style.display = "none";
-			document.getElementById('active').style.display = "grid";
-
-			// Show or hide the buttons
-			document.getElementById('answer_audio').style.display = "none";
-			document.getElementById('answer_video').style.display = "none";
-			document.getElementById('decline').style.display = "none";
-			document.getElementById('mute_audio').style.display = "none";
-			document.getElementById('mute_video').style.display = "none";
-
-			// Clear destination field
-			document.getElementById('destination').value = '';
-
-			return;  // Early return since we handled everything
+			setup_outgoing_session_events(current_session, destination, use_video);
+			return;
 		} catch (err) {
 			console.error('send_call: Tab audio capture failed:', err);
-			// Fall through to use default audio
 		}
 	}
 
-	//make a call using a sip invite
-	session = user_agent.invite('sip:'+destination+'@<?php echo $domain_name; ?>', call_options);
-	var current_session = session;
+	// Make a call using a sip invite
+	current_session = user_agent.invite('sip:'+destination+'@<?php echo $domain_name; ?>', call_options);
+	call_session.session = current_session;
+
 	if (use_video) {
 		ensure_local_video_preview(current_session);
 	}
-	current_session.local_ended = false;
-	start_call_tone('outgoing');
 
-	current_session.on('progress', function() {
-		start_call_tone('outgoing');
-		if (use_video) {
-			ensure_local_video_preview(current_session);
-		}
-	});
-
-	current_session.on('accepted', function() {
-		stop_call_tone();
-		answer_time = Date.now();
-		active_call_is_video = use_video;
-		set_hangup_visibility(true);
-		document.getElementById('mute_audio').style.display = "inline";
-		document.getElementById('unmute_audio').style.display = "none";
-		document.getElementById('hold').style.display = "inline";
-		document.getElementById('unhold').style.display = "none";
-		document.getElementById('mute_video').style.display = use_video ? "inline" : "none";
-		document.getElementById('unmute_video').style.display = "none";
-		set_call_action_mode(true, use_video);
-		var remote_display_name = session.display_name || (session.remoteIdentity && session.remoteIdentity.displayName) || destination;
-		var remote_number = session.uri_user || (session.remoteIdentity && session.remoteIdentity.uri && session.remoteIdentity.uri.user) || destination;
-		active_call_display_name = remote_display_name;
-		active_call_number = remote_number;
-		update_video_stream_info(remote_display_name, remote_number, use_video);
-		update_active_call_status(use_video, remote_display_name, remote_number);
-		if (use_video) {
-			ensure_local_video_preview(current_session);
-		}
-	});
-
-	current_session.on('bye', function() {
-		stop_call_tone();
-		if (!current_session.local_ended) {
-			reset_call_ui_state(true);
-		}
-	});
-
-	current_session.on('failed', function() {
-		handle_outgoing_session_failure(current_session, 'Call failed');
-	});
-
-	current_session.on('rejected', function() {
-		handle_outgoing_session_failure(current_session, 'Call rejected');
-	});
-
-	current_session.on('cancel', function() {
-		handle_outgoing_session_failure(current_session, 'Call canceled');
-	});
-
-	// Unmute the audio
-	audio_muted = false;
-
-	// Wait until the call is answered before starting the timer
-	answer_time = null;
-
-	// Set the caller ID to the destination
-	document.getElementById('ringing_caller_id').innerHTML = destination;
-	document.getElementById('active_caller_id').innerHTML = destination;
-
-	// Add the caller ID with video indicator if applicable
-	var video_indicator = use_video ? "<div style='color: #1eba00; font-size: 0.7em;'><i class='fas fa-video'></i> Video Call</div>" : "";
-	document.getElementById('ringing_caller_id').innerHTML = "<div>" + sanitize_string(session.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>" + video_indicator;
-	document.getElementById('active_caller_id').innerHTML = "<div>" + sanitize_string(session.display_name) + "</div><div style='flex-basis: 100%; height: 0;'></div><div><a href='https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=" + sanitize_string(session.uri_user) + "' target='_blank'>" + sanitize_string(session.uri_user) + "</a></div>" + video_indicator;
-
-	// Show or hide the panels
-	//document.getElementById('dialpad').style.display = "none";
-	document.getElementById('ringing').style.display = "none";
-	document.getElementById('active').style.display = "grid";
-
-	// Show or hide the buttons
-	document.getElementById('answer_audio').style.display = "none";
-	document.getElementById('answer_video').style.display = "none";
-	document.getElementById('decline').style.display = "none";
-	document.getElementById('mute_audio').style.display = "none";
-	document.getElementById('mute_video').style.display = "none";
-
-	// Clear destination field
-	document.getElementById('destination').value = '';
+	setup_outgoing_session_events(current_session, destination, use_video);
 }
+
+// ============================================================
+// END MULTI-CALL: Outgoing Call Function
+// ============================================================
 
 // Check if an incoming SIP INVITE contains video capability
 function detect_video_invite(session) {
@@ -351,9 +335,257 @@ async function check_camera_permissions() {
 	}
 }
 
+// ============================================================
+// MULTI-CALL SUPPORT - Call Registry Infrastructure
+// ============================================================
+
+// Global call registry - stores all active call sessions
+let call_session_list = {};
+let selected_call_session_id = null;  // The currently selected/active call
+
+// Call session counter for unique IDs
+let call_session_counter = 0;
+
+// Call waiting configuration
+let call_waiting_config = {
+  enabled: true,
+  max_concurrent_calls: 3,
+  waiting_tone_file: 'resources/sounds/ringback/waiting.mp3',
+  auto_answer: false
+};
+
+// Media resource manager for video/camera sharing constraints
+let media_resource_manager = {
+  camera_track: null,
+  active_video_calls: []
+};
+
+// ============================================================
+// END MULTI-CALL INFRASTRUCTURE
+// ============================================================
+
+// ============================================================
+// MULTI-CALL SUPPORT - Call Registry Helper Functions
+// ============================================================
+
+/**
+ * Create a new call session entry
+ * @param {string} call_direction - 'outgoing' or 'incoming'
+ * @param {string} call_number - The phone number/user
+ * @param {string} call_display_name - Display name of remote party
+ * @param {boolean} is_video - Whether this is a video call
+ * @returns {string} The call session ID
+ */
+function create_call_session(call_direction, call_number, call_display_name, is_video) {
+	call_session_counter++;
+	let call_id = call_session_counter;
+
+	let call_session = {
+		id: call_id,
+		session: null,
+		display_name: call_display_name || '',
+		number: call_number || '',
+		direction: call_direction,
+		is_video: is_video || false,
+		is_on_hold: false,
+		is_muted: false,
+		start_time: null,
+		history_entry_id: null,
+		local_ended: false,
+		conversation_partner: null,
+		transfer_target: null,
+		has_video_stream: false,
+		media_stream: null
+	};
+
+	call_session_list[call_id] = call_session;
+	selected_call_session_id = call_id;
+
+	console.log('[Call Registry] Created call session:', call_id, call_session);
+	return call_id;
+}
+
+/**
+ * Get a call session by ID
+ * @param {string} call_id
+ * @returns {object|null}
+ */
+function get_call_session(call_id) {
+	return call_session_list[call_id] || null;
+}
+
+/**
+ * Get the currently selected call session
+ * @returns {object|null}
+ */
+function get_selected_call_session() {
+	if (selected_call_session_id && call_session_list[selected_call_session_id]) {
+		return call_session_list[selected_call_session_id];
+	}
+	return null;
+}
+
+/**
+ * Get all active (non-hungup) call sessions
+ * @returns {Array}
+ */
+function get_active_call_sessions() {
+	let active_calls = [];
+	Object.keys(call_session_list).forEach(function(call_id) {
+		let call = call_session_list[call_id];
+		if (!call.local_ended && call.session && call.session.status !== SIP.Session.C.STATUS_TERMINATED) {
+			active_calls.push(call);
+		}
+	});
+	return active_calls;
+}
+
+/**
+ * Get all held call sessions
+ * @returns {Array}
+ */
+function get_held_call_sessions() {
+	let held_calls = [];
+	Object.keys(call_session_list).forEach(function(call_id) {
+		let call = call_session_list[call_id];
+		if (call.is_on_hold && !call.local_ended) {
+			held_calls.push(call);
+		}
+	});
+	return held_calls;
+}
+
+/**
+ * Select a call session as the active/selected one
+ * Manages audio/video tracks to ensure only the active call has audio
+ * @param {string} call_id
+ */
+function select_call_session(call_id) {
+	if (call_session_list[call_id]) {
+		let previous_selected = get_selected_call_session();
+		
+		// If switching away from a call, put it on hold and stop its audio
+		if (previous_selected && previous_selected.id !== call_id) {
+			console.log('[Call Switching] Putting previous call on hold and stopping audio');
+			if (!previous_selected.is_on_hold) {
+				previous_selected.is_on_hold = true;
+				if (previous_selected.session && previous_selected.session.status !== SIP.Session.C.STATUS_TERMINATED) {
+					// Use Promise.resolve() to handle cases where hold() returns undefined
+					Promise.resolve(previous_selected.session.hold()).catch(function(err) {
+						console.warn('[Call Switching] Failed to hold previous call:', err);
+					});
+				}
+			}
+			// Stop audio tracks from the previous call's peer connection
+			if (previous_selected.session && previous_selected.session.mediaHandler && previous_selected.session.mediaHandler.peerConnection) {
+				let senders = previous_selected.session.mediaHandler.peerConnection.getSenders();
+				for (let i = 0; i < senders.length; i++) {
+					if (senders[i].track && senders[i].track.kind === 'audio') {
+						senders[i].track.enabled = false;
+					}
+				}
+			}
+		}
+		
+		selected_call_session_id = call_id;
+		console.log('[Call Registry] Selected call session:', call_id);
+		update_call_switcher_ui();
+		update_call_controls_for_selected_call();
+		
+		// Enable audio tracks for the newly selected call
+		let new_selected = get_selected_call_session();
+		if (new_selected && new_selected.session && new_selected.session.mediaHandler && new_selected.session.mediaHandler.peerConnection) {
+			let senders = new_selected.session.mediaHandler.peerConnection.getSenders();
+			for (let i = 0; i < senders.length; i++) {
+				if (senders[i].track && senders[i].track.kind === 'audio') {
+					senders[i].track.enabled = true;
+				}
+			}
+			// Also enable local stream audio tracks
+			if (new_selected.session.mediaHandler.localStream) {
+				let audioTracks = new_selected.session.mediaHandler.localStream.getAudioTracks();
+				for (let i = 0; i < audioTracks.length; i++) {
+					audioTracks[i].enabled = true;
+				}
+			}
+		}
+		
+		return true;
+	}
+	return false;
+}
+
+/**
+ * Remove a call session from the registry
+ * @param {string} call_id
+ */
+function remove_call_session(call_id) {
+	if (call_session_list[call_id]) {
+		console.log('[Call Registry] Removing call session:', call_id);
+		delete call_session_list[call_id];
+
+		// If the removed call was the selected one, select another active call
+		if (selected_call_session_id === call_id) {
+			let active_calls = get_active_call_sessions();
+			if (active_calls.length > 0) {
+				select_call_session(active_calls[0].id);
+			} else {
+				selected_call_session_id = null;
+			}
+		}
+
+		// Update the call switcher UI to reflect the removed call
+		update_call_switcher_ui();
+	}
+}
+
+/**
+ * Check if there are available slots for new calls
+ * @returns {boolean}
+ */
+function check_call_limit() {
+	let active_count = Object.keys(call_session_list).length;
+	return active_count < call_waiting_config.max_concurrent_calls;
+}
+
+/**
+ * Get the number of available call slots
+ * @returns {number}
+ */
+function get_available_call_slots() {
+	let active_count = Object.keys(call_session_list).length;
+	return call_waiting_config.max_concurrent_calls - active_count;
+}
+
+/**
+ * Check if any call has video enabled
+ * @returns {boolean}
+ */
+function has_active_video_call() {
+	let active_calls = get_active_call_sessions();
+	for (let i = 0; i < active_calls.length; i++) {
+		if (active_calls[i].is_video) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * Get the total number of active calls
+ * @returns {number}
+ */
+function get_active_call_count() {
+	return Object.keys(call_session_list).length;
+}
+
+// ============================================================
+// END MULTI-CALL SUPPORT - Call Registry Helper Functions
+// ============================================================
+
 let user_agent;
-let session;
 let answer_time;
+let session = null;
 let session_hungup = false;
 let last_call_type = 'audio';  // Remember last call type for Enter key
 let camera_available = true;  // Camera availability status
@@ -367,7 +599,7 @@ let transient_status_timeout;
 let active_call_is_video = false;
 let active_call_display_name = '';
 let active_call_number = '';
-let current_history_entry_id = null;  // Track current call's history entry for duration update
+let current_history_entry_id = null;  // Track current call's history entry for duration tracking
 let current_conversation_partner = null;  // Current active conversation partner
 let dtmf_display_timer = null;  // Timer for clearing DTMF display
 let dtmf_flush_timer = null;  // Timer for auto-flushing DTMF buffer
@@ -1148,8 +1380,19 @@ function sync_call_action_controls() {
 	var action_video_mute_icon = document.getElementById('action_video_mute_icon');
 	var action_video_mute_label = document.getElementById('action_video_mute_label');
 
-	var muted = audio_muted;
-	var on_hold = document.getElementById('unhold').style.display === 'inline';
+	// Get the selected call session to check its actual mute/hold state
+	var selected_call = get_selected_call_session();
+	
+	// Use the call session's is_muted property if available, otherwise fall back to global
+	var muted = selected_call && selected_call.is_muted !== undefined ? selected_call.is_muted : audio_muted;
+	
+	// Use the call session's is_on_hold property if available, otherwise fall back to DOM check
+	var on_hold = false;
+	if (selected_call && selected_call.is_on_hold !== undefined) {
+		on_hold = selected_call.is_on_hold;
+	} else {
+		on_hold = document.getElementById('unhold').style.display === 'inline';
+	}
 
 	if (action_mute_icon) {
 		action_mute_icon.className = muted ? 'fas fa-microphone-slash' : 'fas fa-microphone';
@@ -1254,21 +1497,37 @@ function set_call_action_mode(enabled, use_video) {
 }
 
 function toggle_audio_mute_action() {
-	if (!session) { return; }
-	if (audio_muted) {
-		unmute_audio();
+	let selected_call = get_selected_call_session();
+	
+	// Check the call session's is_muted property first, fall back to global
+	let muted = false;
+	if (selected_call && selected_call.is_muted !== undefined) {
+		muted = selected_call.is_muted;
+	} else {
+		muted = audio_muted;
 	}
-	else {
+	
+	if (muted) {
+		unmute_audio();
+	} else {
 		mute_audio();
 	}
 }
 
 function toggle_audio_hold_action() {
-	if (!session) { return; }
-	if (document.getElementById('unhold').style.display === 'inline') {
-		unhold();
+	let selected_call = get_selected_call_session();
+	
+	// Check the call session's is_on_hold property first, fall back to DOM
+	let on_hold = false;
+	if (selected_call && selected_call.is_on_hold !== undefined) {
+		on_hold = selected_call.is_on_hold;
+	} else {
+		on_hold = document.getElementById('unhold').style.display === 'inline';
 	}
-	else {
+	
+	if (on_hold) {
+		unhold();
+	} else {
 		hold();
 	}
 }
@@ -1286,7 +1545,13 @@ function toggle_video_mute_action() {
 
 // Toggle screen sharing - starts or stops screen share stream
 async function toggle_screen_share() {
-	if (!session || !active_call_is_video) {
+	// Get the selected call session (supports multi-call)
+	let selected_call = get_selected_call_session();
+
+	// Check if there's an active video call - use selected_call.is_video first, fall back to global
+	let is_video_call = (selected_call && selected_call.is_video !== undefined) ? selected_call.is_video : active_call_is_video;
+
+	if (!is_video_call) {
 		console.log('toggle_screen_share: No active video call');
 		return;
 	}
@@ -1315,11 +1580,23 @@ async function start_screen_share() {
 			return;
 		}
 
+		// Get the session from the selected call session (supports outgoing calls)
+		// For outgoing calls, the session is stored in call_session.session, not the global session
+		let selected_call = get_selected_call_session();
+		let call_session_obj = selected_call ? selected_call.session : null;
+		let current_session = call_session_obj || session;
+
+		if (!current_session || !current_session.mediaHandler) {
+			console.error('start_screen_share: No active call session available');
+			alert('No active call session available for screen sharing.');
+			return;
+		}
+
 		// Store the original audio track before replacing it
-		if (session && session.mediaHandler) {
-			var localStreams = session.mediaHandler.getLocalStreams ? session.mediaHandler.getLocalStreams() : null;
+		if (current_session && current_session.mediaHandler) {
+			var localStreams = current_session.mediaHandler.getLocalStreams ? current_session.mediaHandler.getLocalStreams() : null;
 			if (!localStreams || localStreams.length === 0) {
-				localStreams = session.mediaHandler.localStream ? [session.mediaHandler.localStream] : null;
+				localStreams = current_session.mediaHandler.localStream ? [current_session.mediaHandler.localStream] : null;
 			}
 
 			if (localStreams && localStreams.length > 0) {
@@ -1365,8 +1642,8 @@ async function start_screen_share() {
 			console.log('start_screen_share: Tab audio track captured:', tab_audio_track.id);
 
 			// Replace the audio track in the peer connection
-			if (session && session.mediaHandler && session.mediaHandler.peerConnection) {
-				var senders = session.mediaHandler.peerConnection.getSenders();
+			if (current_session && current_session.mediaHandler && current_session.mediaHandler.peerConnection) {
+				var senders = current_session.mediaHandler.peerConnection.getSenders();
 				var audio_sender = null;
 
 				for (var i = 0; i < senders.length; i++) {
@@ -1381,15 +1658,15 @@ async function start_screen_share() {
 					console.log('start_screen_share: Replaced audio track with tab audio');
 
 					// Also update the local stream
-					if (session.mediaHandler.localStream) {
-						var audioTracks = session.mediaHandler.localStream.getAudioTracks();
+					if (current_session.mediaHandler.localStream) {
+						var audioTracks = current_session.mediaHandler.localStream.getAudioTracks();
 						for (var j = 0; j < audioTracks.length; j++) {
 							if (audioTracks[j].id !== tab_audio_track.id) {
-								session.mediaHandler.localStream.removeTrack(audioTracks[j]);
+								current_session.mediaHandler.localStream.removeTrack(audioTracks[j]);
 								break;
 							}
 						}
-						session.mediaHandler.localStream.addTrack(tab_audio_track);
+						current_session.mediaHandler.localStream.addTrack(tab_audio_track);
 					}
 				} else {
 					console.warn('start_screen_share: No audio sender found in peer connection');
@@ -1412,14 +1689,14 @@ async function start_screen_share() {
 		is_screen_sharing = true;
 
 		// REPLACE camera video with screen share in peer connection
-		var peer_connection = session ? session.mediaHandler ? session.mediaHandler.peerConnection : null : null;
+		// Use current_session (from selected call) instead of global session
+		var peer_connection = current_session ? current_session.mediaHandler ? current_session.mediaHandler.peerConnection : null : null;
 		if (peer_connection) {
 			console.log('start_screen_share: Replacing camera track with screen share track');
 
 			// Find the sender sending the camera video track
 			var senders = peer_connection.getSenders();
-			var camera_sender = null;
-			camera_sender = senders.find(function(sender) {
+			var camera_sender = senders.find(function(sender) {
 				return sender.track && sender.track.kind === 'video';
 			});
 
@@ -1437,9 +1714,25 @@ async function start_screen_share() {
 						console.log('start_screen_share: Stored original video track from localStream:', original_video_track.id);
 					}
 				}
+
 				// Replace the camera track with the screen share track
 				camera_sender.replaceTrack(screen_share_video_track).then(function() {
 					console.log('start_screen_share: Track replaced successfully');
+
+					// Add the screen share video track to the local stream so it's properly sent to the remote party
+					if (session && session.mediaHandler && session.mediaHandler.localStream) {
+						var local_video_tracks = session.mediaHandler.localStream.getVideoTracks();
+						// Remove the old camera track from the local stream
+						for (var k = 0; k < local_video_tracks.length; k++) {
+							if (local_video_tracks[k].id === original_video_track.id) {
+								session.mediaHandler.localStream.removeTrack(local_video_tracks[k]);
+								break;
+							}
+						}
+						// Add the screen share video track to the local stream
+						session.mediaHandler.localStream.addTrack(screen_share_video_track);
+						console.log('start_screen_share: Added screen share video track to local stream');
+					}
 				}).catch(function(err) {
 					console.error('start_screen_share: Error replacing track:', err);
 				});
@@ -1450,7 +1743,7 @@ async function start_screen_share() {
 			console.error('start_screen_share: No peer connection found!');
 		}
 
-		// Replace local video preview with screen share
+		// Update local video preview with screen share
 		var local_video = document.getElementById('local_video');
 		if (local_video) {
 			local_video.srcObject = screen_share_stream;
@@ -1466,7 +1759,6 @@ async function start_screen_share() {
 			console.log('start_screen_share: Screen share stopped by user (track ended)');
 			stop_screen_share();
 		};
-
 	} catch (err) {
 		console.error('start_screen_share: Failed to start screen share:', err);
 		if (err.name === 'NotAllowedError') {
@@ -1481,6 +1773,11 @@ async function start_screen_share() {
 async function stop_screen_share() {
 	console.log('stop_screen_share: Stopping screen share...');
 
+	// Get the session from the selected call session (supports outgoing calls)
+	let selected_call = get_selected_call_session();
+	let call_session_obj = selected_call ? selected_call.session : null;
+	let current_session = call_session_obj || session;
+
 	// Stop tab audio if it was active
 	if (tab_audio_stream) {
 		console.log('stop_screen_share: Stopping tab audio stream');
@@ -1488,10 +1785,10 @@ async function stop_screen_share() {
 		tab_audio_stream = null;
 
 		// Restore original audio track
-		if (session && session.mediaHandler) {
-			var localStreams = session.mediaHandler.getLocalStreams ? session.mediaHandler.getLocalStreams() : null;
+		if (current_session && current_session.mediaHandler) {
+			var localStreams = current_session.mediaHandler.getLocalStreams ? current_session.mediaHandler.getLocalStreams() : null;
 			if (!localStreams || localStreams.length === 0) {
-				localStreams = session.mediaHandler.localStream ? [session.mediaHandler.localStream] : null;
+				localStreams = current_session.mediaHandler.localStream ? [current_session.mediaHandler.localStream] : null;
 			}
 
 			if (localStreams && localStreams.length > 0) {
@@ -1509,7 +1806,7 @@ async function stop_screen_share() {
 					localStream.addTrack(original_audio_track);
 
 					// Replace in peer connection
-					var senders = session.mediaHandler.peerConnection.getSenders();
+					var senders = current_session.mediaHandler.peerConnection.getSenders();
 					for (var j = 0; j < senders.length; j++) {
 						if (senders[j].track && senders[j].track.kind === 'audio') {
 							await senders[j].replaceTrack(original_audio_track);
@@ -1531,8 +1828,8 @@ async function stop_screen_share() {
 		screen_share_video_track = screen_share_stream.getVideoTracks()[0];
 	}
 
-	// Restore camera track in peer connection
-	var peer_connection = session ? session.mediaHandler ? session.mediaHandler.peerConnection : null : null;
+	// Restore camera track in peer connection - use current_session instead of global session
+	var peer_connection = current_session ? current_session.mediaHandler ? current_session.mediaHandler.peerConnection : null : null;
 	var sender = screen_share_sender;
 	if (!sender && peer_connection) {
 		sender = peer_connection.getSenders().find(function(s) {
@@ -1550,8 +1847,8 @@ async function stop_screen_share() {
 				restore_track = camera_tracks[0];
 				original_video_track = restore_track;
 
-				if (session && session.mediaHandler && session.mediaHandler.localStream) {
-					var local_stream = session.mediaHandler.localStream;
+				if (current_session && current_session.mediaHandler && current_session.mediaHandler.localStream) {
+					var local_stream = current_session.mediaHandler.localStream;
 					local_stream.getVideoTracks().forEach(function(track) {
 						if (track.id !== restore_track.id) {
 							local_stream.removeTrack(track);
@@ -1561,8 +1858,8 @@ async function stop_screen_share() {
 						local_stream.addTrack(restore_track);
 					}
 				}
-				else if (session && session.mediaHandler) {
-					session.mediaHandler.localStream = camera_stream;
+				else if (current_session && current_session.mediaHandler) {
+					current_session.mediaHandler.localStream = camera_stream;
 				}
 			}
 		} catch (err) {
@@ -1593,8 +1890,8 @@ async function stop_screen_share() {
 	var local_video = document.getElementById('local_video');
 	if (local_video) {
 		var preview_stream = null;
-		if (session && session.mediaHandler && session.mediaHandler.localStream && session.mediaHandler.localStream.getVideoTracks().length > 0) {
-			preview_stream = session.mediaHandler.localStream;
+		if (current_session && current_session.mediaHandler && current_session.mediaHandler.localStream && current_session.mediaHandler.localStream.getVideoTracks().length > 0) {
+			preview_stream = current_session.mediaHandler.localStream;
 		}
 		else if (restore_track) {
 			preview_stream = new MediaStream([restore_track]);
@@ -1800,32 +2097,44 @@ function update_status_bar() {
 	if (is_session_active()) {
 		var display_name = active_call_display_name || '';
 		var number = active_call_number || '';
-		var duration = document.getElementById('answer_time').textContent;
 
 		var safe_name = display_name ? sanitize_string(display_name) : '';
 		var safe_number = number ? sanitize_string(number) : '';
 
 		var caller_info = '';
 		if (safe_name && safe_number) {
-			caller_info = safe_name + ' (<a href="https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=' + safe_number + '" target="_blank" style="color: #ccc; text-decoration: none;">' + safe_number + '</a>)';
+			caller_info = safe_name + ' (' + safe_number + ')';
 		} else if (safe_name || safe_number) {
 			if (safe_number) {
-				caller_info = '<a href="https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=' + safe_number + '" target="_blank" style="color: #ccc; text-decoration: none;">' + safe_number + '</a>';
+				caller_info = safe_number;
 			} else {
 				caller_info = safe_name;
 			}
 		}
 
-		var status_text = caller_info ? caller_info + ' &nbsp; ' + duration : duration;
-		document.getElementById('status_text').innerHTML = status_text;
+		// Duration is now shown in the active call switcher, not in the status bar
+		document.getElementById('status_text').innerHTML = caller_info || 'Call in progress';
 	} else {
 		update_idle_status();
 	}
 }
 
+// ============================================================
+// MULTI-CALL: Updated is_session_active to check call registry
+// ============================================================
 function is_session_active() {
+	// First check the call registry for active calls
+	let active_calls = get_active_call_sessions();
+	if (active_calls.length > 0) {
+		return true;
+	}
+	// Fallback to legacy global session check
 	return !!(session && session.status !== SIP.Session.C.STATUS_TERMINATED);
 }
+
+// ============================================================
+// END MULTI-CALL: is_session_active
+// ============================================================
 
 function set_hangup_visibility(is_visible) {
 	document.getElementById('hangup').style.display = is_visible ? 'flex' : 'none';
@@ -1878,7 +2187,6 @@ function reset_call_ui_state(show_dialpad) {
 	document.getElementById('active_caller_id').innerHTML = '';
 	document.getElementById('settings_panel').style.display = 'none';
 	update_video_stream_info('', '', false);
-	document.getElementById('answer_time').innerHTML = '00:00:00';
 	set_call_action_mode(false, false);
 	active_call_is_video = false;
 	active_call_display_name = '';
@@ -1892,6 +2200,9 @@ function reset_call_ui_state(show_dialpad) {
 
 	clear_transient_status();
 	update_idle_status();
+
+	// Update the call switcher UI to reflect the cleared state
+	update_call_switcher_ui();
 }
 
 function cycle_local_video_corner() {
@@ -2117,27 +2428,87 @@ async function get_media_options(use_video) {
 	};
 }
 
-// Answer
+// ============================================================
+// MULTI-CALL: Incoming Call Handler (Updated for call waiting)
+// ============================================================
 user_agent.on('invite', function (s) {
 	console.log('INVITE received - incoming call from:', s.remoteIdentity);
 	console.log('INVITE remoteIdentity:', s.remoteIdentity);
 	console.log('INVITE uri_user:', s.remoteIdentity ? s.remoteIdentity.uri.user : 'N/A');
 
-	if (is_session_active()) {
-		console.log('INVITE: Rejecting - session already active');
+	// Get caller info
+	var incoming_display_name = s.remoteIdentity && s.remoteIdentity.displayName ? s.remoteIdentity.displayName : '';
+	var incoming_uri_user = s.remoteIdentity && s.remoteIdentity.uri && s.remoteIdentity.uri.user ? s.remoteIdentity.uri.user : '';
+
+	// Check call limit
+	if (!check_call_limit()) {
+		console.log('INVITE: Rejecting - maximum calls reached');
 		s.reject();
+		show_temporary_status('Maximum calls reached', 'fas fa-exclamation-circle');
 		return;
 	}
 
-	// Save the session to the global session
+	// Check if there's already an active call (call waiting scenario)
+	let active_calls = get_active_call_sessions();
+	if (active_calls.length > 0) {
+		// Call waiting scenario - create a new call session for the waiting call
+		if (!call_waiting_config.enabled) {
+			console.log('INVITE: Call waiting disabled, rejecting');
+			s.reject();
+			return;
+		}
+
+		console.log('INVITE: Call waiting - creating secondary call session');
+
+		// Create a new call session for the waiting incoming call
+		let waiting_call_id = create_call_session('incoming', incoming_uri_user, incoming_display_name, detect_video_invite(s));
+		let waiting_call = get_call_session(waiting_call_id);
+		waiting_call.session = s;
+
+		// Save session info
+		waiting_call.display_name = incoming_display_name;
+		waiting_call.number = incoming_uri_user;
+		waiting_call.has_video = detect_video_invite(s);
+
+		// Show call waiting panel
+		show_call_waiting_panel(waiting_call_id, s);
+
+		// Set up call waiting event handlers
+		waiting_call.session.on('cancel', function() {
+			add_to_history(waiting_call.number, 'missed', Date.now());
+			hide_call_waiting_panel();
+			remove_call_session(waiting_call_id);
+		});
+
+		waiting_call.session.on('bye', function() {
+			hide_call_waiting_panel();
+			remove_call_session(waiting_call_id);
+		});
+
+		waiting_call.session.on('rejected', function() {
+			add_to_history(waiting_call.number, 'missed', Date.now());
+			hide_call_waiting_panel();
+			remove_call_session(waiting_call_id);
+		});
+
+		return;
+	}
+
+	// No active call - this is the first/only call
+	// Save the session to the global session (for backward compatibility)
 	session = s;
-	session.display_name = session.remoteIdentity.displayName;
-	session.uri_user = session.remoteIdentity.uri.user;
-	session.incoming_number = session.remoteIdentity.uri.user || session.remoteIdentity.displayName;
+	session.display_name = incoming_display_name;
+	session.uri_user = incoming_uri_user;
+	session.incoming_number = incoming_uri_user || incoming_display_name;
 	session.has_video = detect_video_invite(s);
 
-	// Send the object to the browser console
-	//console.log(session);
+	// Create a call session entry for this incoming call
+	let first_call_id = create_call_session('incoming', incoming_uri_user, incoming_display_name, detect_video_invite(s));
+	let first_call = get_call_session(first_call_id);
+	first_call.session = s;
+	first_call.display_name = incoming_display_name;
+	first_call.number = incoming_uri_user;
+	first_call.has_video = detect_video_invite(s);
 
 	// Update status bar for incoming call
 	var incoming_type = session.has_video ? 'Incoming Video Call' : 'Incoming Call';
@@ -2179,23 +2550,37 @@ user_agent.on('invite', function (s) {
 			add_to_history(session.incoming_number, 'missed', Date.now());
 		}
 
-		reset_call_ui_state(true);
-	});
-
-	session.on('bye', function (s) {
+		// Remove the selected call session from the registry
+		let selected_call = get_selected_call_session();
+		if (selected_call) {
+			remove_call_session(selected_call.id);
+		}
 		reset_call_ui_state(true);
 	});
 
 	session.on('failed', function (s) {
+		// Remove the selected call session from the registry
+		let selected_call = get_selected_call_session();
+		if (selected_call) {
+			remove_call_session(selected_call.id);
+		}
 		reset_call_ui_state(true);
 	});
 
 	session.on('rejected', function (s) {
-		// Record missed call
-		if (session.incoming_number) {
-			add_to_history(session.incoming_number, 'missed', Date.now());
+		// Save incoming_number before cleanup (session may be null if the call was abandoned)
+		var saved_incoming_number = session ? session.incoming_number : null;
+
+		// Record missed call if we have the number
+		if (saved_incoming_number) {
+			add_to_history(saved_incoming_number, 'missed', Date.now());
 		}
 
+		// Remove the selected call session from the registry
+		let selected_call = get_selected_call_session();
+		if (selected_call) {
+			remove_call_session(selected_call.id);
+		}
 		reset_call_ui_state(true);
 	});
 
@@ -2217,31 +2602,50 @@ user_agent.on('invite', function (s) {
 				if (track) {
 					// Find or create a stream for this track
 					var foundStream = null;
-					for (var rs = 0; rs < remoteStreams.length; rs++) {
-						if (remoteStreams[rs].id === track.streams[0] && remoteStreams[rs].id) {
-							foundStream = remoteStreams[rs];
-							break;
-						}
-					}
-					if (!foundStream && track.streams && track.streams.length > 0) {
-						// Check if this stream already exists in our array
-						var streamExists = false;
+
+					// Get streams from track.streams (may be undefined in modern browsers)
+					var trackStreams = track.streams || [];
+
+					// Check if track is already in our remoteStreams array
+					for (var rs = 0; rs < trackStreams.length; rs++) {
 						for (var es = 0; es < remoteStreams.length; es++) {
-							if (remoteStreams[es].id === track.streams[0].id) {
-								streamExists = true;
+							if (trackStreams[rs] && remoteStreams[es] && trackStreams[rs].id === remoteStreams[es].id) {
 								foundStream = remoteStreams[es];
 								break;
 							}
 						}
-						if (!streamExists) {
-							foundStream = track.streams[0];
-							remoteStreams.push(foundStream);
+						if (foundStream) break;
+					}
+
+					if (!foundStream && trackStreams.length > 0) {
+						// Track is in a stream not yet in our array - use that stream
+						for (var ts = 0; ts < trackStreams.length; ts++) {
+							if (trackStreams[ts]) {
+								foundStream = trackStreams[ts];
+								remoteStreams.push(foundStream);
+								break;
+							}
 						}
-					} else if (!foundStream) {
+					}
+
+					// If track has no streams (deprecated API), create a new MediaStream
+					if (!foundStream) {
 						foundStream = new MediaStream();
 						remoteStreams.push(foundStream);
 					}
-					foundStream.addTrack(track);
+
+					// Add the track to the stream (avoid duplicates)
+					var tracks = foundStream.getTracks();
+					var hasTrack = false;
+					for (var t = 0; t < tracks.length; t++) {
+						if (tracks[t].id === track.id) {
+							hasTrack = true;
+							break;
+						}
+					}
+					if (!hasTrack) {
+						foundStream.addTrack(track);
+					}
 				}
 			}
 		}
@@ -2494,29 +2898,71 @@ async function answer_video(use_video) {
 	answer_call(true, false);
 }
 
-// Unified answer function used by both answer_audio() and answer_video()
+// ============================================================
+// MULTI-CALL: Unified answer function (Updated for multi-call)
+// ============================================================
+
+/**
+ * Answer an incoming call - automatically puts any current active call on hold
+ * @param {boolean} use_video - Whether this is a video call
+ * @param {boolean} receive_only_video - Whether to receive video only (no send)
+ */
 async function answer_call(use_video, receive_only_video) {
 	if (typeof receive_only_video === 'undefined') {
 		receive_only_video = false;
 	}
+
 	// Set the session state
 	session_hungup = false;
 
-	// Continue if the session exists
+	// ============================================================
+	// MULTI-CALL: Auto-hold current call when answering incoming call
+	// ============================================================
+	let active_calls_before = get_active_call_sessions();
+	
+	// Get the selected call session
+	let selected_call = get_selected_call_session();
+	if (!selected_call) {
+	// Fallback to legacy session for backward compatibility
 	if (!session) {
+		return false;
+	}
+	selected_call = { session: session, display_name: session.display_name, number: session.uri_user, has_video: session.has_video, incoming_number: session.incoming_number };
+}
+
+// Hold any other active calls (not the one being answered)
+for (let i = 0; i < active_calls_before.length; i++) {
+	let call = active_calls_before[i];
+	if (call.id !== selected_call.id && !call.is_on_hold && call.session && call.session.status !== SIP.Session.C.STATUS_TERMINATED) {
+		console.log('[Call Switching] Putting current call on hold to answer incoming call');
+		call.is_on_hold = true;
+		call.session.hold().catch(function(err) {
+			console.warn('[Call Switching] Failed to hold previous call:', err);
+		});
+	}
+}
+
+	// Get the incoming session to answer
+	let incoming_session = selected_call.session || session;
+	if (!incoming_session) {
 		return false;
 	}
 
 	// Record incoming call to history and save entry ID for duration tracking
-	if (session.incoming_number) {
-		current_history_entry_id = add_to_history(session.incoming_number, 'incoming', Date.now(), use_video);
+	if (selected_call.incoming_number || selected_call.number) {
+		current_history_entry_id = add_to_history(selected_call.incoming_number || selected_call.number, 'incoming', Date.now(), use_video);
+		selected_call.history_entry_id = current_history_entry_id;
 	}
 
 	// Start the answer time
 	answer_time = Date.now();
+	if (selected_call.start_time) {
+		selected_call.start_time = answer_time;
+	}
 
 	// Pause the ringtone
 	stop_call_tone();
+	stop_call_waiting_tone();
 
 	// Handle tab audio selection for Chromium browsers
 	var answer_audio_constraints = {
@@ -2528,10 +2974,9 @@ async function answer_call(use_video, receive_only_video) {
 	var answer_media = null;
 
 	if (selected_audio_input_device_id === 'tab-audio') {
-		// For tab audio, prompt user to select a tab with audio sharing
 		try {
 			var tab_stream = await navigator.mediaDevices.getDisplayMedia({
-				video: false,  // No video, just audio
+				video: false,
 				audio: true
 			});
 
@@ -2541,12 +2986,8 @@ async function answer_call(use_video, receive_only_video) {
 				return;
 			}
 
-			// Store the tab audio stream
-			session._tab_audio_stream = tab_stream;
+			incoming_session._tab_audio_stream = tab_stream;
 			var tab_audio_track = tab_stream.getAudioTracks()[0];
-
-			// Set audio constraint to use the tab audio track
-			answer_audio_constraints = tab_audio_track;
 
 			var rtc_constraints = {
 				"optional": [{ 'DtlsSrtpKeyAgreement': 'true'} ]
@@ -2574,11 +3015,9 @@ async function answer_call(use_video, receive_only_video) {
 				}
 			};
 
-			// Accept the call first
-			session.accept(answer_media);
+			incoming_session.accept(answer_media);
 
-			// Then replace the audio track with the tab audio
-			var sender = session.mediaHandler.peerConnection.getSenders().find(function(s) {
+			var sender = incoming_session.mediaHandler.peerConnection.getSenders().find(function(s) {
 				return s.track && s.track.kind === 'audio';
 			});
 
@@ -2586,12 +3025,10 @@ async function answer_call(use_video, receive_only_video) {
 				await sender.replaceTrack(tab_audio_track);
 			}
 
-			// Add tab audio to local stream
-			if (session.mediaHandler.localStream) {
-				session.mediaHandler.localStream.addTrack(tab_audio_track);
+			if (incoming_session.mediaHandler.localStream) {
+				incoming_session.mediaHandler.localStream.addTrack(tab_audio_track);
 			}
 
-			// Listen for the stream ending
 			tab_audio_track.onended = function() {
 				console.log('answer_call: Tab audio stream ended');
 				selected_audio_input_device_id = '';
@@ -2602,13 +3039,22 @@ async function answer_call(use_video, receive_only_video) {
 			};
 
 			if (use_video) {
-				ensure_local_video_preview(session);
+				ensure_local_video_preview(incoming_session);
 			}
+
+			// Update call session state
+			if (selected_call) {
+				selected_call.is_video = use_video;
+				selected_call.start_time = answer_time;
+			}
+
+			// Hide call waiting panel if it was showing
+			hide_call_waiting_panel();
 
 			// Show the UI
 			document.getElementById('dialpad').style.display = "none";
 			document.getElementById('ringing').style.display = "none";
-			document.getElementById('active').style.display = "none";
+			document.getElementById('active').style.display = "grid";
 			document.getElementById('answer_audio').style.display = "none";
 			document.getElementById('answer_video').style.display = "none";
 			document.getElementById('decline').style.display = "none";
@@ -2621,11 +3067,10 @@ async function answer_call(use_video, receive_only_video) {
 			active_call_is_video = use_video;
 			set_call_action_mode(true, use_video);
 			set_hangup_visibility(true);
-			active_call_display_name = session.display_name || session.incoming_number || '';
-			active_call_number = session.uri_user || session.incoming_number || '';
-			update_video_stream_info(session.display_name, session.uri_user, use_video);
+			active_call_display_name = selected_call.display_name || '';
+			active_call_number = selected_call.number || '';
+			update_video_stream_info(selected_call.display_name, selected_call.number, use_video);
 
-			// Show video if enabled
 			if (use_video) {
 				document.getElementById('video_container').style.display = "block";
 				if (!receive_only_video && camera_available) {
@@ -2639,26 +3084,19 @@ async function answer_call(use_video, receive_only_video) {
 				apply_video_fit_layout();
 			}
 
-			// Update status bar for active call
-			if (session.incoming_number) {
-				update_active_call_status(use_video, session.display_name || session.incoming_number, session.uri_user || session.incoming_number);
-			}
-			else {
-				update_active_call_status(use_video, session.display_name, session.uri_user);
+			if (selected_call.incoming_number || selected_call.number) {
+				update_active_call_status(use_video, selected_call.display_name || selected_call.incoming_number, selected_call.number || selected_call.incoming_number);
+			} else {
+				update_active_call_status(use_video, selected_call.display_name, selected_call.number);
 			}
 
-			// Force update status bar to show Caller ID and duration immediately
 			update_status_bar();
+			update_call_switcher_ui();
 
-			return;  // Early return since we've already handled everything
+			return;
 		} catch (err) {
 			console.error('answer_call: Tab audio capture failed:', err);
-			// Fall through to use default audio
 		}
-	}
-	// Add deviceId constraint if a specific audio input device is selected
-	else if (selected_audio_input_device_id && selected_audio_input_device_id !== '') {
-		answer_audio_constraints.deviceId = selected_audio_input_device_id;
 	}
 
 	var video_constraints = use_video && !receive_only_video;
@@ -2666,10 +3104,6 @@ async function answer_call(use_video, receive_only_video) {
 		"optional": [{ 'DtlsSrtpKeyAgreement': 'true'} ]
 	};
 
-	// IMPORTANT: For SIP.js 0.7.8, offerToReceiveVideo must be in media.constraints.video
-	// to properly include video in the SDP answer. Setting it in RTCConstraints does NOT
-	// work because RTCConstraints are for WebRTC peer connection optional constraints,
-	// not for SDP negotiation.
 	var answer_video_constraints = video_constraints;
 	if (use_video) {
 		answer_video_constraints = {
@@ -2687,23 +3121,29 @@ async function answer_call(use_video, receive_only_video) {
 				remote: document.getElementById('remote_video'),
 				local: document.getElementById('local_video')
 			},
-			autoAnswer: true,  // Allow remote media to play (including ringback)
-			autoAccept: false,  // Don't auto-accept the call
+			autoAnswer: true,
+			autoAccept: false,
 			RTCConstraints: rtc_constraints
 		}
 	};
-	session.accept(answer_media);
+	incoming_session.accept(answer_media);
 	if (use_video) {
-		ensure_local_video_preview(session);
+		ensure_local_video_preview(incoming_session);
 	}
 
-	// Show the or hide the panels
-	//document.getElementById('dialpad').style.display = "none";
+	// Update call session state
+	if (selected_call) {
+		selected_call.is_video = use_video;
+		selected_call.start_time = answer_time;
+	}
+
+	// Hide call waiting panel if it was showing
+	hide_call_waiting_panel();
+
 	document.getElementById('ringing').style.display = "none";
 	document.getElementById('active').style.display = "grid";
 	document.getElementById('destination').value = '';
 
-	// Show or hide the buttons
 	document.getElementById('answer_audio').style.display = "none";
 	document.getElementById('answer_video').style.display = "none";
 	document.getElementById('decline').style.display = "none";
@@ -2716,11 +3156,10 @@ async function answer_call(use_video, receive_only_video) {
 	active_call_is_video = use_video;
 	set_call_action_mode(true, use_video);
 	set_hangup_visibility(true);
-	active_call_display_name = session.display_name || session.incoming_number || '';
-	active_call_number = session.uri_user || session.incoming_number || '';
-	update_video_stream_info(session.display_name, session.uri_user, use_video);
+	active_call_display_name = selected_call.display_name || '';
+	active_call_number = selected_call.number || '';
+	update_video_stream_info(selected_call.display_name, selected_call.number, use_video);
 
-	// Show video if enabled
 	if (use_video) {
 		document.getElementById('video_container').style.display = "block";
 		if (!receive_only_video && camera_available) {
@@ -2734,17 +3173,19 @@ async function answer_call(use_video, receive_only_video) {
 		apply_video_fit_layout();
 	}
 
-	// Update status bar for active call
-	if (session.incoming_number) {
-		update_active_call_status(use_video, session.display_name || session.incoming_number, session.uri_user || session.incoming_number);
-	}
-	else {
-		update_active_call_status(use_video, session.display_name, session.uri_user);
+	if (selected_call.incoming_number || selected_call.number) {
+		update_active_call_status(use_video, selected_call.display_name || selected_call.incoming_number, selected_call.number || selected_call.incoming_number);
+	} else {
+		update_active_call_status(use_video, selected_call.display_name, selected_call.number);
 	}
 
-	// Force update status bar to show Caller ID and duration immediately
 	update_status_bar();
+	update_call_switcher_ui();
 }
+
+// ============================================================
+// END MULTI-CALL: answer_call
+// ============================================================
 
 // Function to pad numbers with leading zeros
 function pad(number, length) {
@@ -2764,29 +3205,19 @@ function hide_all_panels() {
 }
 
 function show_dialpad() {
-	// Get the dialpad
 	var dialpad = document.getElementById('dialpad');
 
 	// Toggle: if dialpad is already open, close it
 	if (dialpad.style.display === 'flex') {
 		hide_all_panels();
-		update_action_bar_state(null);  // Clear all active states
+		update_action_bar_state(null);
 		return;
 	}
 	
-	// Toggle Active call
-	if (is_session_active()) {
-		hide_all_panels();
-		dialpad.style.display = 'flex';
-		update_action_bar_state('dialpad');  // Set dialpad as active
-	}
-
-	// Toggle the dialpad when no call is active
-	if (!is_session_active()) {
-		hide_all_panels();
-		dialpad.style.display = 'flex';
-		update_action_bar_state('dialpad');  // Set dialpad as active
-	}
+	// Show dialpad
+	hide_all_panels();
+	dialpad.style.display = 'flex';
+	update_action_bar_state('dialpad');
 }
 
 function show_contacts() {
@@ -2936,19 +3367,13 @@ function render_history() {
 	});
 }
 
-// Format duration in seconds to human-readable string (e.g., "2m 34s" or "1h 5m")
+// Format duration in seconds to HH:MM:SS format
 function format_duration(seconds) {
-	if (seconds < 60) {
-		return seconds + 's';
-	}
-	var minutes = Math.floor(seconds / 60);
-	var remaining_seconds = seconds % 60;
-	if (minutes < 60) {
-		return minutes + 'm' + (remaining_seconds > 0 ? ' ' + remaining_seconds + 's' : '');
-	}
-	var hours = Math.floor(minutes / 60);
-	remaining_minutes = minutes % 60;
-	return hours + 'h' + (remaining_minutes > 0 ? ' ' + remaining_minutes + 'm' : '');
+	var hours = Math.floor(seconds / 3600);
+	var remaining_seconds = seconds % 3600;
+	var minutes = Math.floor(remaining_seconds / 60);
+	var secs = remaining_seconds % 60;
+	return pad(hours, 2) + ':' + pad(minutes, 2) + ':' + pad(secs, 2);
 }
 
 // Helper functions
@@ -3002,36 +3427,6 @@ function call_number(number) {
 	send();
 }
 
-// Function to get the current time in seconds
-function get_session_time() {
-	if (answer_time) {
-		// get the elapsed time using the answer time
-		elapsed_time = Date.now() - answer_time;
-
-		// Calculate hours, minutes, and seconds
-		var hours = Math.floor(elapsed_time / (1000 * 60 * 60));
-		var minutes = Math.floor((elapsed_time % (1000 * 60 * 60)) / (1000 * 60));
-		var seconds = Math.floor((elapsed_time % (1000 * 60)) / 1000);
-
-		// Format the time with leading zeros if necessary
-		var formatted_time = pad(hours, 2) + ":" + pad(minutes, 2) + ":" + pad(seconds, 2);
-
-		// Update the element with id="elapsed-time" to display the formatted elapsed time
-		document.getElementById("answer_time").textContent = formatted_time;
-
-		// Update status bar with Caller ID and duration (no longer overwritten by show_status)
-		update_status_bar();
-
-		if (!active_call_is_video) {
-			document.querySelector('#status_bar .status_icon i').className = 'fas fa-phone';
-		}
-	}
-	else {
-		console.log('Call has not been answered yet');
-		return null;
-	}
-}
-
 // Function to save the final call duration to history when call ends
 function save_call_duration() {
 	if (answer_time && current_history_entry_id !== null) {
@@ -3043,16 +3438,13 @@ function save_call_duration() {
 	}
 }
 
-// Update elapsed time every second
-setInterval(get_session_time, 1000);
-
-// Function to reset media after a call ends
-// Stops all media tracks to prevent camera/microphone from remaining active
+// ============================================================
+// MULTI-CALL: reset_media (Updated for multi-call)
+// ============================================================
 function reset_media() {
 	var videoElements = [document.getElementById('remote_video'), document.getElementById('local_video')];
 	videoElements.forEach(function(video) {
 		if (video && video.srcObject) {
-			// Stop all tracks in the media stream (prevents camera/mic staying active)
 			var tracks = video.srcObject.getTracks();
 			tracks.forEach(function(track) {
 				track.stop();
@@ -3064,7 +3456,6 @@ function reset_media() {
 		}
 	});
 
-	// Also stop remote audio tracks
 	var remote_audio = document.getElementById('remote_audio');
 	if (remote_audio && remote_audio.srcObject) {
 		var audioTracks = remote_audio.srcObject.getTracks();
@@ -3076,45 +3467,190 @@ function reset_media() {
 	}
 }
 
-// Function used to end the session
+// ============================================================
+// MULTI-CALL: hangup (Updated for multi-call)
+// ============================================================
 function hangup() {
-	if (session && !session_hungup && session.status !== SIP.Session.C.STATUS_TERMINATED) {
-		session_hungup = true;
-		session.local_ended = true;
+	// Get the selected call session
+	let selected_call = get_selected_call_session();
 
-		if (session.status === SIP.Session.C.STATUS_CONFIRMED || session.status === SIP.Session.C.STATUS_ANSWERED) {
-			session.bye();
-		} else {
-			session.terminate();
+	if (!selected_call) {
+		// Fallback to legacy session
+		if (session && !session_hungup && session.status !== SIP.Session.C.STATUS_TERMINATED) {
+			session_hungup = true;
+			session.local_ended = true;
+			if (session.status === SIP.Session.C.STATUS_CONFIRMED || session.status === SIP.Session.C.STATUS_ANSWERED) {
+				session.bye();
+			} else {
+				session.terminate();
+			}
 		}
+		save_call_duration();
+		reset_call_ui_state(true);
+		return;
 	}
 
-	// Save call duration to history before resetting UI
-	save_call_duration();
+	let call_session = selected_call.session;
+	if (!call_session) {
+		return;
+	}
 
-	reset_call_ui_state(true);
+	// Mark the call as locally ended
+	selected_call.local_ended = true;
+	session_hungup = true;
+
+	// Hangup the call session
+	if (call_session.status === SIP.Session.C.STATUS_CONFIRMED || call_session.status === SIP.Session.C.STATUS_ANSWERED) {
+		call_session.bye();
+	} else {
+		call_session.terminate();
+	}
+
+	// Save call duration to history
+	save_call_duration(selected_call);
+
+	// Check if there are other active calls
+	let remaining_calls = get_active_call_sessions();
+	if (remaining_calls.length > 0) {
+		// Switch to another active call
+		select_call_session(remaining_calls[0].id);
+		update_call_switcher_ui();
+		update_call_controls_for_selected_call();
+	} else {
+		// No more calls - reset UI
+		reset_call_ui_state(true);
+	}
+
+	// Remove the ended call from registry
+	remove_call_session(selected_call.id);
 }
 
+// ============================================================
+// MULTI-CALL: hold/unhold (Updated for multi-call)
+// ============================================================
 function hold() {
-	if (!session) { return; }
+	let selected_call = get_selected_call_session();
+	if (!selected_call || !selected_call.session) { return; }
+
+	selected_call.is_on_hold = true;
 	document.getElementById('hold').style.display = "none";
 	document.getElementById('unhold').style.display = "inline";
 	sync_call_action_controls();
-	session.hold();
-	//session.hold({
-	//	useUpdate: true
-	//});
+	update_call_switcher_ui();
+	
+	// Disable audio for this call when holding
+	enable_audio_for_call(selected_call.id);
+	
+	selected_call.session.hold();
 }
 
 function unhold() {
-	if (!session) { return; }
+	let selected_call = get_selected_call_session();
+	if (!selected_call || !selected_call.session) { return; }
+
+	selected_call.is_on_hold = false;
 	document.getElementById('hold').style.display = "inline";
 	document.getElementById('unhold').style.display = "none";
 	sync_call_action_controls();
-	session.unhold();
-	//session.unhold({
-	//	useUpdate: true
-	//});
+	update_call_switcher_ui();
+	
+	// Enable audio for this call when unholding
+	enable_audio_for_call(selected_call.id);
+	
+	selected_call.session.unhold();
+}
+
+// ============================================================
+// MULTI-CALL: mute/unmute (Updated for multi-call)
+// ============================================================
+function mute_audio() {
+	let selected_call = get_selected_call_session();
+	if (!selected_call) { return; }
+
+	selected_call.is_muted = true;
+
+	if (selected_call.session) {
+		selected_call.session.mute({audio: true});
+	}
+	if (selected_call.session && selected_call.session.mediaHandler && selected_call.session.mediaHandler.localStream) {
+		selected_call.session.mediaHandler.localStream.getAudioTracks().forEach(function(track) {
+			track.enabled = false;
+		});
+	}
+	if (selected_call.session && selected_call.session.mediaHandler && selected_call.session.mediaHandler.peerConnection && typeof selected_call.session.mediaHandler.peerConnection.getSenders === 'function') {
+		selected_call.session.mediaHandler.peerConnection.getSenders().forEach(function(sender) {
+			if (sender.track && sender.track.kind === 'audio') {
+				sender.track.enabled = false;
+			}
+		});
+	}
+
+	// Update audio routing to reflect mute state
+	enable_audio_for_call(selected_call.id);
+
+	document.getElementById('mute_audio').style.display = "none";
+	document.getElementById('unmute_audio').style.display = "inline";
+	sync_call_action_controls();
+}
+
+function mute_video() {
+	let selected_call = get_selected_call_session();
+	if (!selected_call) { return; }
+
+	if (selected_call.session) {
+		selected_call.session.mute({video: true});
+	}
+	document.getElementById('local_video').style.display = "none";
+	document.getElementById('mute_video').style.display = "none";
+	document.getElementById('unmute_video').style.display = "inline";
+	sync_call_action_controls();
+}
+
+function unmute_audio() {
+	let selected_call = get_selected_call_session();
+	if (!selected_call) { return; }
+
+	selected_call.is_muted = false;
+
+	if (selected_call.session) {
+		selected_call.session.unmute({audio: true});
+	}
+	if (selected_call.session && selected_call.session.mediaHandler && selected_call.session.mediaHandler.localStream) {
+		selected_call.session.mediaHandler.localStream.getAudioTracks().forEach(function(track) {
+			track.enabled = true;
+		});
+	}
+	if (selected_call.session && selected_call.session.mediaHandler && selected_call.session.mediaHandler.peerConnection && typeof selected_call.session.mediaHandler.peerConnection.getSenders === 'function') {
+		selected_call.session.mediaHandler.peerConnection.getSenders().forEach(function(sender) {
+			if (sender.track && sender.track.kind === 'audio') {
+				sender.track.enabled = true;
+			}
+		});
+	}
+
+	// Update audio routing to reflect unmute state
+	enable_audio_for_call(selected_call.id);
+
+	document.getElementById('mute_audio').style.display = "inline";
+	document.getElementById('unmute_audio').style.display = "none";
+	sync_call_action_controls();
+}
+
+// ============================================================
+// END MULTI-CALL: mute/unmute
+// ============================================================
+
+function unmute_video() {
+	let selected_call = get_selected_call_session();
+	if (!selected_call) { return; }
+
+	if (selected_call.session) {
+		selected_call.session.unmute({video: true});
+	}
+	document.getElementById('local_video').style.display = "inline";
+	document.getElementById('mute_video').style.display = "inline";
+	document.getElementById('unmute_video').style.display = "none";
+	sync_call_action_controls();
 }
 
 // Legacy send function - uses last call type (maintains backward compatibility)
@@ -3127,87 +3663,68 @@ function send() {
 	}
 }
 
-function mute_audio(destination) {
-	if (!session) { return; }
-	audio_muted = true;
-	session.mute({audio: true});
-	if (session.mediaHandler && session.mediaHandler.localStream) {
-		session.mediaHandler.localStream.getAudioTracks().forEach(function(track) {
-			track.enabled = false;
-		});
-	}
-	if (session.mediaHandler && session.mediaHandler.peerConnection && typeof session.mediaHandler.peerConnection.getSenders === 'function') {
-		session.mediaHandler.peerConnection.getSenders().forEach(function(sender) {
-			if (sender.track && sender.track.kind === 'audio') {
-				sender.track.enabled = false;
-			}
-		});
-	}
-	document.getElementById('mute_audio').style.display = "none";
-	document.getElementById('unmute_audio').style.display = "inline";
-	sync_call_action_controls();
-}
-
 function mute_video(destination) {
-	if (!session) { return; }
-	session.mute({video: true});
+	let selected_call = get_selected_call_session();
+	if (!selected_call) { return; }
+
+	if (selected_call.session) {
+		selected_call.session.mute({video: true});
+	}
 	document.getElementById('local_video').style.display = "none";
 	document.getElementById('mute_video').style.display = "none";
 	document.getElementById('unmute_video').style.display = "inline";
 	sync_call_action_controls();
 }
 
-function unmute_audio(destination) {
-	if (!session) { return; }
-	audio_muted = false;
-	session.unmute({audio: true});
-	if (session.mediaHandler && session.mediaHandler.localStream) {
-		session.mediaHandler.localStream.getAudioTracks().forEach(function(track) {
-			track.enabled = true;
-		});
-	}
-	if (session.mediaHandler && session.mediaHandler.peerConnection && typeof session.mediaHandler.peerConnection.getSenders === 'function') {
-		session.mediaHandler.peerConnection.getSenders().forEach(function(sender) {
-			if (sender.track && sender.track.kind === 'audio') {
-				sender.track.enabled = true;
-			}
-		});
-	}
-	document.getElementById('mute_audio').style.display = "inline";
-	document.getElementById('unmute_audio').style.display = "none";
-	sync_call_action_controls();
-}
-
 function unmute_video(destination) {
-	if (!session) { return; }
-	session.unmute({video: true});
+	let selected_call = get_selected_call_session();
+	if (!selected_call) { return; }
+
+	if (selected_call.session) {
+		selected_call.session.unmute({video: true});
+	}
 	document.getElementById('local_video').style.display = "inline";
 	document.getElementById('mute_video').style.display = "inline";
 	document.getElementById('unmute_video').style.display = "none";
 	sync_call_action_controls();
 }
 
-// Transfer the current call to another number (blind/attended transfer via SIP REFER)
+// ============================================================
+// MULTI-CALL: Blind Transfer (Updated for multi-call)
+// ============================================================
 function blind_transfer_call(target_number) {
-	if (!session) { return; }
+	// Get the selected call session
+	let selected_call = get_selected_call_session();
+	let transfer_session = selected_call ? selected_call.session : session;
+
+	if (!transfer_session) { 
+		show_temporary_status('No active call to transfer', 'fas fa-exclamation-circle');
+		return; 
+	}
 	if (!target_number || target_number.trim() === '') { return; }
 
 	// Create REFER request to transfer current call
 	var refer_to = 'sip:' + target_number.trim() + '@' + '<?php echo $domain_name; ?>';
 
 	// Use session.refer() if available, otherwise use session.ua.request()
-	if (session.refer) {
-		session.refer(refer_to).send();
+	if (transfer_session.refer) {
+		transfer_session.refer(refer_to).send();
 		show_temporary_status('Transferring to ' + target_number, 'fas fa-phone-square');
 	} else {
-		// Fallback: try using the UA's invite capability for transfer
 		show_temporary_status('Transfer not supported', 'fas fa-exclamation-triangle');
 	}
 }
 
 // Show transfer dialog/prompt
 function show_blind_transfer_prompt() {
-	if (!session) { return; }
+	// Get the selected call session
+	let selected_call = get_selected_call_session();
+	let check_session = selected_call ? selected_call.session : session;
+
+	if (!check_session) { 
+		show_temporary_status('No active call to transfer', 'fas fa-exclamation-circle');
+		return; 
+	}
 
 	// Get current destination value
 	var current_value = document.getElementById('destination').value || '';
@@ -3689,13 +4206,18 @@ document.addEventListener('DOMContentLoaded', function() {
 // Attended Transfer state (SIPJS 0.7.x compatible)
 let attendedTransfer = {
 	state: 'idle', // idle | dialing | target_connected
-	targetSession: null,
+	originalSession: null,  // The original call session being transferred
+	targetSession: null,    // The consultation call session
 	timeoutId: null,
 	isCleaningUp: false
 };
 
 function show_attended_transfer_prompt() {
-	if (!session || session.status !== SIP.Session.C.STATUS_CONFIRMED) {
+	// Use the selected call session (supports multi-call) instead of just the global session
+	let selected_call = get_selected_call_session();
+	let check_session = selected_call ? selected_call.session : session;
+
+	if (!check_session || check_session.status !== SIP.Session.C.STATUS_CONFIRMED) {
 		show_temporary_status('No active call to transfer', 'fas fa-exclamation-circle');
 		return;
 	}
@@ -3703,6 +4225,9 @@ function show_attended_transfer_prompt() {
 		show_temporary_status('Transfer already in progress', 'fas fa-exclamation-triangle');
 		return;
 	}
+
+	// Store the original session reference for use in other transfer functions
+	attendedTransfer.originalSession = check_session;
 
 	let currentVal = document.getElementById('destination').value || '';
 	let target = prompt('Enter extension/number to transfer to:', currentVal);
@@ -3717,13 +4242,20 @@ function start_attended_transfer(target) {
 	attendedTransfer.isCleaningUp = false;
 	show_temporary_status('Calling transfer target...', 'fas fa-phone');
 
+	// Use the stored original session (supports multi-call)
+	let originalSession = attendedTransfer.originalSession || session;
+
 	// Hold original caller so they hear ringback/silence during supervision
-	if (session.status === SIP.Session.C.STATUS_CONFIRMED || session.status === SIP.Session.C.STATUS_ANSWERED) {
+	if (originalSession.status === SIP.Session.C.STATUS_CONFIRMED || originalSession.status === SIP.Session.C.STATUS_ANSWERED) {
 		console.log('[Attended Transfer] Placing original caller on hold.');
-		session.hold();
+		originalSession.hold();
 	}
 
 	toggle_transfer_ui(true); // Switch UI to transfer mode
+
+	// Register the consultation call in the call session registry
+	let consultation_call_id = create_call_session('outgoing', target.trim(), 'Transfer Target', false);
+	let consultation_call = get_call_session(consultation_call_id);
 
 	// Place secondary call to transfer target
 	attendedTransfer.targetSession = user_agent.invite('sip:' + target.trim() + '@<?php echo $domain_name; ?>', {
@@ -3732,6 +4264,15 @@ function start_attended_transfer(target) {
 			render: { remote: document.getElementById('remote_video') }
 		}
 	});
+
+	// Link the registry entry to the SIP session
+	consultation_call.session = attendedTransfer.targetSession;
+	consultation_call.display_name = 'Transfer Target';
+	consultation_call.number = target.trim();
+	consultation_call.is_on_hold = true; // Auto-hold the consultation call
+
+	// Store the consultation call registry ID for cleanup
+	attendedTransfer.targetCallId = consultation_call_id;
 
 	let sec = attendedTransfer.targetSession;
 
@@ -3756,9 +4297,10 @@ function start_attended_transfer(target) {
 		show_temporary_status('Transfer target disconnected. Restoring original call.', 'fas fa-phone-slash');
 
 		// Unhold the original caller so they hear us again
-		if (session && session.local_hold === true) {
+		let orig = attendedTransfer.originalSession || session;
+		if (orig && orig.local_hold === true) {
 			console.log('[Attended Transfer] Removing hold from original caller.');
-			session.unhold();
+			orig.unhold();
 		}
 
 		reset_call_controls();
@@ -3773,9 +4315,10 @@ function start_attended_transfer(target) {
 		show_temporary_status('Transfer target unreachable. Restoring original call.', 'fas fa-exclamation-triangle');
 
 		// Unhold the original caller
-		if (session && session.local_hold === true) {
+		let orig = attendedTransfer.originalSession || session;
+		if (orig && orig.local_hold === true) {
 			console.log('[Attended Transfer] Removing hold from original caller.');
-			session.unhold();
+			orig.unhold();
 		}
 
 		reset_call_controls();
@@ -3788,8 +4331,9 @@ function start_attended_transfer(target) {
 			sec.bye();
 
 			// Unhold the original caller
-			if (session && session.local_hold === true) {
-				session.unhold();
+			let orig = attendedTransfer.originalSession || session;
+			if (orig && orig.local_hold === true) {
+				orig.unhold();
 			}
 		}
 	}, 30000);
@@ -3801,7 +4345,8 @@ function complete_attended_transfer() {
 		return;
 	}
 
-	var originalSession = session;                       // webphone <-> A : the original caller
+	// Use the stored original session reference (supports multi-call)
+	var originalSession = attendedTransfer.originalSession || session;   // webphone <-> A : the original caller
 	var targetSession = attendedTransfer.targetSession;  // webphone <-> C : the transfer target
 
 	if (!originalSession || !originalSession.dialog || !targetSession.dialog) {
@@ -3860,9 +4405,28 @@ function complete_attended_transfer() {
 					// of our transferor legs once the bridge is established; the
 					// existing session "bye" handlers will run harmlessly.
 					save_call_duration();
+
+					// Mark the original session as locally ended to prevent the bye handler
+					// from trying to switch calls or hold a terminated session.
+					if (attendedTransfer.originalSession) {
+						attendedTransfer.originalSession.local_ended = true;
+					}
+
+					// Remove both the original call and the consultation call from the registry
+					if (attendedTransfer.originalSession && attendedTransfer.originalSession.id) {
+						remove_call_session(attendedTransfer.originalSession.id);
+					}
+					// Use the stored consultation call registry ID for proper cleanup
+					if (attendedTransfer.targetCallId) {
+						remove_call_session(attendedTransfer.targetCallId);
+					}
+
+					// Reset the UI state and clear the call switcher
 					reset_call_ui_state(true);
+					update_call_switcher_ui();
 
 					attendedTransfer.targetSession = null;
+					attendedTransfer.originalSession = null;
 					attendedTransfer.state = 'idle';
 					toggle_transfer_ui(false);
 					toggle_transfer_ui_state(false);
@@ -3941,51 +4505,342 @@ function reset_call_controls() {
 	toggle_transfer_ui(false);
 
 	// Unhold original call if PBX still holds it
-	if (session && session.local_hold === true) {
-		session.unhold();
+	// Use the stored original session from attended transfer if available
+	let origSession = attendedTransfer.originalSession || session;
+	if (origSession && origSession.local_hold === true) {
+		origSession.unhold();
 	}
 }
 
-function cancel_attended_transfer() {
-	if (attendedTransfer.state === 'idle') {
-		show_temporary_status('No transfer in progress.', 'fas fa-info-circle');
+// ============================================================
+// CALL WAITING TONE
+// ============================================================
+
+/**
+ * Play the call waiting tone (distinct pattern to indicate another call is waiting)
+ */
+function play_call_waiting_tone() {
+	if (active_call_tone_mode === 'call_waiting') {
+		return;
+	}
+	stop_call_tone();
+	active_call_tone_mode = 'call_waiting';
+
+	// Use a different cadence for call waiting (fast pulsing)
+	const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+	if (AudioContextClass && !call_tone_context) {
+		call_tone_context = new AudioContextClass();
+	}
+	if (call_tone_context && call_tone_context.state === 'suspended') {
+		call_tone_context.resume().catch(function() {});
+	}
+
+	const play_waiting_burst = function() {
+		if (!call_tone_context || active_call_tone_mode !== 'call_waiting') return;
+		const end_time = call_tone_context.currentTime + 0.15;
+		[440, 480].forEach(function(frequency) {
+			const oscillator = call_tone_context.createOscillator();
+			const gain = call_tone_context.createGain();
+			oscillator.type = 'sine';
+			oscillator.frequency.value = frequency;
+			gain.gain.setValueAtTime(0.0001, call_tone_context.currentTime);
+			gain.gain.exponentialRampToValueAtTime(0.02, call_tone_context.currentTime + 0.01);
+			gain.gain.exponentialRampToValueAtTime(0.0001, end_time);
+			oscillator.connect(gain);
+			gain.connect(call_tone_context.destination);
+			oscillator.start();
+			oscillator.stop(end_time);
+		});
+	};
+
+	call_tone_interval = setInterval(play_waiting_burst, 300);
+	call_tone_timeout = setTimeout(function() {
+		if (active_call_tone_mode === 'call_waiting') {
+			stop_call_waiting_tone();
+		}
+	}, 30000);
+	console.log('[Call Waiting] Playing call waiting tone');
+}
+
+/**
+ * Stop the call waiting tone
+ */
+function stop_call_waiting_tone() {
+	if (active_call_tone_mode === 'call_waiting') {
+		active_call_tone_mode = null;
+		stop_call_tone();
+		console.log('[Call Waiting] Stopped call waiting tone');
+	}
+}
+
+// ============================================================
+// CALL SWITCHER UI HELPERS
+// ============================================================
+
+/**
+ * Timer ID for the call switcher duration refresh interval
+ */
+let call_switcher_refresh_interval = null;
+
+/**
+ * Update the call switcher UI to show all active calls
+ */
+function update_call_switcher_ui() {
+	let call_switcher = document.getElementById('call_switcher');
+	if (!call_switcher) return;
+
+	let active_calls = get_active_call_sessions();
+	if (active_calls.length === 0) {
+		call_switcher.style.display = 'none';
+		// Stop the refresh interval when no calls are active
+		if (call_switcher_refresh_interval) {
+			clearInterval(call_switcher_refresh_interval);
+			call_switcher_refresh_interval = null;
+		}
 		return;
 	}
 
-	console.log('[Attended Transfer] User cancelled transfer. Current state:', attendedTransfer.state);
-	show_temporary_status('Transfer cancelled. Restoring original call.', 'fas fa-ban');
+	call_switcher.style.display = 'flex';
 
-	// Guard so the target session "bye" handler does not also run restore logic.
-	attendedTransfer.isCleaningUp = true;
+	// Build the call switcher HTML
+	let new_html = '';
+	active_calls.forEach(function(call) {
+		let call_item = document.createElement('div');
+		call_item.className = 'call_switcher_item';
+		if (selected_call_session_id === call.id) {
+			call_item.classList.add('selected');
+		}
 
-	if (attendedTransfer.timeoutId) {
-		clearTimeout(attendedTransfer.timeoutId);
-		attendedTransfer.timeoutId = null;
+		let icon_class = 'fas fa-phone';
+		let status_text = 'Active';
+		if (call.is_on_hold) {
+			icon_class = 'fas fa-pause';
+			status_text = 'On Hold';
+		} else if (call.direction === 'incoming') {
+			icon_class = 'fas fa-phone-volume';
+		}
+		if (call.is_video) {
+			icon_class = 'fas fa-video';
+		}
+
+		let duration_str = '';
+		if (call.start_time && !call.is_on_hold) {
+			let elapsed = Math.floor((Date.now() - call.start_time) / 1000);
+			duration_str = format_duration(elapsed);
+		}
+
+		let display_name = call.display_name || call.number || '';
+		let item_html = '<div class="call_switcher_icon"><i class="' + icon_class + '"></i></div>';
+		item_html += '<div class="call_switcher_info">';
+		item_html += '<div class="call_switcher_name">' + sanitize_string(display_name) + '</div>';
+		item_html += '<div class="call_switcher_status">' + status_text + (duration_str ? ' • ' + sanitize_string(duration_str) : '') + '</div>';
+		item_html += '</div>';
+		item_html += '<div class="call_switcher_select"><i class="fas fa-check"></i></div>';
+
+		call_item.innerHTML = item_html;
+		call_item.setAttribute('data-call-id', call.id);
+		call_item.setAttribute('data-call-start-time', call.start_time || '0');
+		call_item.addEventListener('click', function() {
+			select_call_session(call.id);
+		});
+		new_html += call_item.outerHTML;
+	});
+	call_switcher.innerHTML = new_html;
+
+	// Start the refresh interval if not already running
+	if (!call_switcher_refresh_interval) {
+		call_switcher_refresh_interval = setInterval(refresh_call_switcher_durations, 1000);
+	}
+}
+
+/**
+ * Refresh the duration display for all active calls in the call switcher
+ * Called every second to keep durations up to date
+ */
+function refresh_call_switcher_durations() {
+	let call_switcher = document.getElementById('call_switcher');
+	if (!call_switcher) return;
+
+	let call_items = call_switcher.querySelectorAll('.call_switcher_item');
+	call_items.forEach(function(item) {
+		let call_id = parseInt(item.getAttribute('data-call-id') || '0');
+		let start_time = parseInt(item.getAttribute('data-call-start-time') || '0');
+
+		if (call_id && start_time > 0) {
+			let call = get_call_session(call_id);
+			if (call && call.start_time && !call.is_on_hold) {
+				let elapsed = Math.floor((Date.now() - call.start_time) / 1000);
+				let duration_str = format_duration(elapsed);
+				let status_div = item.querySelector('.call_switcher_status');
+				if (status_div) {
+					let parts = status_div.textContent.split(' • ');
+					let status_part = parts[0] || 'Active';
+					status_div.textContent = status_part + ' • ' + duration_str;
+				}
+			}
+		}
+	});
+}
+
+/**
+ * Update call controls to reflect the selected call's state
+ * Also manages audio routing to ensure only the active call has audio
+ */
+function update_call_controls_for_selected_call() {
+	let selected = get_selected_call_session();
+	if (!selected) return;
+
+	// Update display name and number
+	active_call_display_name = selected.display_name;
+	active_call_number = selected.number;
+	active_call_is_video = selected.is_video;
+
+	// Update hold button visibility
+	if (selected.is_on_hold) {
+		document.getElementById('hold').style.display = 'none';
+		document.getElementById('unhold').style.display = 'inline';
+	} else {
+		document.getElementById('hold').style.display = 'inline';
+		document.getElementById('unhold').style.display = 'none';
 	}
 
-	// Hang up the consultation call with the transfer target (C).
-	var sec = attendedTransfer.targetSession;
-	if (sec) {
-		try { sec.removeAllListeners('bye'); } catch (e) {}
-		try { sec.removeAllListeners('failed'); } catch (e) {}
-		try { sec.removeAllListeners('accepted'); } catch (e) {}
-		try { sec.removeAllListeners('progress'); } catch (e) {}
-		if (sec.status !== SIP.Session.C.STATUS_TERMINATED) {
-			console.log('[Attended Transfer] Hanging up consultation call.');
-			sec.bye();
+	// Update mute button
+	if (selected.is_muted) {
+		document.getElementById('mute_audio').style.display = 'none';
+		document.getElementById('unmute_audio').style.display = 'inline';
+	} else {
+		document.getElementById('mute_audio').style.display = 'inline';
+		document.getElementById('unmute_audio').style.display = 'none';
+	}
+
+	// Update video buttons
+	if (selected.is_video) {
+		document.getElementById('mute_video').style.display = 'inline';
+		document.getElementById('unmute_video').style.display = 'none';
+	} else {
+		document.getElementById('mute_video').style.display = 'none';
+		document.getElementById('unmute_video').style.display = 'none';
+	}
+
+	// Ensure audio is enabled for the selected call and disabled for others
+	enable_audio_for_call(selected.id);
+
+	// Sync action bar controls
+	sync_call_action_controls();
+
+	// Update status bar
+	update_status_bar();
+}
+
+/**
+ * Enable audio for the selected call and disable audio for all other calls
+ * This ensures only the active call has audio
+ * @param {number} active_call_id - The call ID that should have audio enabled
+ */
+function enable_audio_for_call(active_call_id) {
+	// Disable audio for all calls
+	Object.keys(call_session_list).forEach(function(call_id) {
+		let call = call_session_list[call_id];
+		if (!call.session || !call.session.mediaHandler || !call.session.mediaHandler.peerConnection) {
+			return;
+		}
+		
+		// Only enable audio for the active call if it's not muted
+		let should_enable = (call_id == active_call_id) && !call.is_on_hold && !call.is_muted;
+		
+		// Disable all audio tracks in this peer connection
+		let senders = call.session.mediaHandler.peerConnection.getSenders();
+		for (let i = 0; i < senders.length; i++) {
+			if (senders[i].track && senders[i].track.kind === 'audio') {
+				senders[i].track.enabled = should_enable;
+			}
+		}
+		
+		// Disable/enable local stream audio tracks
+		if (call.session.mediaHandler.localStream) {
+			let audioTracks = call.session.mediaHandler.localStream.getAudioTracks();
+			for (let i = 0; i < audioTracks.length; i++) {
+				audioTracks[i].enabled = should_enable;
+			}
+		}
+	});
+}
+
+/**
+ * Handle call session state changes (for UI updates)
+ */
+function on_call_session_state_change(call_id, new_state) {
+	let call = get_call_session(call_id);
+	if (!call) return;
+
+	console.log('[Call Registry] Call session', call_id, 'state changed to:', new_state);
+	update_call_switcher_ui();
+
+	if (selected_call_session_id === call_id) {
+		update_call_controls_for_selected_call();
+	}
+}
+
+// ============================================================
+// END CALL SWITCHER UI HELPERS
+// ============================================================
+
+// ============================================================
+// MULTI-CALL UI - Answer/Decline for call waiting
+// ============================================================
+
+/**
+ * Show the call waiting incoming panel
+ */
+function show_call_waiting_panel(call_id, incoming_session) {
+	let call = get_call_session(call_id);
+	if (!call) return;
+
+	// Show the ringing panel for the waiting call
+	document.getElementById('ringing').style.display = 'flex';
+	document.getElementById('ringing').setAttribute('data-waiting-call-id', call_id);
+
+	let video_indicator = call.is_video ? "<div class='caller_video'><i class='fas fa-video'></i> Video Call</div>" : "";
+	document.getElementById('ringing_caller_id').innerHTML =
+		"<div class='caller_name'>" + sanitize_string(call.display_name) + "</div>" +
+		"<div class='caller_number'><a href='https://<?php echo $_SESSION['domain_name']; ?>/core/contacts/contacts.php?search=" + sanitize_string(call.number) + "' target='_blank'>" + sanitize_string(call.number) + "</a></div>" +
+		video_indicator;
+	document.getElementById('active_caller_id').innerHTML = document.getElementById('ringing_caller_id').innerHTML;
+
+	// Show answer/decline buttons
+	document.getElementById('answer_audio').style.display = 'inline';
+	document.getElementById('answer_video').style.display = call.is_video ? 'inline' : 'inline';
+	document.getElementById('decline').style.display = 'inline';
+	set_hangup_visibility(false);
+
+	// Play call waiting tone
+	play_call_waiting_tone();
+}
+
+/**
+ * Decline a call waiting (incoming call)
+ */
+function decline_call_waiting() {
+	let waiting_call_id = parseInt(document.getElementById('ringing').getAttribute('data-waiting-call-id') || '0');
+	if (waiting_call_id > 0) {
+		let call = get_call_session(waiting_call_id);
+		if (call && call.session) {
+			call.session.reject();
 		}
 	}
-
-	// Clear transfer state.
-	attendedTransfer.targetSession = null;
-	attendedTransfer.state = 'idle';
-
-	// Take the original caller (A) off hold so the agent can talk to them again.
-	if (session && session.local_hold === true) {
-		console.log('[Attended Transfer] Unholding original caller.');
-		session.unhold();
-	}
-
-	// Restore the normal in-call controls. The original call (A <-> B) is still up.
-	reset_call_controls();
+	stop_call_waiting_tone();
+	hide_call_waiting_panel();
 }
+
+/**
+ * Hide the call waiting panel
+ */
+function hide_call_waiting_panel() {
+	document.getElementById('ringing').style.display = 'none';
+	document.getElementById('ringing').removeAttribute('data-waiting-call-id');
+	stop_call_waiting_tone();
+}
+
+// ============================================================
+// END MULTI-CALL UI
+// ============================================================
