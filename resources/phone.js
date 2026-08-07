@@ -2767,26 +2767,36 @@ function show_dialpad() {
 	// Get the dialpad
 	var dialpad = document.getElementById('dialpad');
 
+	// Toggle: if dialpad is already open, close it
+	if (dialpad.style.display === 'flex') {
+		hide_all_panels();
+		update_action_bar_state(null);  // Clear all active states
+		return;
+	}
+	
 	// Toggle Active call
 	if (is_session_active()) {
-		if (dialpad.style.display === '' || dialpad.style.display === 'flex') {
-			dialpad.style.display = 'none';
-		}
-		else {
-			hide_all_panels();
-			dialpad.style.display = 'flex';
-		}
+		hide_all_panels();
+		dialpad.style.display = 'flex';
+		update_action_bar_state('dialpad');  // Set dialpad as active
 	}
 
-	// Show the dialpad
+	// Toggle the dialpad when no call is active
 	if (!is_session_active()) {
 		hide_all_panels();
 		dialpad.style.display = 'flex';
+		update_action_bar_state('dialpad');  // Set dialpad as active
 	}
-	//alert(dialpad.style.display);
 }
 
 function show_contacts() {
+	// Toggle: if contacts panel is already open, close it
+	if (document.getElementById('contacts').style.display === 'flex') {
+		hide_all_panels();
+		update_action_bar_state(null);
+		return;
+	}
+	
 	hide_all_panels();
 	render_contacts();
 	document.getElementById('contacts').style.display = 'flex';
@@ -2797,19 +2807,29 @@ function show_history() {
 	// Get the dialpad
 	var history = document.getElementById('history');
 
-	// Toggle the call history
-	if (history.style.display === '' || history.style.display === 'inline' || history.style.display === 'flex') {
-		history.style.display = 'none';
-	}
-	else {
+	// Toggle: if history panel is already open, close it
+	if (history.style.display === 'flex') {
 		hide_all_panels();
-		render_history();
-		history.style.display = 'flex';
-		update_action_bar_state('history');
+		update_action_bar_state(null);
+		return;
 	}
+	
+	hide_all_panels();
+	render_history();
+	history.style.display = 'flex';
+	update_action_bar_state('history');
 }
 
 function show_messages() {
+	// Toggle: if messages panel is already open, close it
+	if (document.getElementById('messages').style.display === 'flex') {
+		hide_all_panels();
+		document.getElementById('conversation').style.display = 'none';
+		update_action_bar_state(null);
+		current_conversation_partner = null;
+		return;
+	}
+	
 	hide_all_panels();
 	render_conversations();
 	document.getElementById('messages').style.display = 'flex';
@@ -2823,10 +2843,9 @@ function update_action_bar_state(active) {
 	});
 
 	// Add active class based on current panel
-	//if (active === 'dialpad' || active === 'keypad') {
-	//	document.getElementById('action_keypad').classList.add('active');
-	//} else
-	if (active === 'contacts') {
+	if (active === 'dialpad' || active === 'keypad') {
+		document.getElementById('action_keypad').classList.add('active');
+	} else if (active === 'contacts') {
 		document.getElementById('action_contacts').classList.add('active');
 	} else if (active === 'history') {
 		document.getElementById('action_history').classList.add('active');
@@ -3295,6 +3314,7 @@ function send_current_message() {
 function open_conversation(partner_number) {
 	current_conversation_partner = partner_number;
 	hide_all_panels();
+	document.getElementById('messages').style.display = 'none';
 	document.getElementById('conversation').style.display = 'flex';
 	update_action_bar_state('conversation');
 	render_conversation(partner_number);

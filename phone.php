@@ -177,25 +177,23 @@ echo "			</div>\n";
 echo "		</div>\n";
 
 //close the body_content
-echo "	<div>\n";
+	echo "	</div>\n";
 
 //define the contacts panel
 echo "	<div class='contacts' id='contacts' style='display: none;'>\n";
-echo "		<div class='keypad_header'><i class='fas fa-address-book'></i> Contacts</div>\n";
 echo "		<div class='contacts_list' id='contacts_list'>\n";
 echo "		</div>\n";
 echo "	</div>\n";
 
 //define the history panel
 echo "	<div class='history' id='history' style='display: none;'>\n";
-echo "		<div class='keypad_header'><i class='fas fa-history'></i> Call History</div>\n";
 echo "		<div class='history_list' id='history_list'>\n";
 echo "		</div>\n";
 echo "	</div>\n";
 
 //define the messages panel (conversations list)
 echo "	<div class='messages' id='messages' style='display: none;'>\n";
-echo "		<div class='keypad_header'><i class='fas fa-comment'></i> Messages\n";
+echo "		<div class='keypad_header'>\n";
 echo "			<a href='javascript:void(0)' onclick='new_conversation();' style='margin-left: 10px; color: #1eba00;' title='New Message'><i class='fas fa-plus'></i></a>\n";
 echo "		</div>\n";
 echo "		<div class='messages_list' id='messages_list'>\n";
@@ -204,10 +202,7 @@ echo "	</div>\n";
 
 //define the conversation panel (chat view)
 echo "	<div class='conversation' id='conversation' style='display: none;'>\n";
-echo "		<div class='conversation_header'>\n";
-echo "			<a href='javascript:void(0)' onclick='show_messages();' style='color: #fff;'><i class='fas fa-arrow-left'></i></a>\n";
-echo "			<span class='conversation_title' id='conversation_title'></span>\n";
-echo "		</div>\n";
+
 echo "		<div class='messages_container' id='messages_container'>\n";
 echo "		</div>\n";
 echo "		<div class='message_input_container'>\n";
@@ -242,7 +237,6 @@ echo "	</div>\n";
 
 //define the settings panel (audio device selection)
 echo "	<div class='settings_panel' id='settings_panel' style='display: none;'>\n";
-echo "		<div class='settings_header'><i class='fas fa-cog'></i> Settings</div>\n";
 echo "		<div class='settings_content'>\n";
 echo "			<div class='audio_device_selector_container'>\n";
 echo "				<label for='audio_input_select' class='audio_device_label'><i class='fas fa-microphone'></i> Audio Input:</label>\n";
@@ -288,9 +282,9 @@ echo "		</div>\n";
 echo "		<div class='action_item' id='action_history'onclick='show_history();'><i class='fas fa-history'></i>\n";
 echo "			<span class='action_label'>History</span>\n";
 echo "		</div>\n";
-// echo "		<div class='action_item' id='action_messages' onclick='show_messages();'><i class='fas fa-comment'></i>\n";
-// echo "			<span class='action_label'>".$text['label-messages']."</span>\n";
-// echo "		</div>\n";
+//echo "		<div class='action_item' id='action_messages' onclick='show_messages();'><i class='fas fa-comment'></i>\n";
+//echo "			<span class='action_label'>".$text['label-messages']."</span>\n";
+//echo "		</div>\n";
 echo "		<div class='action_item' id='action_mute' onclick='toggle_audio_mute_action();' style='display: none;'><i id='action_mute_icon' class='fas fa-microphone'></i>\n";
 echo "			<span class='action_label' id='action_mute_label'>".$text['label-mute']."</span>\n";
 echo "		</div>\n";
