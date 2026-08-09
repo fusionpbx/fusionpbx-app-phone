@@ -82,6 +82,7 @@ async function send_call(use_video) {
 
 	// Create a new call session entry
 	let call_id = create_call_session('outgoing', destination, '', use_video);
+	update_active_calls_button();
 	let call_session = get_call_session(call_id);
 	let current_session = null;
 
@@ -176,7 +177,7 @@ async function send_call(use_video) {
 			document.getElementById('destination').value = '';
 
 			// Update call switcher
-			update_call_switcher_ui();
+			update_active_calls_panel();
 		});
 
 		current_sess.on('bye', function() {
@@ -489,7 +490,7 @@ function select_call_session(call_id) {
 		
 		selected_call_session_id = call_id;
 		console.log('[Call Registry] Selected call session:', call_id);
-		update_call_switcher_ui();
+		update_active_calls_panel();
 		update_call_controls_for_selected_call();
 		
 		// Enable audio tracks for the newly selected call
@@ -535,7 +536,7 @@ function remove_call_session(call_id) {
 		}
 
 		// Update the call switcher UI to reflect the removed call
-		update_call_switcher_ui();
+		update_active_calls_panel();
 	}
 }
 
@@ -1411,11 +1412,13 @@ function sync_call_action_controls() {
 	action_hold.classList.toggle('action_item_toggle_active', on_hold);
 
 	if (action_video_mute) {
-		var local_video_wrapper = document.getElementById('local_video_wrapper');
-		var local_video_hidden = !!(local_video_wrapper && local_video_wrapper.classList.contains('local_preview_hidden'));
-		if (!camera_available) {
+		// Only show video mute button if the selected call has video
+		var is_video_call = selected_call && selected_call.is_video !== undefined ? selected_call.is_video : false;
+		if (!is_video_call || !camera_available) {
 			action_video_mute.style.display = 'none';
 		} else {
+			var local_video_wrapper = document.getElementById('local_video_wrapper');
+			var local_video_hidden = !!(local_video_wrapper && local_video_wrapper.classList.contains('local_preview_hidden'));
 			action_video_mute.style.display = 'flex';
 			if (action_video_mute_icon) {
 				action_video_mute_icon.className = local_video_hidden ? 'fas fa-video-slash' : 'fas fa-video';
@@ -1535,11 +1538,19 @@ function toggle_audio_hold_action() {
 function toggle_video_mute_action() {
 	if (!session || !active_call_is_video) { return; }
 	var local_video_wrapper = document.getElementById('local_video_wrapper');
-	if (!local_video_wrapper) {
+	var local_video = document.getElementById('local_video');
+	if (!local_video_wrapper || !local_video) {
 		return;
 	}
 
 	local_video_wrapper.classList.toggle('local_preview_hidden');
+
+	if (local_video_wrapper.classList.contains('local_preview_hidden')) {
+		local_video.style.display = 'none';
+	} else {
+		local_video.style.display = 'inline';
+	}
+
 	sync_call_action_controls();
 }
 
@@ -2202,7 +2213,7 @@ function reset_call_ui_state(show_dialpad) {
 	update_idle_status();
 
 	// Update the call switcher UI to reflect the cleared state
-	update_call_switcher_ui();
+	update_active_calls_panel();
 }
 
 function cycle_local_video_corner() {
@@ -2462,6 +2473,7 @@ user_agent.on('invite', function (s) {
 
 		// Create a new call session for the waiting incoming call
 		let waiting_call_id = create_call_session('incoming', incoming_uri_user, incoming_display_name, detect_video_invite(s));
+		update_active_calls_button();
 		let waiting_call = get_call_session(waiting_call_id);
 		waiting_call.session = s;
 
@@ -3091,7 +3103,7 @@ for (let i = 0; i < active_calls_before.length; i++) {
 			}
 
 			update_status_bar();
-			update_call_switcher_ui();
+			update_active_calls_panel();
 
 			return;
 		} catch (err) {
@@ -3180,7 +3192,7 @@ for (let i = 0; i < active_calls_before.length; i++) {
 	}
 
 	update_status_bar();
-	update_call_switcher_ui();
+	update_active_calls_panel();
 }
 
 // ============================================================
@@ -3514,7 +3526,7 @@ function hangup() {
 	if (remaining_calls.length > 0) {
 		// Switch to another active call
 		select_call_session(remaining_calls[0].id);
-		update_call_switcher_ui();
+		update_active_calls_panel();
 		update_call_controls_for_selected_call();
 	} else {
 		// No more calls - reset UI
@@ -3536,7 +3548,7 @@ function hold() {
 	document.getElementById('hold').style.display = "none";
 	document.getElementById('unhold').style.display = "inline";
 	sync_call_action_controls();
-	update_call_switcher_ui();
+	update_active_calls_panel();
 	
 	// Disable audio for this call when holding
 	enable_audio_for_call(selected_call.id);
@@ -3552,7 +3564,7 @@ function unhold() {
 	document.getElementById('hold').style.display = "inline";
 	document.getElementById('unhold').style.display = "none";
 	sync_call_action_controls();
-	update_call_switcher_ui();
+	update_active_calls_panel();
 	
 	// Enable audio for this call when unholding
 	enable_audio_for_call(selected_call.id);
@@ -4423,7 +4435,7 @@ function complete_attended_transfer() {
 
 					// Reset the UI state and clear the call switcher
 					reset_call_ui_state(true);
-					update_call_switcher_ui();
+					update_active_calls_panel();
 
 					attendedTransfer.targetSession = null;
 					attendedTransfer.originalSession = null;
@@ -4580,76 +4592,105 @@ function stop_call_waiting_tone() {
 /**
  * Timer ID for the call switcher duration refresh interval
  */
-let call_switcher_refresh_interval = null;
+let active_calls_panel_refresh_interval = null;
 
 /**
  * Update the call switcher UI to show all active calls
  */
-function update_call_switcher_ui() {
-	let call_switcher = document.getElementById('call_switcher');
-	if (!call_switcher) return;
+/**
+ * Render the active calls list items in the panel
+ * Called by update_active_calls_panel() and show_active_calls_panel()
+ */
+function render_active_calls() {
+	let container = document.getElementById('active_calls_panel_list');
+	if (!container) return;
+	container.innerHTML = '';
 
-	let active_calls = get_active_call_sessions();
-	if (active_calls.length === 0) {
-		call_switcher.style.display = 'none';
-		// Stop the refresh interval when no calls are active
-		if (call_switcher_refresh_interval) {
-			clearInterval(call_switcher_refresh_interval);
-			call_switcher_refresh_interval = null;
-		}
+	let active_call_sessions = get_active_call_sessions();
+
+	if (active_call_sessions.length === 0) {
+		container.innerHTML = '<div style="text-align: center; color: #ccc; padding: 40px; font-size: 16px;">No active calls</div>';
 		return;
 	}
 
-	call_switcher.style.display = 'flex';
-
-	// Build the call switcher HTML
-	let new_html = '';
-	active_calls.forEach(function(call) {
-		let call_item = document.createElement('div');
-		call_item.className = 'call_switcher_item';
+	active_call_sessions.forEach(function(call) {
+		let call_div = document.createElement('div');
+		call_div.className = 'active_calls_panel_item';
 		if (selected_call_session_id === call.id) {
-			call_item.classList.add('selected');
+			call_div.classList.add('selected');
+		}
+		call_div.onclick = function() { select_call_session(call.id); };
+
+		let icon_class = 'fa-phone';
+		let status_text = 'Active';
+		let icon_bg = '#1eba00';
+
+		if (call.is_on_hold) {
+			icon_class = 'fa-pause';
+			status_text = 'On Hold';
+			icon_bg = '#ffaa00';
+		} else if (call.direction === 'incoming') {
+			icon_class = 'fa-phone-volume';
+			icon_bg = '#1e90ff';
 		}
 
-		let icon_class = 'fas fa-phone';
-		let status_text = 'Active';
-		if (call.is_on_hold) {
-			icon_class = 'fas fa-pause';
-			status_text = 'On Hold';
-		} else if (call.direction === 'incoming') {
-			icon_class = 'fas fa-phone-volume';
-		}
 		if (call.is_video) {
-			icon_class = 'fas fa-video';
+			icon_class = 'fa-video';
 		}
 
 		let duration_str = '';
 		if (call.start_time && !call.is_on_hold) {
 			let elapsed = Math.floor((Date.now() - call.start_time) / 1000);
-			duration_str = format_duration(elapsed);
+			duration_str = ' \u2022 ' + format_duration(elapsed);
 		}
 
-		let display_name = call.display_name || call.number || '';
-		let item_html = '<div class="call_switcher_icon"><i class="' + icon_class + '"></i></div>';
-		item_html += '<div class="call_switcher_info">';
-		item_html += '<div class="call_switcher_name">' + sanitize_string(display_name) + '</div>';
-		item_html += '<div class="call_switcher_status">' + status_text + (duration_str ? ' • ' + sanitize_string(duration_str) : '') + '</div>';
-		item_html += '</div>';
-		item_html += '<div class="call_switcher_select"><i class="fas fa-check"></i></div>';
+		let display_name = call.display_name || '';
+		let caller_number = call.number || '';
 
-		call_item.innerHTML = item_html;
-		call_item.setAttribute('data-call-id', call.id);
-		call_item.setAttribute('data-call-start-time', call.start_time || '0');
-		call_item.addEventListener('click', function() {
-			select_call_session(call.id);
-		});
-		new_html += call_item.outerHTML;
+		let item_html = '<div class="active_calls_panel_icon" style="background: ' + icon_bg + ';">';
+		item_html += '<i class="fas ' + icon_class + '"></i>';
+		item_html += '</div>';
+		item_html += '<div class="active_calls_panel_info">';
+		item_html += '<div class="active_calls_panel_name">' + sanitize_string(display_name) + '</div>';
+		item_html += '<div class="active_calls_panel_number">' + sanitize_string(caller_number) + '</div>';
+		item_html += '<div class="active_calls_panel_status">' + status_text + duration_str + '</div>';
+		item_html += '</div>';
+		item_html += '<div class="active_calls_panel_select"><i class="fas fa-check"></i></div>';
+
+		call_div.innerHTML = item_html;
+		call_div.setAttribute('data-call-id', call.id);
+		call_div.setAttribute('data-call-start-time', call.start_time || '0');
+		container.appendChild(call_div);
 	});
-	call_switcher.innerHTML = new_html;
+}
+
+/**
+ * Update the active calls panel UI to show all active calls
+ * Updates panel content without auto-showing the panel.
+ * The panel only shows when the user clicks the "Calls" button.
+ */
+function update_active_calls_panel() {
+	let active_calls_panel = document.getElementById('active_calls_panel');
+	if (!active_calls_panel) return;
+
+	let active_call_sessions = get_active_call_sessions();
+	if (active_call_sessions.length === 0) {
+		active_calls_panel.style.display = 'none';
+		// Stop the refresh interval when no calls are active
+		if (active_calls_panel_refresh_interval) {
+			clearInterval(active_calls_panel_refresh_interval);
+			active_calls_panel_refresh_interval = null;
+		}
+		// Also hide the action bar button
+		update_active_calls_button();
+		return;
+	}
+
+	render_active_calls();
 
 	// Start the refresh interval if not already running
-	if (!call_switcher_refresh_interval) {
-		call_switcher_refresh_interval = setInterval(refresh_call_switcher_durations, 1000);
+	if (!active_calls_panel_refresh_interval) {
+		active_calls_panel_refresh_interval = setInterval(refresh_active_calls_panel_durations, 1000);
 	}
 }
 
@@ -4657,11 +4698,11 @@ function update_call_switcher_ui() {
  * Refresh the duration display for all active calls in the call switcher
  * Called every second to keep durations up to date
  */
-function refresh_call_switcher_durations() {
-	let call_switcher = document.getElementById('call_switcher');
-	if (!call_switcher) return;
+function refresh_active_calls_panel_durations() {
+	let active_calls_panel = document.getElementById('active_calls_panel');
+	if (!active_calls_panel) return;
 
-	let call_items = call_switcher.querySelectorAll('.call_switcher_item');
+	let call_items = active_calls_panel.querySelectorAll('.active_calls_panel_item');
 	call_items.forEach(function(item) {
 		let call_id = parseInt(item.getAttribute('data-call-id') || '0');
 		let start_time = parseInt(item.getAttribute('data-call-start-time') || '0');
@@ -4671,7 +4712,7 @@ function refresh_call_switcher_durations() {
 			if (call && call.start_time && !call.is_on_hold) {
 				let elapsed = Math.floor((Date.now() - call.start_time) / 1000);
 				let duration_str = format_duration(elapsed);
-				let status_div = item.querySelector('.call_switcher_status');
+				let status_div = item.querySelector('.active_calls_panel_status');
 				if (status_div) {
 					let parts = status_div.textContent.split(' • ');
 					let status_part = parts[0] || 'Active';
@@ -4683,9 +4724,60 @@ function refresh_call_switcher_durations() {
 }
 
 /**
- * Update call controls to reflect the selected call's state
- * Also manages audio routing to ensure only the active call has audio
+ * Show the active calls panel (like show_history)
  */
+function show_active_calls_panel() {
+	// Only show if there are active calls
+	if (get_active_call_count() === 0) {
+		hide_active_calls_panel();
+		return;
+	}
+
+	hide_all_panels();
+	render_active_calls();
+	document.getElementById('active_calls_panel').style.display = 'flex';
+	update_action_bar_state('active_calls');
+}
+
+/**
+ * Hide the active calls panel
+ */
+function hide_active_calls_panel() {
+	let panel = document.getElementById('active_calls_panel');
+	if (!panel) return;
+	panel.style.display = 'none';
+	update_action_bar_state(null);
+}
+
+/**
+ * Toggle the active calls panel visibility
+ */
+function toggle_active_calls_panel() {
+	let panel = document.getElementById('active_calls_panel');
+	if (!panel) return;
+	if (panel.style.display === 'flex') {
+		hide_active_calls_panel();
+	} else {
+		show_active_calls_panel();
+	}
+}
+
+/**
+ * Update the active calls action bar button visibility
+ * Shows the button only when there are active call sessions
+ */
+function update_active_calls_button() {
+	let active_count = get_active_call_count();
+	let action_button = document.getElementById('action_active_calls');
+	if (!action_button) return;
+	if (active_count > 0) {
+		action_button.style.display = 'flex';
+	} else {
+		action_button.style.display = 'none';
+		hide_active_calls_panel();
+	}
+}
+
 function update_call_controls_for_selected_call() {
 	let selected = get_selected_call_session();
 	if (!selected) return;
@@ -4774,7 +4866,7 @@ function on_call_session_state_change(call_id, new_state) {
 	if (!call) return;
 
 	console.log('[Call Registry] Call session', call_id, 'state changed to:', new_state);
-	update_call_switcher_ui();
+	update_active_calls_panel();
 
 	if (selected_call_session_id === call_id) {
 		update_call_controls_for_selected_call();

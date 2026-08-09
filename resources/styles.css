@@ -462,143 +462,120 @@ sup {
 }
 
 /* ===========================================
-   CALL SWITCHER (multi-call)
+   ACTIVE CALLS PANEL (multi-call)
    =========================================== */
-.call_switcher {
-	position: fixed;
-	top: 38px;
+
+.active_calls_panel {
+	top: 0;
 	left: 0;
 	right: 0;
-	min-height: 48px;
-	max-height: 120px;
-	background: rgba(10, 10, 10, 0.95);
+	bottom: 0;
+	position: fixed;
 	display: none;
-	flex-direction: row;
-	align-items: center;
-	gap: 8px;
-	padding: 6px 12px;
-	overflow-x: auto;
-	overflow-y: hidden;
 	z-index: 2500;
-	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
-	scrollbar-width: thin;
-	scrollbar-color: #444 #1a1a1a;
-}
-
-.call_switcher::-webkit-scrollbar {
-	height: 4px;
-}
-
-.call_switcher::-webkit-scrollbar-track {
-	background: #1a1a1a;
-}
-
-.call_switcher::-webkit-scrollbar-thumb {
-	background: #444;
-	border-radius: 2px;
-}
-
-.call_switcher_item {
-	display: flex;
+	justify-content: center;
 	align-items: center;
-	gap: 8px;
-	padding: 6px 12px;
-	background: rgba(60, 60, 60, 0.6);
-	border: 2px solid #333;
+}
+
+
+	/* Active Calls Panel - same layout as history/contacts */
+#active_calls_panel {
+	position: fixed;
+	top: 38px;
+	bottom: 66px;
+	left: 0;
+	right: 0;
+	background: #161D28;
+	padding: 20px;
+	overflow-y: auto;
+	display: none;
+	flex-direction: column;
+	align-items: center;
+}
+
+.active_calls_panel_list {
+	max-width: 600px;
+	width: 100%;
+	margin: 0 auto;
+}
+
+/* Active calls list items - styled like history_item */
+.active_calls_panel_item {
+	background: #252A32;
+	color: #fff;
+	padding: 18px 15px;
+	margin-bottom: 10px;
 	border-radius: 8px;
 	cursor: pointer;
-	transition: background 0.2s, border-color 0.2s;
-	flex-shrink: 0;
-	min-width: 120px;
-	max-width: 200px;
+	display: flex;
+	align-items: center;
+	gap: 15px;
+	transition: background 0.2s;
 }
 
-.call_switcher_item:hover {
-	background: rgba(80, 80, 80, 0.8);
-	border-color: #555;
+.active_calls_panel_item:hover {
+	background: rgba(70, 70, 70, 0.9);
 }
 
-.call_switcher_item.selected {
+.active_calls_panel_item.selected {
 	background: rgba(30, 186, 0, 0.15);
-	border-color: #1eba00;
+	border: 2px solid #1eba00;
 }
 
-.call_switcher_icon {
+.active_calls_panel_icon {
+	width: 50px;
+	height: 50px;
+	border-radius: 50%;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 28px;
-	height: 28px;
 	flex-shrink: 0;
 }
 
-.call_switcher_icon i {
-	font-size: 16px;
+.active_calls_panel_icon i {
+	font-size: 20px;
 	color: #fff;
 }
 
-.call_switcher_item.selected .call_switcher_icon i {
-	color: #1eba00;
-}
-
-.call_switcher_info {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	overflow: hidden;
+.active_calls_panel_info {
 	flex: 1;
 	min-width: 0;
 }
 
-.call_switcher_name {
-	font-size: 12px;
-	font-weight: 600;
+.active_calls_panel_name {
+	font-size: 20px;
+	font-weight: bold;
+	margin-bottom: 4px;
 	color: #fff;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
 }
 
-.call_switcher_status {
-	font-size: 10px;
+.active_calls_panel_status {
+	font-size: 13px;
+	color: #ccc;
+}
+
+.active_calls_panel_number {
+	font-size: 14px;
 	color: #aaa;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
+	margin-bottom: 2px;
 }
 
-.call_switcher_select {
+.active_calls_panel_select {
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	flex-shrink: 0;
-	width: 20px;
-	height: 20px;
+	width: 24px;
+	height: 24px;
 }
 
-.call_switcher_select i {
-	font-size: 12px;
+.active_calls_panel_select i {
+	font-size: 14px;
 	color: #1eba00;
 }
 
-.call_switcher_item:not(.selected) .call_switcher_select i {
+.active_calls_panel_item:not(.selected) .active_calls_panel_select i {
 	color: transparent;
-}
-
-/* Responsive: hide call switcher on very small screens */
-@media (max-width: 480px) {
-	.call_switcher_item {
-		min-width: 100px;
-		padding: 4px 8px;
-	}
-
-	.call_switcher_name {
-		font-size: 11px;
-	}
-
-	.call_switcher_status {
-		font-size: 9px;
-	}
 }
 
 /* Status Bar Styles */

@@ -221,10 +221,14 @@ echo "			<div class='dialpad_box' id='answer_video' onclick='answer_video();' st
 echo "		</div>\n";
 echo "	</div>\n";
 
-//define the call switcher (for multi-call)
-echo "	<div class='call_switcher' id='call_switcher' style='display: none;'>\n";
+//define the active calls panel (for multi-call)
+echo "	<div class='active_calls_panel' id='active_calls_panel' onclick='toggle_active_calls_panel(); style='display: none;'>\n";
+echo "		<div class='active_calls_panel_header'>\n";
+echo "			<span class='active_calls_panel_close' onclick='toggle_active_calls_panel();'><i class='fas fa-times'></i></span>\n";
+echo "		</div>\n";
+echo "		<div class='active_calls_panel_list' id='active_calls_panel_list'>\n";
+echo "		</div>\n";
 echo "	</div>\n";
-echo "\n";
 
 //define the active call control
 echo "	<div class='active' id='active' style='display: none;'>\n";
@@ -315,6 +319,9 @@ echo "			<span class='action_label'>Cancel Transfer</span>\n";
 echo "		</div>\n";
 echo "		<div class='action_item action_item_hangup' id='hangup' onclick='hangup();' style='display: none;'><i class='fas fa-phone-slash' title=\"".$text['label-end']."\"></i>\n";
 echo "			<span class='action_label'>".$text['label-end']."</span>\n";
+echo "		</div>\n";
+echo "		<div class='action_item' id='action_active_calls' onclick='toggle_active_calls_panel();' style='display: none;'><i id='action_active_calls_icon' class='fas fa-phone-volume'></i>\n";
+echo "			<span class='action_label' id='action_active_calls_label'>Calls</span>\n";
 echo "		</div>\n";
 echo "		<div class='action_item' id='action_settings' onclick='toggle_settings();'><i class='fas fa-cog'></i>\n";
 echo "			<span class='action_label'>Settings</span>\n";
