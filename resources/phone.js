@@ -1488,7 +1488,7 @@ function set_call_action_mode(enabled, use_video) {
 	var action_btransfer = document.getElementById('action_btransfer');
 	var action_settings = document.getElementById('action_settings');
 	var action_keypad = document.getElementById('action_keypad');
-	var action_keypad_during_call = document.getElementById('action_keypad_during_call');
+	var action_dialpad = document.getElementById('action_dialpad');
 
 	if (action_history) {
 		action_history.style.display = enabled ? 'none' : 'flex';
@@ -1513,14 +1513,17 @@ function set_call_action_mode(enabled, use_video) {
 		action_btransfer.style.display = enabled ? 'flex' : 'none';
 	}
 	// Settings button always visible
-	// Keep both dialpad buttons visible during calls
-	// action_keypad (regular dialpad) is always visible for adding new calls
-	// action_keypad_during_call (DTMF keypad) is visible during calls for sending DTMF
-	if (action_keypad) {
-		action_keypad.style.display = 'flex';
+	// Dialpad button is hidden during calls, shown when idle
+	if (action_dialpad) {
+		action_dialpad.style.display = enabled ? 'none' : 'flex';
 	}
-	if (action_keypad_during_call) {
-		action_keypad_during_call.style.display = enabled ? 'flex' : 'none';
+	// Keypad button is shown during calls, hidden when idle
+	if (action_keypad) {
+		action_keypad.style.display = enabled ? 'flex' : 'none';
+	}
+	var action_new_call = document.getElementById('action_new_call');
+	if (action_new_call) {
+		action_new_call.style.display = enabled ? 'flex' : 'none';
 	}
 
 	if (enabled) {
@@ -3247,14 +3250,16 @@ function pad(number, length) {
 
 // Navigation functions to show different panels
 function hide_all_panels() {
-  document.getElementById('dialpad').style.display = 'none';
-  document.getElementById('contacts').style.display = 'none';
-  document.getElementById('history').style.display = 'none';
-  document.getElementById('messages').style.display = 'none';
-  document.getElementById('conversation').style.display = 'none';
-  document.getElementById('ringing').style.display = 'none';
-  document.getElementById('active').style.display = 'none';
-  document.getElementById('settings_panel').style.display = 'none';
+	document.getElementById('dialpad').style.display = 'none';
+	document.getElementById('dtmf_keypad').style.display = 'none';
+	document.getElementById('contacts').style.display = 'none';
+	document.getElementById('history').style.display = 'none';
+	document.getElementById('messages').style.display = 'none';
+	document.getElementById('conversation').style.display = 'none';
+	document.getElementById('ringing').style.display = 'none';
+	document.getElementById('active').style.display = 'none';
+	document.getElementById('settings_panel').style.display = 'none';
+	document.getElementById('active_calls_panel').style.display = 'none';
 }
 
 function show_dialpad() {
@@ -3271,6 +3276,22 @@ function show_dialpad() {
 	hide_all_panels();
 	dialpad.style.display = 'flex';
 	update_action_bar_state('dialpad');
+}
+
+// Start a new call - shows the dialpad panel for dialing a new number
+function start_new_call() {
+	// Show the dialpad panel
+	hide_all_panels();
+	var dialpad = document.getElementById('dialpad');
+	dialpad.style.display = 'flex';
+	update_action_bar_state('new_call');
+	
+	// Clear the destination field so the user can enter a new number
+	var destination = document.getElementById('destination');
+	if (destination) {
+		destination.value = '';
+		destination.focus();
+	}
 }
 
 function show_contacts() {
@@ -3327,8 +3348,15 @@ function update_action_bar_state(active) {
 	});
 
 	// Add active class based on current panel
-	if (active === 'dialpad' || active === 'keypad') {
-		document.getElementById('action_keypad').classList.add('active');
+	if (active === 'new_call') {
+		var new_call_btn = document.getElementById('action_new_call');
+		if (new_call_btn) new_call_btn.classList.add('active');
+	} else if (active === 'keypad') {
+		var keypad_btn = document.getElementById('action_keypad');
+		if (keypad_btn) keypad_btn.classList.add('active');
+	} else if (active === 'dialpad') {
+		var dialpad_btn = document.getElementById('action_dialpad');
+		if (dialpad_btn) dialpad_btn.classList.add('active');
 	} else if (active === 'contacts') {
 		document.getElementById('action_contacts').classList.add('active');
 	} else if (active === 'history') {
@@ -3337,6 +3365,9 @@ function update_action_bar_state(active) {
 		document.getElementById('action_messages').classList.add('active');
 	} else if (active === 'settings') {
 		document.getElementById('action_settings').classList.add('active');
+	} else if (active === 'active_calls') {
+		var active_calls_btn = document.getElementById('action_active_calls');
+		if (active_calls_btn) active_calls_btn.classList.add('active');
 	}
 }
 
@@ -4010,6 +4041,12 @@ function dialpad_digit_delete() {
 	correct_alignment();
 }
 
+function dtmf_keypad_digit_delete() {
+	destination = document.getElementById('dtmf_destination').value;
+	document.getElementById('dtmf_destination').value = destination.substring(0, destination.length - 1);
+	correct_alignment();
+}
+
 function digit_clear() {
 	document.getElementById('destination').value = '';
 	correct_alignment();
@@ -4076,7 +4113,7 @@ function send_dtmf(digit) {
 	dtmf_flush_timer = setTimeout(function() {
 		console.log('DTMF: Auto-flushing buffer after 2s:', dtmf_buffer);
 		flush_dtmf_buffer();
-	}, 2000);
+	}, 4000);
 	console.log('DTMF: Set auto-flush timer for 2000ms');
 }
 
@@ -4159,6 +4196,41 @@ function flush_dtmf_buffer() {
 	console.log('===== DTMF: flush_dtmf_buffer completed =====');
 }
 
+// Send all digits typed in the DTMF keypad input box
+function send_dtmf_keypad() {
+	var display = document.getElementById('dtmf_destination');
+	if (!display) return;
+	
+	var digits = display.value.trim();
+	if (digits.length === 0) return;
+	
+	// Get the selected call session (supports multi-call)
+	let selected_call = get_selected_call_session();
+	if (!selected_call || !selected_call.session) return;
+	
+	let session = selected_call.session;
+	if (selected_call.local_ended) return;
+	if (session.status !== SIP.Session.C.STATUS_CONFIRMED && session.status !== SIP.Session.C.STATUS_ANSWERED) return;
+	if (!session.dialog) return;
+	
+	// Send all digits at once via SIP INFO
+	display.value = '';
+	try {
+		session.dtmf(digits, { duration: 160, interToneGap: 150 });
+		console.log('===== DTMF: ' + digits + ' =====');
+	} catch (err) {
+		console.error('DTMF: ERROR calling session.dtmf():', err);
+	}
+	
+	// Clear the DTMF buffer to avoid conflicts with auto-flush
+	if (dtmf_flush_timer) {
+		clearTimeout(dtmf_flush_timer);
+		dtmf_flush_timer = null;
+	}
+	dtmf_buffer = '';
+}
+
+
 // Show the DTMF keypad panel during active calls
 function show_dtmf_keypad() {
 	console.log('===== DTMF: show_dtmf_keypad called =====');
@@ -4210,16 +4282,14 @@ function hide_dtmf_keypad() {
 
 // Toggle the DTMF keypad panel during active calls
 function toggle_dtmf_keypad() {
-	console.log('===== DTMF: toggle_dtmf_keypad called =====');
-	
 	if (dtmf_keypad_shown) {
-		console.log('DTMF: Hiding DTMF keypad');
 		hide_dtmf_keypad();
+		update_action_bar_state(null);
 	} else {
-		console.log('DTMF: Showing DTMF keypad');
+		hide_all_panels();
 		show_dtmf_keypad();
+		update_action_bar_state('keypad');
 	}
-	console.log('===== DTMF: toggle_dtmf_keypad completed =====');
 }
 
 document.addEventListener('keydown', function(e) {

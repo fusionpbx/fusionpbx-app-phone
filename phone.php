@@ -90,7 +90,7 @@ echo "	<meta http-equiv='X-UA-Compatible' content='IE=edge'>\n";
 echo "	<meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no' />\n";
 echo "	<meta name='robots' content='noindex, nofollow, noarchive' />\n";
 echo "	<link rel='stylesheet' type='text/css' href='".PROJECT_PATH."/resources/fontawesome/css/all.min.css.php'>\n";
-echo "	<link rel='stylesheet' type='text/css' href='resources/styles.css'>\n";
+echo "	<link rel='stylesheet' type='text/css' href='resources/styles.css?updated=".time()."'>\n";
 echo "	<script language='JavaScript' type='text/javascript'>window.FontAwesomeConfig = { autoReplaceSvg: false }</script>\n";
 echo "	<script language='JavaScript' type='text/javascript' src='resources/sip-0.7.8.js'></script>\n";
 echo "</head>\n";
@@ -125,6 +125,7 @@ echo "	<audio id='remote_audio' autoplay style='display:none;'></audio>\n";
 echo "	<script language='JavaScript' type='text/javascript'>\n";
 echo "	const time_zone = '".$settings->get('domain', 'time_zone')."';\n";
 echo "\n";
+
 // Dashboard search configuration
 echo "	const dashboard_enabled = " . (!empty($search_enabled) && $search_enabled == 'true' ? 'true' : 'false') . ";\n";
 echo "	const dashboard_url_base = 'https://" . $search_domain . "/" . $search_path . "?" . $search_parameter . "=';\n";
@@ -202,7 +203,6 @@ echo "	</div>\n";
 
 //define the conversation panel (chat view)
 echo "	<div class='conversation' id='conversation' style='display: none;'>\n";
-
 echo "		<div class='messages_container' id='messages_container'>\n";
 echo "		</div>\n";
 echo "		<div class='message_input_container'>\n";
@@ -223,9 +223,6 @@ echo "	</div>\n";
 
 //define the active calls panel (for multi-call)
 echo "	<div class='active_calls_panel' id='active_calls_panel' onclick='toggle_active_calls_panel(); style='display: none;'>\n";
-echo "		<div class='active_calls_panel_header'>\n";
-echo "			<span class='active_calls_panel_close' onclick='toggle_active_calls_panel();'><i class='fas fa-times'></i></span>\n";
-echo "		</div>\n";
 echo "		<div class='active_calls_panel_list' id='active_calls_panel_list'>\n";
 echo "		</div>\n";
 echo "	</div>\n";
@@ -282,7 +279,7 @@ echo "	</div>\n";
 //define the DTMF keypad panel - shown during active calls for sending DTMF
 echo "	<div class='dialpad' id='dtmf_keypad' style='display: none;'>\n";
 echo "		<div class='dialpad_content'>\n";
-echo "			<input type='text' class='destination' id='dtmf_destination' readonly \/>\n";
+echo "			<input type='text' class='destination' id='dtmf_destination' value='3'/>\n";
 echo "			<div class='dialpad_wrapper'>\n";
 echo "				<div class='dialpad_box' onclick='send_dtmf(\"1\")'><strong>1</strong><sup>&nbsp;</sup></div>\n";
 echo "				<div class='dialpad_box' onclick='send_dtmf(\"2\")'><strong>2</strong><sup>ABC</sup></div>\n";
@@ -299,17 +296,24 @@ echo "\n";
 echo "				<div class='dialpad_box' onclick='send_dtmf(\"*\")'><strong>*</strong><sup>&nbsp;</sup></div>\n";
 echo "				<div class='dialpad_box' onclick='send_dtmf(\"0\")'><strong>0</strong><sup>&nbsp;</sup></div>\n";
 echo "				<div class='dialpad_box' onclick='send_dtmf(\"#\")'><strong>#</strong><sup>&nbsp;</sup></div>\n";
+echo "\n";
+echo "				<div class='dialpad_box unassigned' onclick='' title=''></div>\n";
+echo "				<div class='dialpad_box send' onclick='send_dtmf_keypad();' title='Send'><i class='fa-solid fa-phone'></i><sup>Send</sup></div>\n";
+echo "				<div class='dialpad_box delete' onclick='dtmf_keypad_digit_delete();' title=\"".$text['label-delete']."\"><i class='fas fa-chevron-left'></i><sup>".$text['label-delete']."</sup></div>\n";
 echo "			</div>\n";
 echo "		</div>\n";
 echo "	</div>\n";
+
 //define the action bar
 echo "	<div class='action_bar' id='action_bar'>\n";
-echo "		<div class='action_item' id='action_keypad' onclick='show_dialpad();'><i class='fas fa-phone-alt'></i>\n";
+echo "		<div class='action_item' id='action_dialpad' onclick='show_dialpad();'><i class='fas fa-phone-alt'></i>\n";
 echo "			<span class='action_label'>Dialpad</span>\n";
 echo "		</div>\n";
-
-echo "		<div class='action_item' id='action_keypad_during_call' onclick='toggle_dtmf_keypad();' style='display: none;'><i class='fas fa-keyboard'></i>\n";
+echo "		<div class='action_item' id='action_keypad' onclick='toggle_dtmf_keypad();' style='display: none;'><i class='fas fa-keyboard'></i>\n";
 echo "			<span class='action_label'>Keypad</span>\n";
+echo "		</div>\n";
+echo "		<div class='action_item' id='action_new_call' onclick='start_new_call();' style='display: none;'><i class='fas fa-phone'></i>\n";
+echo "			<span class='action_label'>New Call</span>\n";
 echo "		</div>\n";
 echo "		<div class='action_item' id='action_contacts' onclick='show_contacts();' style='display: none;'><i class='fas fa-address-book'></i>\n";
 echo "			<span class='action_label'>Contacts</span>\n";
