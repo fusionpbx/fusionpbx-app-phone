@@ -1104,32 +1104,78 @@ body.audio_call_mode #active .dialpad_wrapper {
 
 /* DTMF Keypad Panel - shown during active calls */
 #dtmf_keypad {
+	z-index: 2001;
 	position: fixed;
-	top: 0;
-	bottom: 38px;
+	top: 48px;
+	bottom: 66px;
 	left: 0;
 	right: 0;
-	background: rgba(0, 0, 0, 0.8);
-	display: none;
+	overflow-y: auto;
+	overflow-x: hidden;
+	display: flex;
 	flex-direction: column;
 	align-items: center;
-	padding: 20px;
-	z-index: 1500;
+	justify-content: flex-start;
+	padding-top: 15px;
+	background: #161D28;
+	box-sizing: border-box;
 }
 
 /* DTMF destination display - matches the destination input styling */
-.dtmf_destination {
+#dtmf_destination {
+	height: 70px;
+	padding: 10px;
+	background: #080B10;
+	color: #fff;
+	border-radius: 8px;
 	font-size: 45px;
 	font-weight: bold;
-	min-height: 10%;
-	width: 100%;
-	max-width: 300px;
+	border: 3px solid #222;
 	text-align: center;
+	display: block;
+	box-sizing: border-box;
+	width: 92%;
+	max-width: 460px;
+	margin: 0 0 12px 0;
 }
 
-/* DTMF key animation and visual feedback */
-.dialpad_box.dtmf_digit {
-	transition: background 0.15s, transform 0.05s;
+/* DTMF keypad button styling - matches regular dialpad */
+#dtmf_keypad .dialpad_box {
+	box-sizing: border-box;
+	width: 100%;
+	height: 55px;
+	min-height: 50px;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	text-align: center;
+	gap: 3px;
+	background: rgba(0, 0, 0, 0.6);
+	color: #fff;
+	border-radius: 12px;
+	padding: 0 8px;
+	cursor: pointer;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+	border: 2px solid #161D28;
+	transition: background-color 0.2s, transform 0.1s;
+}
+
+#dtmf_keypad .dialpad_box:hover {
+	background: rgba(0, 0, 0, 0.3);
+	transform: scale(1.02);
+}
+
+#dtmf_keypad .dialpad_box:active {
+	transform: scale(0.97);
+}
+
+#dtmf_keypad .dialpad_box.dtmf_pressed {
+	background: #1eba00;
+	transform: scale(0.95);
 }
 
 /* Audio Device Selector Styles */

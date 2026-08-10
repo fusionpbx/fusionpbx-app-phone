@@ -535,6 +535,32 @@ function remove_call_session(call_id) {
 			}
 		}
 
+		// If no more active calls, hide DTMF keypad and show the dialpad
+		if (get_active_call_count() === 0) {
+			console.log('[Call Registry] No more active calls - hiding DTMF keypad and showing regular dialpad');
+			// Hide the DTMF keypad
+			if (dtmf_keypad_shown) {
+				dtmf_keypad_shown = false;
+				var dtmf_keypad = document.getElementById('dtmf_keypad');
+				if (dtmf_keypad) {
+					dtmf_keypad.style.display = 'none';
+				}
+				// Clear any pending DTMF timers
+				if (dtmf_flush_timer) {
+					clearTimeout(dtmf_flush_timer);
+					dtmf_flush_timer = null;
+				}
+				dtmf_buffer = '';
+				console.log('[Call Registry] DTMF keypad hidden');
+			}
+			// Show the regular dialpad
+			var dialpad = document.getElementById('dialpad');
+			if (dialpad) {
+				dialpad.style.display = 'flex';
+			}
+			console.log('[Call Registry] Regular dialpad shown');
+		}
+
 		// Update the call switcher UI to reflect the removed call
 		update_active_calls_panel();
 	}
@@ -605,6 +631,7 @@ let current_conversation_partner = null;  // Current active conversation partner
 let dtmf_display_timer = null;  // Timer for clearing DTMF display
 let dtmf_flush_timer = null;  // Timer for auto-flushing DTMF buffer
 let dtmf_buffer = '';  // Buffer for DTMF digits (to send as batch)
+let dtmf_keypad_shown = false;  // Track if DTMF keypad is visible
 let is_screen_sharing = false;  // Track if screen sharing is active
 let screen_share_stream = null;  // Store the screen share stream
 let original_video_track = null;  // Store original camera video track for restoration
@@ -1486,13 +1513,15 @@ function set_call_action_mode(enabled, use_video) {
 		action_btransfer.style.display = enabled ? 'flex' : 'none';
 	}
 	// Settings button always visible
-	// Toggle dialpad icon (shown when not in call) vs keypad icon (shown during call)
-	// if (action_keypad) {
-	// 	action_keypad.style.display = enabled ? 'none' : 'flex';
-	// }
-	// if (action_keypad_during_call) {
-	// 	action_keypad_during_call.style.display = enabled ? 'flex' : 'none';
-	// }
+	// Keep both dialpad buttons visible during calls
+	// action_keypad (regular dialpad) is always visible for adding new calls
+	// action_keypad_during_call (DTMF keypad) is visible during calls for sending DTMF
+	if (action_keypad) {
+		action_keypad.style.display = 'flex';
+	}
+	if (action_keypad_during_call) {
+		action_keypad_during_call.style.display = enabled ? 'flex' : 'none';
+	}
 
 	if (enabled) {
 		sync_call_action_controls();
@@ -2166,15 +2195,27 @@ function reset_call_ui_state(show_dialpad) {
 	document.getElementById('dialpad').style.display = show_dialpad ? "flex" : "none";
 	document.getElementById('ringing').style.display = "none";
 	document.getElementById('active').style.display = "none";
+	
+	// Hide the DTMF keypad and show regular dialpad when all calls are closed
+	if (show_dialpad) {
+		dtmf_keypad_shown = false;
+		var dtmf_keypad = document.getElementById('dtmf_keypad');
+		if (dtmf_keypad) {
+			dtmf_keypad.style.display = 'none';
+		}
+		// Clear any pending DTMF timers
+		if (dtmf_flush_timer) {
+			clearTimeout(dtmf_flush_timer);
+			dtmf_flush_timer = null;
+		}
+		dtmf_buffer = '';  // Clear any pending DTMF buffer
+		console.log('[UI] DTMF keypad hidden and regular dialpad shown');
+	}
+	
 	if (dtmf_display_timer) {
 		clearTimeout(dtmf_display_timer);
 		dtmf_display_timer = null;
 	}
-	if (dtmf_flush_timer) {
-		clearTimeout(dtmf_flush_timer);
-		dtmf_flush_timer = null;
-	}
-	dtmf_buffer = '';  // Clear any pending DTMF buffer
 
 	document.getElementById('answer_audio').style.display = "none";
 	document.getElementById('answer_video').style.display = "none";
@@ -3976,43 +4017,67 @@ function digit_clear() {
 
 // Send DTMF digit through active SIP session (with buffering to beat FreeSWITCH inter-digit timeout)
 function send_dtmf(digit) {
-	if (!session || session_hungup) {
+	console.log('===== DTMF: send_dtmf called with digit:', digit, '=====');
+	
+	// Get the selected call session (supports multi-call)
+	let selected_call = get_selected_call_session();
+	if (!selected_call || !selected_call.session) {
+		console.error('DTMF: ERROR - No active call session available!');
+		return;
+	}
+	
+	let session = selected_call.session;
+	console.log('DTMF: Session exists from selected_call.session, status:', session.status, '(CONFIRMED=' + SIP.Session.C.STATUS_CONFIRMED + ', ANSWERED=' + SIP.Session.C.STATUS_ANSWERED + ')');
+	console.log('DTMF: Call ID:', selected_call.id, 'Number:', selected_call.number);
+	
+	if (selected_call.local_ended) {
+		console.error('DTMF: ERROR - Call has been locally ended!');
 		return;
 	}
 
 	// Check if session is in CONFIRMED or ANSWERED state
 	if (session.status !== SIP.Session.C.STATUS_CONFIRMED && session.status !== SIP.Session.C.STATUS_ANSWERED) {
+		console.error('DTMF: ERROR - Session not in correct state! Status:', session.status);
 		return;
 	}
 
+	console.log('DTMF: Session is in valid state, proceeding to send DTMF');
+
 	// Add digit to buffer
 	dtmf_buffer += digit;
-	console.log('send_dtmf: Buffered digit:', digit, '| Buffer:', dtmf_buffer);
+	console.log('DTMF: Buffered digit:', digit, '| Buffer now:', dtmf_buffer);
 
 	// Visual feedback: add digit to display
 	var display = document.getElementById('dtmf_destination');
 	if (display) {
 		display.value += digit;
+		console.log('DTMF: Updated display value:', display.value);
+	} else {
+		console.warn('DTMF: Could not find dtmf_destination element');
 	}
 
 	// Highlight pressed key
 	var keys = document.querySelectorAll('.dialpad_box.dtmf_digit');
+	console.log('DTMF: Found', keys.length, 'DTMF keys');
 	keys.forEach(function(key) {
 		var strong = key.querySelector('strong');
 		if (strong && strong.textContent === digit) {
 			key.classList.add('dtmf_pressed');
 			setTimeout(function() { key.classList.remove('dtmf_pressed'); }, 150);
+			console.log('DTMF: Highlighted key:', digit);
 		}
 	});
 
 	// Auto-flush buffer after 2000ms of inactivity (user has 2 seconds to enter digits)
 	if (dtmf_flush_timer) {
 		clearTimeout(dtmf_flush_timer);
+		console.log('DTMF: Cleared existing flush timer, resetting');
 	}
 	dtmf_flush_timer = setTimeout(function() {
-		console.log('send_dtmf: Auto-flushing buffer:', dtmf_buffer);
+		console.log('DTMF: Auto-flushing buffer after 2s:', dtmf_buffer);
 		flush_dtmf_buffer();
 	}, 2000);
+	console.log('DTMF: Set auto-flush timer for 2000ms');
 }
 
 // Clear the display after a short delay (visual feedback cleanup)
@@ -4024,21 +4089,48 @@ function clear_dtmf_display() {
 }
 
 // Flush the DTMF buffer - send ALL digits as a single sequence via SIP INFO
+// Flush the DTMF buffer - send ALL digits as a single sequence via SIP INFO
 function flush_dtmf_buffer() {
-	if (!dtmf_buffer || !session || session_hungup) {
+	console.log('===== DTMF: flush_dtmf_buffer called =====');
+	console.log('DTMF: Buffer before flush:', dtmf_buffer);
+	
+	// Get the selected call session (supports multi-call)
+	let selected_call = get_selected_call_session();
+	if (!selected_call || !selected_call.session) {
+		console.warn('DTMF: Cannot flush - no active call session available');
+		dtmf_buffer = '';
 		return;
 	}
-
-	// Ensure session is still active
-	if (session.status !== SIP.Session.C.STATUS_CONFIRMED && session.status !== SIP.Session.C.STATUS_ANSWERED) {
+	
+	let session = selected_call.session;
+	console.log('DTMF: Session exists from selected_call.session, Call ID:', selected_call.id);
+	
+	if (selected_call.local_ended) {
+		console.error('DTMF: ERROR - Call has been locally ended!');
 		dtmf_buffer = '';
 		return;
 	}
 
+	// Ensure session is still active
+	console.log('DTMF: Session status:', session.status, '(CONFIRMED=' + SIP.Session.C.STATUS_CONFIRMED + ', ANSWERED=' + SIP.Session.C.STATUS_ANSWERED + ')');
+	if (session.status !== SIP.Session.C.STATUS_CONFIRMED && session.status !== SIP.Session.C.STATUS_ANSWERED) {
+		console.error('DTMF: Session not in valid state for DTMF! Status:', session.status);
+		dtmf_buffer = '';
+		return;
+	}
+
+	// Check if dialog exists (required for SIP INFO)
+	if (!session.dialog) {
+		console.error('DTMF: ERROR - No dialog available! Cannot send SIP INFO.');
+		dtmf_buffer = '';
+		return;
+	}
+	console.log('DTMF: Dialog exists, type:', session.dialog.type);
+
 	var digits = dtmf_buffer;
 	dtmf_buffer = '';  // Clear buffer immediately
 
-	console.log('flush_dtmf_buffer: Sending FULL sequence:', digits);
+	console.log('DTMF: Sending DTMF sequence:', digits, '(', digits.length, 'digits)');
 
 	// Clear display after a short delay so user can see what they entered
 	var display = document.getElementById('dtmf_destination');
@@ -4050,33 +4142,124 @@ function flush_dtmf_buffer() {
 		}, 500);
 	}
 
-	// Check if RFC 2833 is available
-	var remote = session.remote_description ? session.remote_description.sdp : null;
-	var uses_rfc2833 = remote && remote.indexOf('a=rtpmap:98') !== -1;
-	console.log('flush_dtmf_buffer: Using', uses_rfc2833 ? 'RFC 2833' : 'SIP INFO');
-
-	if (uses_rfc2833) {
-		// RFC 2833 - use SIP.js built-in sequence sending with inter-tone gap
-		// duration: how long each tone lasts (ms)
-		// interToneGap: delay between tones (ms) - must be > 0 for sequence
+	// Send DTMF using SIP INFO (application/dtmf-relay)
+	// Use short interToneGap (150ms) to avoid FreeSWITCH inter-digit timeout
+	try {
+		console.log('DTMF: Calling session.dtmf() with options:', { duration: 160, interToneGap: 150 });
 		session.dtmf(digits, {
-			duration: 100,		  // 100ms tone duration
-			interToneGap: 100	  // 100ms between tones (faster than 3000ms timeout)
+			duration: 160,       // 160ms tone duration
+			interToneGap: 150    // 150ms between tones (well under FreeSWITCH 2000ms timeout)
 		});
-	} else {
-		// SIP INFO - each digit needs its own request, send as sequence
-		// SIP.js 0.7.8 handles multi-character string by sending each as separate INFO
-		session.dtmf(digits, {
-			duration: 100		   // Duration per tone
-		});
+		console.log('DTMF: session.dtmf() called successfully');
+	} catch (err) {
+		console.error('DTMF: ERROR calling session.dtmf():', err);
+		console.error('DTMF: Error name:', err.name, 'Error message:', err.message);
 	}
 
-	console.log('flush_dtmf_buffer: Started sending sequence');
+	console.log('===== DTMF: flush_dtmf_buffer completed =====');
+}
+
+// Show the DTMF keypad panel during active calls
+function show_dtmf_keypad() {
+	console.log('===== DTMF: show_dtmf_keypad called =====');
+	dtmf_keypad_shown = true;
+	console.log('DTMF: Setting dtmf_keypad_shown = true');
+	
+	var keypad = document.getElementById('dtmf_keypad');
+	if (keypad) {
+		keypad.style.display = 'flex';
+		console.log('DTMF: DTMF keypad panel displayed');
+	} else {
+		console.error('DTMF: ERROR - Could not find dtmf_keypad element!');
+		return;
+	}
+	
+	// Clear the display
+	var display = document.getElementById('dtmf_destination');
+	if (display) {
+		display.value = '';
+		console.log('DTMF: DTMF display cleared');
+	} else {
+		console.error('DTMF: ERROR - Could not find dtmf_destination element!');
+	}
+	console.log('===== DTMF: show_dtmf_keypad completed =====');
+}
+
+// Hide the DTMF keypad panel and return to the active call view
+function hide_dtmf_keypad() {
+	console.log('===== DTMF: hide_dtmf_keypad called =====');
+	dtmf_keypad_shown = false;
+	console.log('DTMF: Setting dtmf_keypad_shown = false');
+	
+	var keypad = document.getElementById('dtmf_keypad');
+	if (keypad) {
+		keypad.style.display = 'none';
+		console.log('DTMF: DTMF keypad panel hidden');
+	}
+	
+	// Clear any pending timers
+	if (dtmf_flush_timer) {
+		clearTimeout(dtmf_flush_timer);
+		dtmf_flush_timer = null;
+		console.log('DTMF: Cleared pending flush timer');
+	}
+	dtmf_buffer = '';
+	console.log('DTMF: Cleared DTMF buffer');
+	console.log('===== DTMF: hide_dtmf_keypad completed =====');
+}
+
+// Toggle the DTMF keypad panel during active calls
+function toggle_dtmf_keypad() {
+	console.log('===== DTMF: toggle_dtmf_keypad called =====');
+	
+	if (dtmf_keypad_shown) {
+		console.log('DTMF: Hiding DTMF keypad');
+		hide_dtmf_keypad();
+	} else {
+		console.log('DTMF: Showing DTMF keypad');
+		show_dtmf_keypad();
+	}
+	console.log('===== DTMF: toggle_dtmf_keypad completed =====');
 }
 
 document.addEventListener('keydown', function(e) {
 	if (!document.getElementById('destination')) {
 		return;
+	}
+
+	// Handle DTMF keypad input when keypad is shown during call
+	if (dtmf_keypad_shown) {
+		console.log('DTMF: Keydown detected - key:', e.key, '| dtmf_keypad_shown:', dtmf_keypad_shown);
+		if (e.key >= '0' && e.key <= '9' || e.key === '*' || e.key === '#') {
+			e.preventDefault();
+			console.log('DTMF: Sending DTMF via keyboard:', e.key);
+			send_dtmf(e.key);
+			return;
+		}
+
+		if (e.key === 'Backspace' || e.key === 'Delete') {
+			e.preventDefault();
+			// Clear the visual display of last digit
+			var display = document.getElementById('dtmf_destination');
+			if (display) {
+				display.value = display.value.slice(0, -1);
+			}
+			console.log('DTMF: Backspace pressed, display now:', display ? display.value : 'N/A');
+			return;
+		}
+
+		// Pressing Enter on DTMF keypad does nothing specific
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			return;
+		}
+
+		if (e.key === 'Escape') {
+			e.preventDefault();
+			console.log('DTMF: Escape pressed, returning to dialpad');
+			show_dialpad();
+			return;
+		}
 	}
 
 	// Regular dialpad input (not in DTMF keypad mode)

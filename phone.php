@@ -279,10 +279,37 @@ echo "			</div>\n";
 echo "		</div>\n";
 echo "	</div>\n";
 
+//define the DTMF keypad panel - shown during active calls for sending DTMF
+echo "	<div class='dialpad' id='dtmf_keypad' style='display: none;'>\n";
+echo "		<div class='dialpad_content'>\n";
+echo "			<input type='text' class='destination' id='dtmf_destination' readonly \/>\n";
+echo "			<div class='dialpad_wrapper'>\n";
+echo "				<div class='dialpad_box' onclick='send_dtmf(\"1\")'><strong>1</strong><sup>&nbsp;</sup></div>\n";
+echo "				<div class='dialpad_box' onclick='send_dtmf(\"2\")'><strong>2</strong><sup>ABC</sup></div>\n";
+echo "				<div class='dialpad_box' onclick='send_dtmf(\"3\")'><strong>3</strong><sup>DEF</sup></div>\n";
+echo "\n";
+echo "				<div class='dialpad_box' onclick='send_dtmf(\"4\")'><strong>4</strong><sup>GHI</sup></div>\n";
+echo "				<div class='dialpad_box' onclick='send_dtmf(\"5\")'><strong>5</strong><sup>JKL</sup></div>\n";
+echo "				<div class='dialpad_box' onclick='send_dtmf(\"6\")'><strong>6</strong><sup>MNO</sup></div>\n";
+echo "\n";
+echo "				<div class='dialpad_box' onclick='send_dtmf(\"7\")'><strong>7</strong><sup>PQRS</sup></div>\n";
+echo "				<div class='dialpad_box' onclick='send_dtmf(\"8\")'><strong>8</strong><sup>TUV</sup></div>\n";
+echo "				<div class='dialpad_box' onclick='send_dtmf(\"9\")'><strong>9</strong><sup>WXYZ</sup></div>\n";
+echo "\n";
+echo "				<div class='dialpad_box' onclick='send_dtmf(\"*\")'><strong>*</strong><sup>&nbsp;</sup></div>\n";
+echo "				<div class='dialpad_box' onclick='send_dtmf(\"0\")'><strong>0</strong><sup>&nbsp;</sup></div>\n";
+echo "				<div class='dialpad_box' onclick='send_dtmf(\"#\")'><strong>#</strong><sup>&nbsp;</sup></div>\n";
+echo "			</div>\n";
+echo "		</div>\n";
+echo "	</div>\n";
 //define the action bar
 echo "	<div class='action_bar' id='action_bar'>\n";
 echo "		<div class='action_item' id='action_keypad' onclick='show_dialpad();'><i class='fas fa-phone-alt'></i>\n";
 echo "			<span class='action_label'>Dialpad</span>\n";
+echo "		</div>\n";
+
+echo "		<div class='action_item' id='action_keypad_during_call' onclick='toggle_dtmf_keypad();' style='display: none;'><i class='fas fa-keyboard'></i>\n";
+echo "			<span class='action_label'>Keypad</span>\n";
 echo "		</div>\n";
 echo "		<div class='action_item' id='action_contacts' onclick='show_contacts();' style='display: none;'><i class='fas fa-address-book'></i>\n";
 echo "			<span class='action_label'>Contacts</span>\n";
