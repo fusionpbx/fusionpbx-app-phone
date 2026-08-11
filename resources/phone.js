@@ -183,11 +183,11 @@ async function send_call(use_video) {
 		current_sess.on('bye', function() {
 			stop_call_tone();
 			call_session.local_ended = true;
-			
+
 			// Remove this call from the registry
 			remove_call_session(call_id);
-			
-			if (!current_sess.local_ended) {
+
+			if (!call_session.local_ended) {
 				// Check if there are other active calls
 				let remaining_calls = get_active_call_sessions();
 				if (remaining_calls.length > 0) {
@@ -2632,6 +2632,24 @@ user_agent.on('invite', function (s) {
 			add_to_history(saved_incoming_number, 'missed', Date.now());
 		}
 
+		// Remove the selected call session from the registry
+		let selected_call = get_selected_call_session();
+		if (selected_call) {
+			remove_call_session(selected_call.id);
+		}
+		reset_call_ui_state(true);
+	});
+
+	session.on('bye', function () {
+		// Remove the selected call session from the registry
+		let selected_call = get_selected_call_session();
+		if (selected_call) {
+			remove_call_session(selected_call.id);
+		}
+		reset_call_ui_state(true);
+	});
+
+	session.on('bye', function () {
 		// Remove the selected call session from the registry
 		let selected_call = get_selected_call_session();
 		if (selected_call) {
