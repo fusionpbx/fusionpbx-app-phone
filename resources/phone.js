@@ -464,7 +464,7 @@ function get_held_call_sessions() {
 function select_call_session(call_id) {
 	if (call_session_list[call_id]) {
 		let previous_selected = get_selected_call_session();
-		
+
 		// If switching away from a call, put it on hold and stop its audio
 		if (previous_selected && previous_selected.id !== call_id) {
 			console.log('[Call Switching] Putting previous call on hold and stopping audio');
@@ -487,12 +487,12 @@ function select_call_session(call_id) {
 				}
 			}
 		}
-		
+
 		selected_call_session_id = call_id;
 		console.log('[Call Registry] Selected call session:', call_id);
 		update_active_calls_panel();
 		update_call_controls_for_selected_call();
-		
+
 		// Enable audio tracks for the newly selected call
 		let new_selected = get_selected_call_session();
 		if (new_selected && new_selected.session && new_selected.session.mediaHandler && new_selected.session.mediaHandler.peerConnection) {
@@ -510,7 +510,7 @@ function select_call_session(call_id) {
 				}
 			}
 		}
-		
+
 		return true;
 	}
 	return false;
@@ -1410,10 +1410,10 @@ function sync_call_action_controls() {
 
 	// Get the selected call session to check its actual mute/hold state
 	var selected_call = get_selected_call_session();
-	
+
 	// Use the call session's is_muted property if available, otherwise fall back to global
 	var muted = selected_call && selected_call.is_muted !== undefined ? selected_call.is_muted : audio_muted;
-	
+
 	// Use the call session's is_on_hold property if available, otherwise fall back to DOM check
 	var on_hold = false;
 	if (selected_call && selected_call.is_on_hold !== undefined) {
@@ -1533,7 +1533,7 @@ function set_call_action_mode(enabled, use_video) {
 
 function toggle_audio_mute_action() {
 	let selected_call = get_selected_call_session();
-	
+
 	// Check the call session's is_muted property first, fall back to global
 	let muted = false;
 	if (selected_call && selected_call.is_muted !== undefined) {
@@ -1541,7 +1541,7 @@ function toggle_audio_mute_action() {
 	} else {
 		muted = audio_muted;
 	}
-	
+
 	if (muted) {
 		unmute_audio();
 	} else {
@@ -1551,7 +1551,7 @@ function toggle_audio_mute_action() {
 
 function toggle_audio_hold_action() {
 	let selected_call = get_selected_call_session();
-	
+
 	// Check the call session's is_on_hold property first, fall back to DOM
 	let on_hold = false;
 	if (selected_call && selected_call.is_on_hold !== undefined) {
@@ -1559,7 +1559,7 @@ function toggle_audio_hold_action() {
 	} else {
 		on_hold = document.getElementById('unhold').style.display === 'inline';
 	}
-	
+
 	if (on_hold) {
 		unhold();
 	} else {
@@ -2198,7 +2198,7 @@ function reset_call_ui_state(show_dialpad) {
 	document.getElementById('dialpad').style.display = show_dialpad ? "flex" : "none";
 	document.getElementById('ringing').style.display = "none";
 	document.getElementById('active').style.display = "none";
-	
+
 	// Hide the DTMF keypad and show regular dialpad when all calls are closed
 	if (show_dialpad) {
 		dtmf_keypad_shown = false;
@@ -2214,7 +2214,7 @@ function reset_call_ui_state(show_dialpad) {
 		dtmf_buffer = '';  // Clear any pending DTMF buffer
 		console.log('[UI] DTMF keypad hidden and regular dialpad shown');
 	}
-	
+
 	if (dtmf_display_timer) {
 		clearTimeout(dtmf_display_timer);
 		dtmf_display_timer = null;
@@ -2649,15 +2649,6 @@ user_agent.on('invite', function (s) {
 		reset_call_ui_state(true);
 	});
 
-	session.on('bye', function () {
-		// Remove the selected call session from the registry
-		let selected_call = get_selected_call_session();
-		if (selected_call) {
-			remove_call_session(selected_call.id);
-		}
-		reset_call_ui_state(true);
-	});
-
 	// Helper function to route remote audio AND video to the appropriate elements
 	// This is called from both 'accepted' and 'stream' events for browser compatibility
 	function route_remote_audio_to_elements() {
@@ -2993,28 +2984,28 @@ async function answer_call(use_video, receive_only_video) {
 	// MULTI-CALL: Auto-hold current call when answering incoming call
 	// ============================================================
 	let active_calls_before = get_active_call_sessions();
-	
+
 	// Get the selected call session
 	let selected_call = get_selected_call_session();
 	if (!selected_call) {
-	// Fallback to legacy session for backward compatibility
-	if (!session) {
-		return false;
+		// Fallback to legacy session for backward compatibility
+		if (!session) {
+			return false;
+		}
+		selected_call = { session: session, display_name: session.display_name, number: session.uri_user, has_video: session.has_video, incoming_number: session.incoming_number };
 	}
-	selected_call = { session: session, display_name: session.display_name, number: session.uri_user, has_video: session.has_video, incoming_number: session.incoming_number };
-}
 
-// Hold any other active calls (not the one being answered)
-for (let i = 0; i < active_calls_before.length; i++) {
-	let call = active_calls_before[i];
-	if (call.id !== selected_call.id && !call.is_on_hold && call.session && call.session.status !== SIP.Session.C.STATUS_TERMINATED) {
-		console.log('[Call Switching] Putting current call on hold to answer incoming call');
-		call.is_on_hold = true;
-		call.session.hold().catch(function(err) {
-			console.warn('[Call Switching] Failed to hold previous call:', err);
-		});
+	// Hold any other active calls (not the one being answered)
+	for (let i = 0; i < active_calls_before.length; i++) {
+		let call = active_calls_before[i];
+		if (call.id !== selected_call.id && !call.is_on_hold && call.session && call.session.status !== SIP.Session.C.STATUS_TERMINATED) {
+			console.log('[Call Switching] Putting current call on hold to answer incoming call');
+			call.is_on_hold = true;
+			call.session.hold().catch(function(err) {
+				console.warn('[Call Switching] Failed to hold previous call:', err);
+			});
+		}
 	}
-}
 
 	// Get the incoming session to answer
 	let incoming_session = selected_call.session || session;
@@ -3255,6 +3246,7 @@ for (let i = 0; i < active_calls_before.length; i++) {
 
 	update_status_bar();
 	update_active_calls_panel();
+	update_active_calls_button();
 }
 
 // ============================================================
@@ -3289,7 +3281,7 @@ function show_dialpad() {
 		update_action_bar_state(null);
 		return;
 	}
-	
+
 	// Show dialpad
 	hide_all_panels();
 	dialpad.style.display = 'flex';
@@ -3303,7 +3295,7 @@ function start_new_call() {
 	var dialpad = document.getElementById('dialpad');
 	dialpad.style.display = 'flex';
 	update_action_bar_state('new_call');
-	
+
 	// Clear the destination field so the user can enter a new number
 	var destination = document.getElementById('destination');
 	if (destination) {
@@ -3319,7 +3311,7 @@ function show_contacts() {
 		update_action_bar_state(null);
 		return;
 	}
-	
+
 	hide_all_panels();
 	render_contacts();
 	document.getElementById('contacts').style.display = 'flex';
@@ -3336,7 +3328,7 @@ function show_history() {
 		update_action_bar_state(null);
 		return;
 	}
-	
+
 	hide_all_panels();
 	render_history();
 	history.style.display = 'flex';
@@ -3352,7 +3344,7 @@ function show_messages() {
 		current_conversation_partner = null;
 		return;
 	}
-	
+
 	hide_all_panels();
 	render_conversations();
 	document.getElementById('messages').style.display = 'flex';
@@ -3639,10 +3631,10 @@ function hold() {
 	document.getElementById('unhold').style.display = "inline";
 	sync_call_action_controls();
 	update_active_calls_panel();
-	
+
 	// Disable audio for this call when holding
 	enable_audio_for_call(selected_call.id);
-	
+
 	selected_call.session.hold();
 }
 
@@ -3655,10 +3647,10 @@ function unhold() {
 	document.getElementById('unhold').style.display = "none";
 	sync_call_action_controls();
 	update_active_calls_panel();
-	
+
 	// Enable audio for this call when unholding
 	enable_audio_for_call(selected_call.id);
-	
+
 	selected_call.session.unhold();
 }
 
@@ -3799,9 +3791,9 @@ function blind_transfer_call(target_number) {
 	let selected_call = get_selected_call_session();
 	let transfer_session = selected_call ? selected_call.session : session;
 
-	if (!transfer_session) { 
+	if (!transfer_session) {
 		show_temporary_status('No active call to transfer', 'fas fa-exclamation-circle');
-		return; 
+		return;
 	}
 	if (!target_number || target_number.trim() === '') { return; }
 
@@ -3823,9 +3815,9 @@ function show_blind_transfer_prompt() {
 	let selected_call = get_selected_call_session();
 	let check_session = selected_call ? selected_call.session : session;
 
-	if (!check_session) { 
+	if (!check_session) {
 		show_temporary_status('No active call to transfer', 'fas fa-exclamation-circle');
-		return; 
+		return;
 	}
 
 	// Get current destination value
@@ -4037,19 +4029,19 @@ function correct_alignment() {
 }
 
 // Function called when the dialpad key is pressed
-function dialplan_digit_add($digit) {
+function dialplan_digit_add(digit) {
 	// Active call send DTMF
 	if (session && session.status === SIP.Session.C.STATUS_CONFIRMED || session && session.status === SIP.Session.C.STATUS_ANSWERED) {
-		send_dtmf($digit);
+		send_dtmf(digit);
 	}
 
-	// Update the Dialpd Destination
-	document.getElementById('destination').value = document.getElementById('destination').value + $digit;
+	// Update the Dialpad Destination
+	document.getElementById('destination').value = document.getElementById('destination').value + digit;
 	correct_alignment();
 }
 
-function digit_add($digit) {
-	document.getElementById('destination').value = document.getElementById('destination').value + $digit;
+function digit_add(digit) {
+	document.getElementById('destination').value = document.getElementById('destination').value + digit;
 	correct_alignment();
 }
 
@@ -4073,18 +4065,18 @@ function digit_clear() {
 // Send DTMF digit through active SIP session (with buffering to beat FreeSWITCH inter-digit timeout)
 function send_dtmf(digit) {
 	console.log('===== DTMF: send_dtmf called with digit:', digit, '=====');
-	
+
 	// Get the selected call session (supports multi-call)
 	let selected_call = get_selected_call_session();
 	if (!selected_call || !selected_call.session) {
 		console.error('DTMF: ERROR - No active call session available!');
 		return;
 	}
-	
+
 	let session = selected_call.session;
 	console.log('DTMF: Session exists from selected_call.session, status:', session.status, '(CONFIRMED=' + SIP.Session.C.STATUS_CONFIRMED + ', ANSWERED=' + SIP.Session.C.STATUS_ANSWERED + ')');
 	console.log('DTMF: Call ID:', selected_call.id, 'Number:', selected_call.number);
-	
+
 	if (selected_call.local_ended) {
 		console.error('DTMF: ERROR - Call has been locally ended!');
 		return;
@@ -4148,7 +4140,7 @@ function clear_dtmf_display() {
 function flush_dtmf_buffer() {
 	console.log('===== DTMF: flush_dtmf_buffer called =====');
 	console.log('DTMF: Buffer before flush:', dtmf_buffer);
-	
+
 	// Get the selected call session (supports multi-call)
 	let selected_call = get_selected_call_session();
 	if (!selected_call || !selected_call.session) {
@@ -4156,10 +4148,10 @@ function flush_dtmf_buffer() {
 		dtmf_buffer = '';
 		return;
 	}
-	
+
 	let session = selected_call.session;
 	console.log('DTMF: Session exists from selected_call.session, Call ID:', selected_call.id);
-	
+
 	if (selected_call.local_ended) {
 		console.error('DTMF: ERROR - Call has been locally ended!');
 		dtmf_buffer = '';
@@ -4218,19 +4210,19 @@ function flush_dtmf_buffer() {
 function send_dtmf_keypad() {
 	var display = document.getElementById('dtmf_destination');
 	if (!display) return;
-	
+
 	var digits = display.value.trim();
 	if (digits.length === 0) return;
-	
+
 	// Get the selected call session (supports multi-call)
 	let selected_call = get_selected_call_session();
 	if (!selected_call || !selected_call.session) return;
-	
+
 	let session = selected_call.session;
 	if (selected_call.local_ended) return;
 	if (session.status !== SIP.Session.C.STATUS_CONFIRMED && session.status !== SIP.Session.C.STATUS_ANSWERED) return;
 	if (!session.dialog) return;
-	
+
 	// Send all digits at once via SIP INFO
 	display.value = '';
 	try {
@@ -4239,7 +4231,7 @@ function send_dtmf_keypad() {
 	} catch (err) {
 		console.error('DTMF: ERROR calling session.dtmf():', err);
 	}
-	
+
 	// Clear the DTMF buffer to avoid conflicts with auto-flush
 	if (dtmf_flush_timer) {
 		clearTimeout(dtmf_flush_timer);
@@ -4254,7 +4246,7 @@ function show_dtmf_keypad() {
 	console.log('===== DTMF: show_dtmf_keypad called =====');
 	dtmf_keypad_shown = true;
 	console.log('DTMF: Setting dtmf_keypad_shown = true');
-	
+
 	var keypad = document.getElementById('dtmf_keypad');
 	if (keypad) {
 		keypad.style.display = 'flex';
@@ -4263,7 +4255,7 @@ function show_dtmf_keypad() {
 		console.error('DTMF: ERROR - Could not find dtmf_keypad element!');
 		return;
 	}
-	
+
 	// Clear the display
 	var display = document.getElementById('dtmf_destination');
 	if (display) {
@@ -4280,13 +4272,13 @@ function hide_dtmf_keypad() {
 	console.log('===== DTMF: hide_dtmf_keypad called =====');
 	dtmf_keypad_shown = false;
 	console.log('DTMF: Setting dtmf_keypad_shown = false');
-	
+
 	var keypad = document.getElementById('dtmf_keypad');
 	if (keypad) {
 		keypad.style.display = 'none';
 		console.log('DTMF: DTMF keypad panel hidden');
 	}
-	
+
 	// Clear any pending timers
 	if (dtmf_flush_timer) {
 		clearTimeout(dtmf_flush_timer);
@@ -5107,10 +5099,10 @@ function enable_audio_for_call(active_call_id) {
 		if (!call.session || !call.session.mediaHandler || !call.session.mediaHandler.peerConnection) {
 			return;
 		}
-		
+
 		// Only enable audio for the active call if it's not muted
 		let should_enable = (call_id == active_call_id) && !call.is_on_hold && !call.is_muted;
-		
+
 		// Disable all audio tracks in this peer connection
 		let senders = call.session.mediaHandler.peerConnection.getSenders();
 		for (let i = 0; i < senders.length; i++) {
@@ -5118,7 +5110,7 @@ function enable_audio_for_call(active_call_id) {
 				senders[i].track.enabled = should_enable;
 			}
 		}
-		
+
 		// Disable/enable local stream audio tracks
 		if (call.session.mediaHandler.localStream) {
 			let audioTracks = call.session.mediaHandler.localStream.getAudioTracks();

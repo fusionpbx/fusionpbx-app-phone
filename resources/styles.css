@@ -585,7 +585,7 @@ sup {
 	left: 0;
 	right: 0;
 	height: 38px;
-	background: rgba(0, 0, 0, 0.85);
+	background: #0a0a0a;
 	display: flex;
 	align-items: center;
 	justify-content: center;
