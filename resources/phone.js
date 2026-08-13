@@ -1332,7 +1332,7 @@ function start_call_tone(mode) {
 					console.log('start_call_tone: Ringback play failed:', err, '- falling back to generated tone');
 					stop_call_tone();
 					active_call_tone_mode = mode;
-					play_generated_tone(mode);
+					// play_generated_tone(mode);
 				});
 			}
 			return;
@@ -1351,7 +1351,7 @@ function start_call_tone(mode) {
 					console.log('start_call_tone: Ringtone play failed:', err, '- falling back to generated tone');
 					stop_call_tone();
 					active_call_tone_mode = mode;
-					play_generated_tone(mode);
+					// play_generated_tone(mode);
 				});
 			}
 			return;
@@ -1360,8 +1360,8 @@ function start_call_tone(mode) {
 	}
 
 	// If neither sound is available or unsupported mode, use generated tone
-	console.log('start_call_tone: Using generated tone for mode:', mode);
-	play_generated_tone(mode);
+	// console.log('start_call_tone: Using generated tone for mode:', mode);
+	// play_generated_tone(mode);
 }
 
 function show_status(text, icon_class) {
