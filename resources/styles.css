@@ -342,7 +342,7 @@ sup {
 	flex-direction: column;
 	justify-content: center;
 	align-items: center;
-	z-index: 2000;
+	z-index: 2800;
 	background: rgba(22, 29, 40, 0.95);
 	padding: 40px 20px;
 	box-sizing: border-box;
