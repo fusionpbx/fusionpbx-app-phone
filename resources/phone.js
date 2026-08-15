@@ -182,20 +182,23 @@ async function send_call(use_video) {
 
 		current_sess.on('bye', function() {
 			stop_call_tone();
-			call_session.local_ended = true;
 
-			// Remove this call from the registry
+			// Mark this specific call session as locally ended (not the global call_session)
+			let this_call = call_session_list[call_id];
+			if (this_call) {
+				this_call.local_ended = true;
+			}
+
+			// Remove this call from the registry using the call_id from closure
 			remove_call_session(call_id);
 
-			if (!call_session.local_ended) {
-				// Check if there are other active calls
-				let remaining_calls = get_active_call_sessions();
-				if (remaining_calls.length > 0) {
-					// Switch to another active call
-					select_call_session(remaining_calls[0].id);
-				} else {
-					reset_call_ui_state(true);
-				}
+			// Check if there are other active calls
+			let remaining_calls = get_active_call_sessions();
+			if (remaining_calls.length > 0) {
+				// Switch to another active call
+				select_call_session(remaining_calls[0].id);
+			} else {
+				reset_call_ui_state(true);
 			}
 		});
 
@@ -428,15 +431,38 @@ function get_selected_call_session() {
 
 /**
  * Get all active (non-hungup) call sessions
+ * Also cleans up sessions that appear to be in a terminated state but haven't been removed yet
  * @returns {Array}
  */
 function get_active_call_sessions() {
 	let active_calls = [];
 	Object.keys(call_session_list).forEach(function(call_id) {
 		let call = call_session_list[call_id];
-		if (!call.local_ended && call.session && call.session.status !== SIP.Session.C.STATUS_TERMINATED) {
-			active_calls.push(call);
+
+		// Skip if locally ended
+		if (call.local_ended) {
+			// Also check if the session is fully terminated and clean up
+			if (call.session && is_session_terminated(call.session)) {
+				cleanup_call_media(call, call_id);
+				delete call_session_list[call_id];
+			}
+			return;
 		}
+
+		// Skip if no session
+		if (!call.session) {
+			return;
+		}
+
+		// Check if session is in a terminated state
+		if (is_session_terminated(call.session)) {
+			// Session is terminated but local_ended wasn't set - clean up
+			cleanup_call_media(call, call_id);
+			delete call_session_list[call_id];
+			return;
+		}
+
+		active_calls.push(call);
 	});
 	return active_calls;
 }
@@ -517,12 +543,19 @@ function select_call_session(call_id) {
 }
 
 /**
- * Remove a call session from the registry
+ * Remove a call session from the registry and clean up all media resources
  * @param {string} call_id
  */
 function remove_call_session(call_id) {
 	if (call_session_list[call_id]) {
+		let call_to_remove = call_session_list[call_id];
 		console.log('[Call Registry] Removing call session:', call_id);
+
+		// Clean up all media resources BEFORE removing from registry
+		if (call_to_remove.session) {
+			cleanup_call_media(call_to_remove, call_id);
+		}
+
 		delete call_session_list[call_id];
 
 		// If the removed call was the selected one, select another active call
@@ -609,6 +642,67 @@ function get_active_call_count() {
 // ============================================================
 // END MULTI-CALL SUPPORT - Call Registry Helper Functions
 // ============================================================
+
+// ============================================================
+// MEDIA CLEANUP HELPERS
+// ============================================================
+
+/**
+ * Stop all media tracks and close the RTCPeerConnection for a call session
+ * @param {object} call_session - The call session object to cleanup
+ * @param {string} call_id - The call session ID (for logging)
+ */
+function cleanup_call_media(call_session, call_id) {
+	if (!call_session || !call_session.session) {
+		console.log('[Media Cleanup] No session to cleanup for call', call_id);
+		return;
+	}
+
+	let session = call_session.session;
+
+	// Stop local media tracks
+	if (session.mediaHandler) {
+		// Stop local audio tracks
+		if (session.mediaHandler.localStream) {
+			let localTracks = session.mediaHandler.localStream.getTracks();
+			if (localTracks.length > 0) {
+				console.log('[Media Cleanup] Stopping', localTracks.length, 'local tracks for call', call_id);
+				localTracks.forEach(track => {
+					track.stop();
+				});
+			}
+		}
+
+		// Stop tab audio stream if it exists
+		if (session._tab_audio_stream) {
+			let tabTracks = session._tab_audio_stream.getTracks();
+			if (tabTracks.length > 0) {
+				console.log('[Media Cleanup] Stopping tab audio tracks for call', call_id);
+				tabTracks.forEach(track => track.stop());
+			}
+			session._tab_audio_stream = null;
+		}
+
+		// Close the RTCPeerConnection
+		if (session.mediaHandler.peerConnection && session.mediaHandler.peerConnection.signalingState !== 'closed') {
+			console.log('[Media Cleanup] Closing RTCPeerConnection for call', call_id);
+			session.mediaHandler.peerConnection.close();
+			session.mediaHandler.peerConnection = null;
+		}
+	}
+}
+
+/**
+ * Check if a SIP session is in a terminated state
+ * @param {object} session - The SIP session object
+ * @returns {boolean}
+ */
+function is_session_terminated(session) {
+	if (!session || !session.status) return true;
+	return session.status === SIP.Session.C.STATUS_TERMINATED ||
+		   session.status === SIP.Session.C.STATUS_BYE_SENT ||
+		   session.status === SIP.Session.C.STATUS_TERMINATING;
+}
 
 let user_agent;
 let answer_time;
@@ -2532,17 +2626,23 @@ user_agent.on('invite', function (s) {
 		// Set up call waiting event handlers
 		waiting_call.session.on('cancel', function() {
 			add_to_history(waiting_call.number, 'missed', Date.now());
+			// Clean up media resources before removing from registry
+			cleanup_call_media(waiting_call, waiting_call_id);
 			hide_call_waiting_panel();
 			remove_call_session(waiting_call_id);
 		});
 
 		waiting_call.session.on('bye', function() {
+			// Clean up media resources before removing from registry
+			cleanup_call_media(waiting_call, waiting_call_id);
 			hide_call_waiting_panel();
 			remove_call_session(waiting_call_id);
 		});
 
 		waiting_call.session.on('rejected', function() {
 			add_to_history(waiting_call.number, 'missed', Date.now());
+			// Clean up media resources before removing from registry
+			cleanup_call_media(waiting_call, waiting_call_id);
 			hide_call_waiting_panel();
 			remove_call_session(waiting_call_id);
 		});
@@ -3593,6 +3693,9 @@ function hangup() {
 	selected_call.local_ended = true;
 	session_hungup = true;
 
+	// Save call duration to history
+	save_call_duration(selected_call);
+
 	// Hangup the call session
 	if (call_session.status === SIP.Session.C.STATUS_CONFIRMED || call_session.status === SIP.Session.C.STATUS_ANSWERED) {
 		call_session.bye();
@@ -3600,8 +3703,11 @@ function hangup() {
 		call_session.terminate();
 	}
 
-	// Save call duration to history
-	save_call_duration(selected_call);
+	// Immediately clean up media resources for this call
+	cleanup_call_media(selected_call, selected_call.id);
+
+	// Remove from registry (this will also clean up any remaining resources)
+	remove_call_session(selected_call.id);
 
 	// Check if there are other active calls
 	let remaining_calls = get_active_call_sessions();
@@ -3614,9 +3720,6 @@ function hangup() {
 		// No more calls - reset UI
 		reset_call_ui_state(true);
 	}
-
-	// Remove the ended call from registry
-	remove_call_session(selected_call.id);
 }
 
 // ============================================================
