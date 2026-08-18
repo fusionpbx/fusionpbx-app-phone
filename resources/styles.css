@@ -19,7 +19,6 @@ body {
 /* Main video container - full screen behind controls */
 .video_container {
 	position: fixed;
-	top: 50px;
 	left: 0;
 	right: 0;
 	bottom: 38px;
@@ -1186,10 +1185,11 @@ body.audio_call_mode #active .dialpad_wrapper {
 	padding: 8px 12px;
 	background: rgba(0, 0, 0, 0.5);
 	border-radius: 8px;
-	margin: 8px auto;
-	max-width: 460px;
-	width: 92%;
-	justify-content: center;
+	margin: 0;
+	max-width: 100%;
+	width: 100%;
+	justify-content: space-between;
+	box-sizing: border-box;
 }
 
 .audio_output_selector_container {
@@ -1199,10 +1199,11 @@ body.audio_call_mode #active .dialpad_wrapper {
 	padding: 8px 12px;
 	background: rgba(0, 0, 0, 0.5);
 	border-radius: 8px;
-	margin: 8px auto;
-	max-width: 460px;
-	width: 92%;
-	justify-content: center;
+	margin: 0;
+	max-width: 100%;
+	width: 100%;
+	justify-content: space-between;
+	box-sizing: border-box;
 }
 
 .audio_device_label {
@@ -1212,6 +1213,8 @@ body.audio_call_mode #active .dialpad_wrapper {
 	display: flex;
 	align-items: center;
 	gap: 4px;
+	flex-shrink: 0;
+	min-width: 120px;
 }
 
 .audio_device_label i {
@@ -1227,7 +1230,8 @@ body.audio_call_mode #active .dialpad_wrapper {
 	font-size: 12px;
 	outline: none;
 	cursor: pointer;
-	min-width: 180px;
+	flex: 1;
+	min-width: 0;
 }
 
 .audio_device_select:hover {
@@ -1250,10 +1254,11 @@ body.audio_call_mode #active .dialpad_wrapper {
 	padding: 8px 12px;
 	background: rgba(0, 0, 0, 0.5);
 	border-radius: 8px;
-	margin: 8px auto;
-	max-width: 460px;
-	width: 92%;
-	justify-content: center;
+	margin: 0;
+	max-width: 100%;
+	width: 100%;
+	justify-content: space-between;
+	box-sizing: border-box;
 }
 
 .video_device_label {
@@ -1263,6 +1268,8 @@ body.audio_call_mode #active .dialpad_wrapper {
 	display: flex;
 	align-items: center;
 	gap: 4px;
+	flex-shrink: 0;
+	min-width: 120px;
 }
 
 .video_device_label i {
@@ -1278,7 +1285,8 @@ body.audio_call_mode #active .dialpad_wrapper {
 	font-size: 12px;
 	outline: none;
 	cursor: pointer;
-	min-width: 180px;
+	flex: 1;
+	min-width: 0;
 }
 
 .video_device_select:hover {
@@ -1302,10 +1310,11 @@ body.audio_call_mode #active .dialpad_wrapper {
 	padding: 8px 12px;
 	background: rgba(0, 0, 0, 0.5);
 	border-radius: 8px;
-	margin: 8px auto;
-	max-width: 460px;
-	width: 92%;
-	justify-content: center;
+	margin: 0;
+	max-width: 100%;
+	width: 100%;
+	justify-content: space-between;
+	box-sizing: border-box;
 }
 
 .ringback_select {
@@ -1317,7 +1326,8 @@ body.audio_call_mode #active .dialpad_wrapper {
 	font-size: 12px;
 	outline: none;
 	cursor: pointer;
-	min-width: 180px;
+	flex: 1;
+	min-width: 0;
 }
 
 .ringback_select:hover {
@@ -1340,6 +1350,8 @@ body.audio_call_mode #active .dialpad_wrapper {
 	display: flex;
 	align-items: center;
 	gap: 4px;
+	flex-shrink: 0;
+	min-width: 120px;
 }
 
 .ringback_label i {
@@ -1355,10 +1367,11 @@ body.audio_call_mode #active .dialpad_wrapper {
 	padding: 8px 12px;
 	background: rgba(0, 0, 0, 0.5);
 	border-radius: 8px;
-	margin: 8px auto;
-	max-width: 460px;
-	width: 92%;
-	justify-content: center;
+	margin: 0;
+	max-width: 100%;
+	width: 100%;
+	justify-content: space-between;
+	box-sizing: border-box;
 }
 
 .ringtone_select {
@@ -1370,7 +1383,8 @@ body.audio_call_mode #active .dialpad_wrapper {
 	font-size: 12px;
 	outline: none;
 	cursor: pointer;
-	min-width: 180px;
+	flex: 1;
+	min-width: 0;
 }
 
 .ringtone_select:hover {
@@ -1393,11 +1407,90 @@ body.audio_call_mode #active .dialpad_wrapper {
 	display: flex;
 	align-items: center;
 	gap: 4px;
+	flex-shrink: 0;
+	min-width: 120px;
 }
 
 .ringtone_label i {
 	font-size: 14px;
 	color: #ccc;
+}
+
+/* Call Waiting Toggle Styles */
+.call_waiting_selector_container {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	background: rgba(0, 0, 0, 0.5);
+	border-radius: 8px;
+	margin: 0;
+	max-width: 100%;
+	width: 100%;
+	justify-content: space-between;
+	box-sizing: border-box;
+}
+
+.call_waiting_label {
+	font-size: 12px;
+	color: #ccc;
+	white-space: nowrap;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	flex-shrink: 0;
+	min-width: 120px;
+}
+
+.call_waiting_label i {
+	font-size: 14px;
+	color: #ccc;
+}
+
+.toggle-switch {
+	position: relative;
+	display: inline-block;
+	width: 44px;
+	height: 24px;
+	flex-shrink: 0;
+}
+
+.toggle-switch input {
+	opacity: 0;
+	width: 0;
+	height: 0;
+}
+
+.toggle-slider {
+	position: absolute;
+	cursor: pointer;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background-color: #555;
+	transition: 0.3s;
+	border-radius: 24px;
+}
+
+.toggle-slider:before {
+	position: absolute;
+	content: "";
+	height: 18px;
+	width: 18px;
+	left: 3px;
+	bottom: 3px;
+	background-color: white;
+	transition: 0.3s;
+	border-radius: 50%;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+	background-color: #1eba00;
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+	transform: translateX(20px);
 }
 
 /* Settings Panel Styles */
@@ -1414,6 +1507,8 @@ body.audio_call_mode #active .dialpad_wrapper {
 	flex-direction: column;
 	align-items: center;
 	z-index: 1500;
+	box-sizing: border-box;
+	scrollbar-gutter: stable;
 }
 
 .settings_header {
@@ -1438,8 +1533,40 @@ body.audio_call_mode #active .dialpad_wrapper {
 	max-width: 480px;
 	display: flex;
 	flex-direction: column;
+	align-items: stretch;
+	gap: 8px;
+	padding: 0 12px;
+	box-sizing: border-box;
+}
+
+.settings_section {
+	background: rgba(255,255,255,0.03);
+	border: 1px solid rgba(255,255,255,0.08);
+	border-radius: 12px;
+	padding: 12px 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	box-sizing: border-box;
+	width: 100%;
+}
+
+.settings_section_header {
+	font-size: 13px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	color: rgba(255,255,255,0.5);
+	display: flex;
 	align-items: center;
-	gap: 20px;
+	gap: 8px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.settings_section_header i {
+	color: #1eba00;
+	font-size: 14px;
 }
 
 .dialpad_box.dtmf_digit.dtmf_pressed {
@@ -1597,7 +1724,8 @@ body.audio_call_mode #active .dialpad_wrapper {
 	.audio_output_selector_container,
 	.video_device_selector_container,
 	.ringback_selector_container,
-	.ringtone_selector_container {
+	.ringtone_selector_container,
+	.call_waiting_selector_container {
 		padding: 6px 10px;
 		margin: 6px auto;
 		flex-wrap: wrap;
@@ -1606,7 +1734,8 @@ body.audio_call_mode #active .dialpad_wrapper {
 	.audio_device_label,
 	.video_device_label,
 	.ringback_label,
-	.ringtone_label {
+	.ringtone_label,
+	.call_waiting_label {
 		font-size: 11px;
 	}
 
@@ -1616,13 +1745,8 @@ body.audio_call_mode #active .dialpad_wrapper {
 	.ringtone_select {
 		padding: 5px 8px;
 		font-size: 11px;
-		min-width: 140px;
-	}
-
-	/* Adjust local video size */
-	.local_video {
-		width: 120px;
-		height: 90px;
+		flex: 1;
+		min-width: 0;
 	}
 
 	.local_video_wrapper {
@@ -1785,7 +1909,8 @@ body.audio_call_mode #active .dialpad_wrapper {
 	.audio_output_selector_container,
 	.video_device_selector_container,
 	.ringback_selector_container,
-	.ringtone_selector_container {
+	.ringtone_selector_container,
+	.call_waiting_selector_container {
 		padding: 5px 8px;
 		margin: 4px auto;
 	}
@@ -1793,7 +1918,8 @@ body.audio_call_mode #active .dialpad_wrapper {
 	.audio_device_label,
 	.video_device_label,
 	.ringback_label,
-	.ringtone_label {
+	.ringtone_label,
+	.call_waiting_label {
 		font-size: 10px;
 	}
 
@@ -1803,7 +1929,8 @@ body.audio_call_mode #active .dialpad_wrapper {
 	.ringtone_select {
 		padding: 4px 6px;
 		font-size: 10px;
-		min-width: 120px;
+		flex: 1;
+		min-width: 0;
 	}
 
 	/* Smaller local video */

@@ -352,7 +352,7 @@ let call_session_counter = 0;
 
 // Call waiting configuration
 let call_waiting_config = {
-  enabled: true,
+  enabled: get_phone_setting('call_waiting', 'true') === 'true',
   max_concurrent_calls: 3,
   waiting_tone_file: 'resources/sounds/ringback/waiting.mp3',
   auto_answer: false
@@ -604,7 +604,7 @@ function remove_call_session(call_id) {
  * @returns {boolean}
  */
 function check_call_limit() {
-	let active_count = Object.keys(call_session_list).length;
+	let active_count = get_active_call_count();
 	return active_count < call_waiting_config.max_concurrent_calls;
 }
 
@@ -613,8 +613,7 @@ function check_call_limit() {
  * @returns {number}
  */
 function get_available_call_slots() {
-	let active_count = Object.keys(call_session_list).length;
-	return call_waiting_config.max_concurrent_calls - active_count;
+	return call_waiting_config.max_concurrent_calls - get_active_call_count();
 }
 
 /**
@@ -636,7 +635,7 @@ function has_active_video_call() {
  * @returns {number}
  */
 function get_active_call_count() {
-	return Object.keys(call_session_list).length;
+	return get_active_call_sessions().length;
 }
 
 // ============================================================
@@ -3101,7 +3100,7 @@ async function answer_call(use_video, receive_only_video) {
 		if (call.id !== selected_call.id && !call.is_on_hold && call.session && call.session.status !== SIP.Session.C.STATUS_TERMINATED) {
 			console.log('[Call Switching] Putting current call on hold to answer incoming call');
 			call.is_on_hold = true;
-			call.session.hold().catch(function(err) {
+			Promise.resolve(call.session.hold()).catch(function(err) {
 				console.warn('[Call Switching] Failed to hold previous call:', err);
 			});
 		}
@@ -3622,12 +3621,14 @@ function call_number(number) {
 }
 
 // Function to save the final call duration to history when call ends
-function save_call_duration() {
-	if (answer_time && current_history_entry_id !== null) {
-		var elapsed_time = Date.now() - answer_time;
+function save_call_duration(call) {
+	var answer_time_used = (call && call.start_time) ? call.start_time : answer_time;
+	var history_entry_id_used = (call && call.history_entry_id) ? call.history_entry_id : current_history_entry_id;
+	if (answer_time_used && history_entry_id_used !== null) {
+		var elapsed_time = Date.now() - answer_time_used;
 		var duration_seconds = Math.floor(elapsed_time / 1000);
 		if (duration_seconds > 0) {
-			update_history_duration(current_history_entry_id, duration_seconds);
+			update_history_duration(history_entry_id_used, duration_seconds);
 		}
 	}
 }
@@ -4563,6 +4564,19 @@ document.addEventListener('DOMContentLoaded', function() {
 			save_phone_setting('ringtone', selected_ringtone);
 			update_ringtone_source(selected_ringtone);
 			console.log('ringtone_select: Ringtone changed to:', selected_ringtone);
+		});
+	}
+
+	// Add change event listener to call waiting toggle
+	var call_waiting_toggle = document.getElementById('call_waiting_toggle');
+	if (call_waiting_toggle) {
+		// Set initial checked state from saved setting
+		call_waiting_toggle.checked = call_waiting_config.enabled;
+
+		call_waiting_toggle.addEventListener('change', function() {
+			call_waiting_config.enabled = this.checked;
+			save_phone_setting('call_waiting', this.checked ? 'true' : 'false');
+			console.log('call_waiting_toggle: Call waiting set to:', call_waiting_config.enabled);
 		});
 	}
 
