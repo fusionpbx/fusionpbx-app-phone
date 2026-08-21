@@ -1,8 +1,92 @@
+/* ===========================================
+   THEME VARIABLES
+   Dark theme = default (matches current look)
+   Light theme applied when <html> has .light
+   =========================================== */
+:root {
+	--bg-main: #161D28;
+	--bg-bar: #0a0a0a;
+	--bg-item: #252A32;
+	--bg-item-hover: rgba(70, 70, 70, 0.9);
+	--bg-input-deep: #080B10;
+	--bg-input-field: rgba(60, 60, 60, 0.9);
+	--border-subtle: #222;
+	--border-mid: #333;
+	--border-input: #444;
+	--text-primary: #fff;
+	--text-secondary: #ccc;
+	--text-tertiary: #aaa;
+	--text-muted: #888;
+	--dialpad-box-bg: rgba(0, 0, 0, 0.6);
+	--dialpad-box-bg-hover: rgba(0, 0, 0, 0.3);
+	--dialpad-box-bg-soft: rgba(0, 0, 0, 0.4);
+	--dialpad-box-border: #161D28;
+	--settings-section-bg: rgba(255, 255, 255, 0.03);
+	--settings-section-border: rgba(255, 255, 255, 0.08);
+	--settings-header-text: rgba(255, 255, 255, 0.5);
+	--settings-header-border: rgba(255, 255, 255, 0.06);
+	--settings-row-bg: rgba(0, 0, 0, 0.5);
+	--select-option-bg: #1a1a2e;
+	--accent-green: #1eba00;
+	--accent-blue: #1E90FF;
+	--video-bg: #000;
+	--caller-id-bg: rgba(0, 0, 0, 0.8);
+	--overlay-bg: rgba(22, 29, 40, 0.95);
+	--hover-bg: rgba(255, 255, 255, 0.12);
+	--active-bg: rgba(255, 255, 255, 0.15);
+}
+
+html.light {
+	/* Preserve white text on colored (green/blue/red) backgrounds */
+	.contact_icon i,
+	.contact_avatar i,
+	.history_icon i,
+	.active_calls_panel_icon i,
+	.conv_icon i,
+	.action_item.action_item_hangup i,
+	.action_item.action_item_hangup .action_label,
+	.video_stream_info {
+		color: #fff;
+	}
+
+	/* Light theme variable overrides */
+	--bg-main: #f0f2f5;
+	--bg-bar: #ffffff;
+	--bg-item: #ffffff;
+	--bg-item-hover: #e8eaed;
+	--bg-input-deep: #ffffff;
+	--bg-input-field: #ffffff;
+	--border-subtle: #d0d4da;
+	--border-mid: #c8ccd2;
+	--border-input: #b0b5bd;
+	--text-primary: #202124;
+	--text-secondary: #5f6368;
+	--text-tertiary: #8a8f98;
+	--text-muted: #9aa0a6;
+	--dialpad-box-bg: rgba(0, 0, 0, 0.05);
+	--dialpad-box-bg-hover: rgba(0, 0, 0, 0.10);
+	--dialpad-box-bg-soft: rgba(0, 0, 0, 0.04);
+	--dialpad-box-border: #e0e3e7;
+	--settings-section-bg: rgba(0, 0, 0, 0.02);
+	--settings-section-border: rgba(0, 0, 0, 0.10);
+	--settings-header-text: rgba(0, 0, 0, 0.55);
+	--settings-header-border: rgba(0, 0, 0, 0.08);
+	--settings-row-bg: rgba(0, 0, 0, 0.04);
+	--select-option-bg: #ffffff;
+	--accent-green: #1eba00;
+	--accent-blue: #1E90FF;
+	--video-bg: #1a1a1a;
+	--caller-id-bg: rgba(255, 255, 255, 0.95);
+	--overlay-bg: rgba(240, 242, 245, 0.95);
+	--hover-bg: rgba(0, 0, 0, 0.06);
+	--active-bg: rgba(0, 0, 0, 0.10);
+}
 
 body {
-	background: #161D28;
+	background: var(--bg-main);
 	margin: 5;
 	overflow: hidden;
+	color: var(--text-primary);
 }
 
 .inner {
@@ -59,7 +143,7 @@ body {
 	padding: 8px 10px;
 	border-radius: 6px;
 	background: rgba(0, 0, 0, 0.62);
-	color: #fff;
+	color: var(--text-primary);
 	font-size: 14px;
 	line-height: 1.35;
 	font-family: sans-serif;
@@ -122,7 +206,7 @@ body {
 	width: 160px;
 	height: 120px;
 	border-radius: 8px;
-	border: 2px solid #333;
+	border: 2px solid var(--border-mid);
 	background: #000;
 	object-fit: cover;
 }
@@ -157,7 +241,7 @@ video::-webkit-media-controls-start-playback-button {
 	align-items: center;
 	justify-content: flex-start;
 	padding-top: 15px;
-	background: #161D28;
+	background: var(--bg-main);
 	/* Ensure content doesn't spill into action bar */
 	box-sizing: border-box;
 }
@@ -173,12 +257,12 @@ video::-webkit-media-controls-start-playback-button {
 .destination {
 	height: 70px;
 	padding: 10px;
-	background: #080B10;
-	color: #fff;
+	background: var(--bg-input-deep);
+	color: var(--text-primary);
 	border-radius: 8px;
 	font-size: 45px;
 	font-weight: bold;
-	border: 3px solid #222;
+	border: 3px solid var(--border-subtle);
 	text-align: center;
 	display: block;
 	box-sizing: border-box;
@@ -188,7 +272,7 @@ video::-webkit-media-controls-start-playback-button {
 }
 
 .dialpad_wrapper {
-	background: #161D28;
+	background: var(--bg-main);
 	padding: 8px;
 	overflow-y: auto;
 	display: grid;
@@ -197,7 +281,7 @@ video::-webkit-media-controls-start-playback-button {
 	width: 92%;
 	max-width: 460px;
 	margin: 0 auto;
-	color: #444;
+	color: var(--text-secondary);
 	box-sizing: border-box;
 }
 
@@ -212,8 +296,8 @@ video::-webkit-media-controls-start-playback-button {
 	align-items: center;
 	text-align: center;
 	gap: 3px; /* Space between icon and text */
-	background: rgba(0, 0, 0, 0.6);
-	color: #fff;
+	background: var(--dialpad-box-bg);
+	color: var(--text-primary);
 	border-radius: 12px;
 	padding: 0 8px;
 	cursor: pointer;
@@ -221,12 +305,12 @@ video::-webkit-media-controls-start-playback-button {
 	-moz-user-select: none;
 	-ms-user-select: none;
 	user-select: none;
-	border: 2px solid #161D28;
+	border: 2px solid var(--bg-main);
 	transition: background-color 0.2s, transform 0.1s;
 }
 
 .dialpad_box:hover {
-	background: rgba(0, 0, 0, 0.3);
+	background: var(--dialpad-box-bg-hover);
 	transform: scale(1.02);
 }
 
@@ -297,7 +381,7 @@ video::-webkit-media-controls-start-playback-button {
 .dialpad_box.hold,
 .dialpad_box.toggle_video,
 .dialpad_box.transfer {
-	background: rgba(0,0,0,0.4);
+	background: var(--dialpad-box-bg-soft);
 }
 
 .dialpad_box.toggle_video.active {
@@ -312,13 +396,13 @@ video::-webkit-media-controls-start-playback-button {
 .dialpad_box.clear:hover,
 .dialpad_box.mute:hover,
 .dialpad_box.hold:hover {
-	background: rgba(0, 0, 0, 0.3);
+	background: var(--dialpad-box-bg-hover);
 }
 
 strong {
 	font-family: monospace;
 	padding: 5px 5px;
-	color: #fff;
+	color: var(--text-primary);
 	font-size: 30px;
 }
 
@@ -326,7 +410,7 @@ sup {
 	font-family: monospace;
 	letter-spacing: 0;
 	padding: 3px 3px;
-	color: #fff;
+	color: var(--text-primary);
 	font-size: 10px;
 }
 
@@ -342,7 +426,7 @@ sup {
 	justify-content: center;
 	align-items: center;
 	z-index: 2800;
-	background: rgba(22, 29, 40, 0.95);
+	background: var(--overlay-bg);
 	padding: 40px 20px;
 	box-sizing: border-box;
 	gap: 40px;
@@ -355,11 +439,11 @@ sup {
 	justify-content: center;
 	align-items: center;
 	text-align: center;
-	background: rgba(0, 0, 0, 0.8);
+	background: var(--caller-id-bg);
 	font-family: sans-serif;
-	border: 3px solid #333;
+	border: 3px solid var(--border-mid);
 	border-radius: 20px;
-	color: #fff;
+	color: var(--text-primary);
 	padding: 40px 20px;
 	width: 100%;
 	max-width: 460px;
@@ -377,19 +461,19 @@ sup {
 
 .caller_number {
 	font-size: 24px;
-	color: #ccc;
+	color: var(--text-secondary);
 	margin: 0 0 20px 0;
 	line-height: 1.2;
 }
 
 .caller_number a {
-	color: #ccc;
+	color: var(--text-secondary);
 	text-decoration: none;
 	transition: color 0.2s;
 }
 
 .caller_number a:hover {
-	color: #fff;
+	color: var(--text-primary);
 }
 
 .caller_video {
@@ -454,7 +538,7 @@ sup {
 .answer_time {
 	margin-bottom: 8px;
 	text-align: center;
-	color: #ccc;
+	color: var(--text-secondary);
 	font-family: monospace;
 	font-size: 14px;
 	text-transform: uppercase;
@@ -484,7 +568,7 @@ sup {
 	bottom: 66px;
 	left: 0;
 	right: 0;
-	background: #161D28;
+	background: var(--bg-main);
 	padding: 20px;
 	overflow-y: auto;
 	display: none;
@@ -500,8 +584,8 @@ sup {
 
 /* Active calls list items - styled like history_item */
 .active_calls_panel_item {
-	background: #252A32;
-	color: #fff;
+	background: var(--bg-item);
+	color: var(--text-primary);
 	padding: 18px 15px;
 	margin-bottom: 10px;
 	border-radius: 8px;
@@ -513,7 +597,7 @@ sup {
 }
 
 .active_calls_panel_item:hover {
-	background: rgba(70, 70, 70, 0.9);
+	background: var(--bg-item-hover);
 }
 
 .active_calls_panel_item.selected {
@@ -533,7 +617,7 @@ sup {
 
 .active_calls_panel_icon i {
 	font-size: 20px;
-	color: #fff;
+	color: var(--text-primary);
 }
 
 .active_calls_panel_info {
@@ -545,17 +629,17 @@ sup {
 	font-size: 20px;
 	font-weight: bold;
 	margin-bottom: 4px;
-	color: #fff;
+	color: var(--text-primary);
 }
 
 .active_calls_panel_status {
 	font-size: 13px;
-	color: #ccc;
+	color: var(--text-secondary);
 }
 
 .active_calls_panel_number {
 	font-size: 14px;
-	color: #aaa;
+	color: var(--text-tertiary);
 	margin-bottom: 2px;
 }
 
@@ -584,7 +668,7 @@ sup {
 	left: 0;
 	right: 0;
 	height: 38px;
-	background: #0a0a0a;
+	background: var(--bg-bar);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -592,7 +676,7 @@ sup {
 	/*z-index: 1000;*/
 	padding: 0 20px;
 	font-size: 18px;
-	color: #fff;
+	color: var(--text-primary);
 	font-family: sans-serif;
 	box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
@@ -617,7 +701,7 @@ sup {
 	left: 0;
 	right: 0;
 	min-height: 48px;
-	background: #0a0a0a;
+	background: var(--bg-bar);
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
 	gap: 8px;
@@ -652,7 +736,7 @@ sup {
 }
 
 .action_item:hover {
-	background: rgba(255, 255, 255, 0.12);
+	background: var(--hover-bg);
 	transform: translateY(-2px);
 }
 
@@ -662,20 +746,20 @@ sup {
 
 .action_item i {
 	font-size: 18px;
-	color: #fff;
+	color: var(--text-primary);
 	line-height: 1;
 }
 
 .action_label {
 	font-size: 10px;
-	color: #ccc;
+	color: var(--text-secondary);
 	font-family: sans-serif;
 	font-weight: 500;
 	letter-spacing: 0.3px;
 }
 
 .action_item.active {
-	background: rgba(255, 255, 255, 0.15);
+	background: var(--active-bg);
 }
 
 .action_item.active i {
@@ -694,7 +778,7 @@ sup {
 
 .action_item.action_item_hangup i,
 .action_item.action_item_hangup .action_label {
-	color: #fff;
+	color: var(--text-primary);
 }
 
 .action_item.action_item_toggle_active {
@@ -720,7 +804,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 	bottom: 66px;
 	left: 0;
 	right: 0;
-	background: #161D28;
+	background: var(--bg-main);
 	padding: 20px;
 	overflow-y: auto;
 	display: none;
@@ -732,7 +816,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 	text-align: center;
 	font-size: 28px;
 	font-weight: bold;
-	color: #fff;
+	color: var(--text-primary);
 	margin-bottom: 20px;
 	font-family: sans-serif;
 }
@@ -749,8 +833,8 @@ body.audio_call_mode #active .dialpad_wrapper {
 }
 
 .contact_item {
-	background: #252A32;
-	color: #fff;
+	background: var(--bg-item);
+	color: var(--text-primary);
 	padding: 18px 15px;
 	margin-bottom: 10px;
 	border-radius: 8px;
@@ -762,7 +846,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 }
 
 .contact_item:hover {
-	background: rgba(70, 70, 70, 0.9);
+	background: var(--bg-item-hover);
 }
 
 .contact_icon {
@@ -778,7 +862,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 
 .contact_icon i {
 	font-size: 22px;
-	color: #fff;
+	color: var(--text-primary);
 }
 
 .contact_info {
@@ -794,7 +878,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 
 .contact_name {
 	font-size: 14px;
-	color: #ccc;
+	color: var(--text-secondary);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -817,7 +901,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 .contacts_search_icon {
 	position: absolute;
 	left: 14px;
-	color: #888;
+	color: var(--text-muted);
 	font-size: 16px;
 	pointer-events: none;
 }
@@ -825,11 +909,11 @@ body.audio_call_mode #active .dialpad_wrapper {
 .contacts_search {
 	width: 100%;
 	box-sizing: border-box;
-	background: #252A32;
-	border: 2px solid #333;
+	background: var(--bg-item);
+	border: 2px solid var(--border-mid);
 	border-radius: 24px;
 	padding: 12px 44px 12px 40px;
-	color: #fff;
+	color: var(--text-primary);
 	font-size: 16px;
 	font-family: sans-serif;
 	outline: none;
@@ -841,7 +925,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 }
 
 .contacts_search::placeholder {
-	color: #888;
+	color: var(--text-muted);
 }
 
 .contacts_search_clear {
@@ -851,7 +935,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 	height: 28px;
 	border: none;
 	background: transparent;
-	color: #888;
+	color: var(--text-muted);
 	font-size: 14px;
 	cursor: pointer;
 	border-radius: 50%;
@@ -864,12 +948,12 @@ body.audio_call_mode #active .dialpad_wrapper {
 }
 
 .contacts_search_clear:hover {
-	background: rgba(255, 255, 255, 0.1);
-	color: #fff;
+	background: var(--hover-bg);
+	color: var(--text-primary);
 }
 
 .contacts_search_clear:active {
-	background: rgba(255, 255, 255, 0.2);
+	background: var(--active-bg);
 }
 
 .contacts_search_clear i {
@@ -892,14 +976,14 @@ body.audio_call_mode #active .dialpad_wrapper {
 
 .contact_avatar i {
 	font-size: 22px;
-	color: #fff;
+	color: var(--text-primary);
 }
 
 .contact_name_primary {
 	font-size: 20px;
 	font-weight: bold;
 	margin-bottom: 3px;
-	color: #fff;
+	color: var(--text-primary);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -915,7 +999,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 
 .contacts_empty {
 	text-align: center;
-	color: #888;
+	color: var(--text-muted);
 	padding: 50px 20px;
 	font-size: 16px;
 	font-family: sans-serif;
@@ -936,8 +1020,8 @@ body.audio_call_mode #active .dialpad_wrapper {
 }
 
 .history_item {
-	background: #252A32;
-	color: #fff;
+	background: var(--bg-item);
+	color: var(--text-primary);
 	padding: 18px 15px;
 	margin-bottom: 10px;
 	border-radius: 8px;
@@ -949,7 +1033,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 }
 
 .history_item:hover {
-	background: rgba(70, 70, 70, 0.9);
+	background: var(--bg-item-hover);
 }
 
 .history_icon {
@@ -991,13 +1075,13 @@ body.audio_call_mode #active .dialpad_wrapper {
 
 .history_meta {
 	font-size: 13px;
-	color: #ccc;
+	color: var(--text-secondary);
 }
 
 .history_time {
 	font-size: 20px;
 	font-family: monospace;
-	color: #aaa;
+	color: var(--text-tertiary);
 	min-width: 80px;
 	text-align: right;
 }
@@ -1008,7 +1092,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 	bottom: 66px;
 	left: 0;
 	right: 0;
-	background: #161D28;
+	background: var(--bg-main);
 	padding: 20px;
 	overflow-y: auto;
 	display: none;
@@ -1023,8 +1107,8 @@ body.audio_call_mode #active .dialpad_wrapper {
 }
 
 .message_conversation_item {
-	background: #252A32;
-	color: #fff;
+	background: var(--bg-item);
+	color: var(--text-primary);
 	padding: 18px 15px;
 	margin-bottom: 10px;
 	border-radius: 8px;
@@ -1036,7 +1120,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 }
 
 .message_conversation_item:hover {
-	background: rgba(70, 70, 70, 0.9);
+	background: var(--bg-item-hover);
 }
 
 .conv_icon {
@@ -1052,7 +1136,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 
 .conv_icon i {
 	font-size: 20px;
-	color: #fff;
+	color: var(--text-primary);
 }
 
 .conv_info {
@@ -1068,7 +1152,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 
 .conv_preview {
 	font-size: 14px;
-	color: #ccc;
+	color: var(--text-secondary);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -1084,7 +1168,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 .conv_time {
 	font-size: 12px;
 	font-family: monospace;
-	color: #aaa;
+	color: var(--text-tertiary);
 }
 
 /* Messages header + button */
@@ -1107,7 +1191,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 	bottom: 0;
 	left: 0;
 	right: 0;
-	background: #161D28;
+	background: var(--bg-main);
 	display: none;
 	flex-direction: column;
 	z-index: 2000;
@@ -1123,7 +1207,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 }
 
 .conversation_header a {
-	color: #fff;
+	color: var(--text-primary);
 	font-size: 20px;
 	text-decoration: none;
 }
@@ -1131,7 +1215,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 .conversation_title {
 	font-size: 18px;
 	font-weight: bold;
-	color: #fff;
+	color: var(--text-primary);
 }
 
 .messages_container {
@@ -1157,13 +1241,13 @@ body.audio_call_mode #active .dialpad_wrapper {
 }
 
 .message_bubble.incoming {
-	background: rgba(60, 60, 60, 0.9);
+	background: var(--bg-input-field);
 	align-self: flex-start;
 	border-bottom-left-radius: 4px;
 }
 
 .bubble_text {
-	color: #fff;
+	color: var(--text-primary);
 	font-size: 15px;
 	line-height: 1.4;
 	word-wrap: break-word;
@@ -1187,9 +1271,9 @@ body.audio_call_mode #active .dialpad_wrapper {
 
 #message_input {
 	flex: 1;
-	background: rgba(60, 60, 60, 0.9);
-	border: 2px solid #444;
-	color: #fff;
+	background: var(--bg-input-field);
+	border: 2px solid var(--border-input);
+	color: var(--text-primary);
 	border-radius: 24px;
 	padding: 12px 20px;
 	font-size: 15px;
@@ -1203,13 +1287,13 @@ body.audio_call_mode #active .dialpad_wrapper {
 }
 
 #message_input::placeholder {
-	color: #888;
+	color: var(--text-muted);
 }
 
 #send_message_btn {
-	background: rgba(60, 60, 60, 0.9);
+	background: var(--bg-input-field);
 	border: none;
-	color: #fff;
+	color: var(--text-primary);
 	border-radius: 50%;
 	width: 44px;
 	height: 44px;
@@ -1245,7 +1329,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 	align-items: center;
 	justify-content: flex-start;
 	padding-top: 15px;
-	background: #161D28;
+	background: var(--bg-main);
 	box-sizing: border-box;
 }
 
@@ -1253,12 +1337,12 @@ body.audio_call_mode #active .dialpad_wrapper {
 #dtmf_destination {
 	height: 70px;
 	padding: 10px;
-	background: #080B10;
-	color: #fff;
+	background: var(--bg-input-deep);
+	color: var(--text-primary);
 	border-radius: 8px;
 	font-size: 45px;
 	font-weight: bold;
-	border: 3px solid #222;
+	border: 3px solid var(--border-subtle);
 	text-align: center;
 	display: block;
 	box-sizing: border-box;
@@ -1279,8 +1363,8 @@ body.audio_call_mode #active .dialpad_wrapper {
 	align-items: center;
 	text-align: center;
 	gap: 3px;
-	background: rgba(0, 0, 0, 0.6);
-	color: #fff;
+	background: var(--dialpad-box-bg);
+	color: var(--text-primary);
 	border-radius: 12px;
 	padding: 0 8px;
 	cursor: pointer;
@@ -1288,12 +1372,12 @@ body.audio_call_mode #active .dialpad_wrapper {
 	-moz-user-select: none;
 	-ms-user-select: none;
 	user-select: none;
-	border: 2px solid #161D28;
+	border: 2px solid var(--bg-main);
 	transition: background-color 0.2s, transform 0.1s;
 }
 
 #dtmf_keypad .dialpad_box:hover {
-	background: rgba(0, 0, 0, 0.3);
+	background: var(--dialpad-box-bg-hover);
 	transform: scale(1.02);
 }
 
@@ -1312,7 +1396,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 	align-items: center;
 	gap: 8px;
 	padding: 8px 12px;
-	background: rgba(0, 0, 0, 0.5);
+	background: var(--settings-row-bg);
 	border-radius: 8px;
 	margin: 0;
 	max-width: 100%;
@@ -1326,7 +1410,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 	align-items: center;
 	gap: 8px;
 	padding: 8px 12px;
-	background: rgba(0, 0, 0, 0.5);
+	background: var(--settings-row-bg);
 	border-radius: 8px;
 	margin: 0;
 	max-width: 100%;
@@ -1337,7 +1421,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 
 .audio_device_label {
 	font-size: 12px;
-	color: #ccc;
+	color: var(--text-secondary);
 	white-space: nowrap;
 	display: flex;
 	align-items: center;
@@ -1351,9 +1435,9 @@ body.audio_call_mode #active .dialpad_wrapper {
 }
 
 .audio_device_select {
-	background: rgba(60, 60, 60, 0.9);
-	border: 2px solid #444;
-	color: #fff;
+	background: var(--bg-input-field);
+	border: 2px solid var(--border-input);
+	color: var(--text-primary);
 	border-radius: 6px;
 	padding: 6px 10px;
 	font-size: 12px;
@@ -1372,8 +1456,8 @@ body.audio_call_mode #active .dialpad_wrapper {
 }
 
 .audio_device_select option {
-	background: #1a1a2e;
-	color: #fff;
+	background: var(--select-option-bg);
+	color: var(--text-primary);
 }
 
 .video_device_selector_container {
@@ -1381,7 +1465,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 	align-items: center;
 	gap: 8px;
 	padding: 8px 12px;
-	background: rgba(0, 0, 0, 0.5);
+	background: var(--settings-row-bg);
 	border-radius: 8px;
 	margin: 0;
 	max-width: 100%;
@@ -1392,7 +1476,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 
 .video_device_label {
 	font-size: 12px;
-	color: #ccc;
+	color: var(--text-secondary);
 	white-space: nowrap;
 	display: flex;
 	align-items: center;
@@ -1406,9 +1490,9 @@ body.audio_call_mode #active .dialpad_wrapper {
 }
 
 .video_device_select {
-	background: rgba(60, 60, 60, 0.9);
-	border: 2px solid #444;
-	color: #fff;
+	background: var(--bg-input-field);
+	border: 2px solid var(--border-input);
+	color: var(--text-primary);
 	border-radius: 6px;
 	padding: 6px 10px;
 	font-size: 12px;
@@ -1427,8 +1511,8 @@ body.audio_call_mode #active .dialpad_wrapper {
 }
 
 .video_device_select option {
-	background: #1a1a2e;
-	color: #fff;
+	background: var(--select-option-bg);
+	color: var(--text-primary);
 }
 
 /* Ringback Selector Styles */
@@ -1437,7 +1521,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 	align-items: center;
 	gap: 8px;
 	padding: 8px 12px;
-	background: rgba(0, 0, 0, 0.5);
+	background: var(--settings-row-bg);
 	border-radius: 8px;
 	margin: 0;
 	max-width: 100%;
@@ -1447,9 +1531,9 @@ body.audio_call_mode #active .dialpad_wrapper {
 }
 
 .ringback_select {
-	background: rgba(60, 60, 60, 0.9);
-	border: 2px solid #444;
-	color: #fff;
+	background: var(--bg-input-field);
+	border: 2px solid var(--border-input);
+	color: var(--text-primary);
 	border-radius: 6px;
 	padding: 6px 10px;
 	font-size: 12px;
@@ -1468,13 +1552,13 @@ body.audio_call_mode #active .dialpad_wrapper {
 }
 
 .ringback_select option {
-	background: #1a1a2e;
-	color: #fff;
+	background: var(--select-option-bg);
+	color: var(--text-primary);
 }
 
 .ringback_label {
 	font-size: 12px;
-	color: #ccc;
+	color: var(--text-secondary);
 	white-space: nowrap;
 	display: flex;
 	align-items: center;
@@ -1485,7 +1569,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 
 .ringback_label i {
 	font-size: 14px;
-	color: #ccc;
+	color: var(--text-secondary);
 }
 
 /* Ringtone Selector Styles */
@@ -1494,7 +1578,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 	align-items: center;
 	gap: 8px;
 	padding: 8px 12px;
-	background: rgba(0, 0, 0, 0.5);
+	background: var(--settings-row-bg);
 	border-radius: 8px;
 	margin: 0;
 	max-width: 100%;
@@ -1504,9 +1588,9 @@ body.audio_call_mode #active .dialpad_wrapper {
 }
 
 .ringtone_select {
-	background: rgba(60, 60, 60, 0.9);
-	border: 2px solid #444;
-	color: #fff;
+	background: var(--bg-input-field);
+	border: 2px solid var(--border-input);
+	color: var(--text-primary);
 	border-radius: 6px;
 	padding: 6px 10px;
 	font-size: 12px;
@@ -1525,13 +1609,13 @@ body.audio_call_mode #active .dialpad_wrapper {
 }
 
 .ringtone_select option {
-	background: #1a1a2e;
-	color: #fff;
+	background: var(--select-option-bg);
+	color: var(--text-primary);
 }
 
 .ringtone_label {
 	font-size: 12px;
-	color: #ccc;
+	color: var(--text-secondary);
 	white-space: nowrap;
 	display: flex;
 	align-items: center;
@@ -1542,7 +1626,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 
 .ringtone_label i {
 	font-size: 14px;
-	color: #ccc;
+	color: var(--text-secondary);
 }
 
 /* Call Waiting Toggle Styles */
@@ -1551,7 +1635,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 	align-items: center;
 	gap: 8px;
 	padding: 8px 12px;
-	background: rgba(0, 0, 0, 0.5);
+	background: var(--settings-row-bg);
 	border-radius: 8px;
 	margin: 0;
 	max-width: 100%;
@@ -1562,7 +1646,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 
 .call_waiting_label {
 	font-size: 12px;
-	color: #ccc;
+	color: var(--text-secondary);
 	white-space: nowrap;
 	display: flex;
 	align-items: center;
@@ -1573,7 +1657,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 
 .call_waiting_label i {
 	font-size: 14px;
-	color: #ccc;
+	color: var(--text-secondary);
 }
 
 .toggle-switch {
@@ -1629,7 +1713,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 	bottom: 66px;
 	left: 0;
 	right: 0;
-	background: #161D28;
+	background: var(--bg-main);
 	padding: 20px;
 	overflow-y: auto;
 	display: none;
@@ -1644,7 +1728,7 @@ body.audio_call_mode #active .dialpad_wrapper {
 	text-align: center;
 	font-size: 28px;
 	font-weight: bold;
-	color: #fff;
+	color: var(--text-primary);
 	margin-bottom: 30px;
 	font-family: sans-serif;
 	display: flex;
@@ -1669,8 +1753,8 @@ body.audio_call_mode #active .dialpad_wrapper {
 }
 
 .settings_section {
-	background: rgba(255,255,255,0.03);
-	border: 1px solid rgba(255,255,255,0.08);
+	background: var(--settings-section-bg);
+	border: 1px solid var(--settings-section-border);
 	border-radius: 12px;
 	padding: 12px 16px;
 	display: flex;
@@ -1685,12 +1769,12 @@ body.audio_call_mode #active .dialpad_wrapper {
 	font-weight: 600;
 	text-transform: uppercase;
 	letter-spacing: 0.5px;
-	color: rgba(255,255,255,0.5);
+	color: var(--settings-header-text);
 	display: flex;
 	align-items: center;
 	gap: 8px;
 	padding-bottom: 8px;
-	border-bottom: 1px solid rgba(255,255,255,0.06);
+	border-bottom: 1px solid var(--settings-header-border);
 }
 
 .settings_section_header i {

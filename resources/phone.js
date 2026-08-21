@@ -762,10 +762,28 @@ function get_phone_setting(key, defaultValue) {
 		var stored = localStorage.getItem('phone_setting_' + key);
 		return stored !== null ? stored : defaultValue;
 	} catch (e) {
-		console.warn('Could not load phone setting ' + key + ':', e);
 		return defaultValue;
 	}
 }
+
+// --- Theme (light / dark) ---------------------------------------------
+var current_theme = get_phone_setting('theme', 'dark');
+
+function apply_theme(theme) {
+	current_theme = (theme === 'light') ? 'light' : 'dark';
+	document.documentElement.classList.toggle('light', current_theme === 'light');
+	save_phone_setting('theme', current_theme);
+	// Keep the settings toggle in sync
+	var toggle = document.getElementById('theme_toggle');
+	if (toggle) {
+		toggle.checked = (current_theme === 'light');
+	}
+}
+
+function toggle_theme() {
+	apply_theme(current_theme === 'light' ? 'dark' : 'light');
+}
+// ----------------------------------------------------------------------
 
 // Check if browser is Chrome/Chromium-based
 function check_chromium_browser() {
@@ -4716,6 +4734,16 @@ document.addEventListener('DOMContentLoaded', function() {
 			call_waiting_config.enabled = this.checked;
 			save_phone_setting('call_waiting', this.checked ? 'true' : 'false');
 			console.log('call_waiting_toggle: Call waiting set to:', call_waiting_config.enabled);
+		});
+	}
+
+	// Apply saved theme and wire up the theme toggle
+	apply_theme(current_theme);
+	var theme_toggle = document.getElementById('theme_toggle');
+	if (theme_toggle) {
+		theme_toggle.addEventListener('change', function() {
+			apply_theme(this.checked ? 'light' : 'dark');
+			console.log('theme_toggle: Theme set to:', current_theme);
 		});
 	}
 
