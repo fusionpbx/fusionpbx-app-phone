@@ -1016,6 +1016,19 @@ body.audio_call_mode #active .dialpad_wrapper {
 	color: var(--text-primary);
 }
 
+/* Initials avatar - shown when a contact has no photo.
+   Background color is set inline from the pastel palette;
+   dark text keeps the initials readable in both themes. */
+.contact_avatar_initials {
+	background-color: #A8D8B9;
+	color: #202124;
+	font-size: 20px;
+	font-weight: 600;
+	font-family: sans-serif;
+	line-height: 1;
+	text-align: center;
+}
+
 .contact_name_primary {
 	font-size: 20px;
 	font-weight: bold;

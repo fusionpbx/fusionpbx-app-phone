@@ -3482,14 +3482,52 @@ function update_action_bar_state(active) {
 // CONTACTS PANEL - AJAX based search and rendering
 // ============================================================
 
-// Build the avatar markup for a contact (round image or icon fallback)
+// Pastel palette for initial avatars - soft tones that read well
+// with dark text in both light and dark themes
+var AVATAR_PASTEL_COLORS = [
+	'#A8D8B9', // pastel green
+	'#AEC6CF', // pastel blue-gray
+	'#FFB3BA', // pastel pink
+	'#FFDFBA', // pastel peach
+	'#B5A8FF', // pastel purple
+	'#C2E8FF', // pastel sky
+	'#F5C6AA', // pastel salmon
+	'#E0C3FC', // pastel lavender
+	'#FFF2B2', // pastel yellow
+	'#B8E0D2', // pastel teal
+	'#FAD0C4', // pastel coral
+	'#BAFFC9'  // pastel mint
+];
+
+// Deterministic hash of a seed string so each contact always
+// gets the same "random" pastel color across re-renders
+function avatar_color_index(seed) {
+	var hash = 0;
+	for (var i = 0; i < seed.length; i++) {
+		hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
+	}
+	return Math.abs(hash) % AVATAR_PASTEL_COLORS.length;
+}
+
+// Extract up to two initials from a display name
+function contact_initials(name) {
+	var parts = (name || '').trim().split(/\s+/).filter(Boolean);
+	if (parts.length === 0) { return '?'; }
+	if (parts.length === 1) { return parts[0].charAt(0).toUpperCase(); }
+	return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
+// Build the avatar markup for a contact (round image or initials fallback)
 function contact_avatar_html(contact) {
 	var size = '48px';
 	if (contact.avatar) {
 		var img_url = '../../core/contacts/contact_attachment.php?id=' + encodeURIComponent(contact.avatar) + '&action=download&sid=' + (typeof window !== 'undefined' && window.session_id ? window.session_id : '');
 		return '<div class="contact_avatar" style="width:' + size + ';height:' + size + ';background-image:url(\'' + img_url + '\');"></div>';
 	}
-	return '<div class="contact_avatar contact_avatar_placeholder" style="width:' + size + ';height:' + size + ';"><i class="fas fa-user"></i></div>';
+	var seed = contact.uuid || contact.name || '';
+	var bg = AVATAR_PASTEL_COLORS[avatar_color_index(seed)];
+	var initials = contact_initials(contact.name);
+	return '<div class="contact_avatar contact_avatar_initials" style="width:' + size + ';height:' + size + ';background-color:' + bg + ';">' + initials + '</div>';
 }
 
 // Render a list of contacts into the contacts_list container
