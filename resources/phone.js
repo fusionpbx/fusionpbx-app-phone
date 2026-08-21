@@ -3504,40 +3504,55 @@ function render_contact_list(contacts) {
 	}
 
 	contacts.forEach(function(contact) {
-		var dialable = contact.dialable || contact.extension || contact.phone || '';
-		if (!dialable) {
+		// Collect the distinct dialable numbers for this contact.
+		// Each number is rendered as its own clickable chip so that the
+		// specific number that is clicked is the one used to place the call.
+		var numbers = [];
+		if (contact.extension) {
+			numbers.push(contact.extension);
+		}
+		if (contact.phone && contact.phone !== contact.extension) {
+			numbers.push(contact.phone);
+		}
+		if (numbers.length === 0) {
 			return; // skip contacts with no number to dial
 		}
+		var dialable = contact.dialable || numbers[0];
 
 		var contactDiv = document.createElement('div');
 		contactDiv.className = 'contact_item';
 		contactDiv.setAttribute('data-dialable', dialable);
+		// Clicking the row (name / avatar) dials the primary number
 		contactDiv.onclick = function() { call_contact(dialable); };
 
 		var avatar_html = contact_avatar_html(contact);
 		var name_html = contact.name ? sanitize_string(contact.name) : '&nbsp;';
 
-		var sub_label = '';
-		if (contact.extension && contact.phone && contact.extension !== contact.phone) {
-			sub_label = sanitize_string(contact.extension) + ' &bull; ' + sanitize_string(contact.phone);
-		}
-		else if (contact.extension) {
-			sub_label = sanitize_string(contact.extension);
-		}
-		else if (contact.phone) {
-			sub_label = sanitize_string(contact.phone);
-		}
-
 		var html = avatar_html;
 		html += '<div class="contact_info">';
 		html += '<div class="contact_name_primary">' + name_html + '</div>';
-		if (sub_label) {
-			html += '<div class="contact_name">' + sub_label + '</div>';
-		}
+		html += '<div class="contact_numbers"></div>';
 		html += '</div>';
 		html += '<div class="contact_dial_icon"><i class="fas fa-phone"></i></div>';
-
 		contactDiv.innerHTML = html;
+
+		// Build each number as an individually clickable chip
+		var numbers_wrapper = contactDiv.querySelector('.contact_numbers');
+		numbers.forEach(function(number) {
+			var chip = document.createElement('span');
+			chip.className = 'contact_number_chip';
+			chip.setAttribute('data-number', number);
+			chip.innerHTML = '<i class="fas fa-phone"></i>';
+			var label = document.createElement('span');
+			label.textContent = number;
+			chip.appendChild(label);
+			chip.onclick = function(e) {
+				e.stopPropagation();
+				call_contact(number);
+			};
+			numbers_wrapper.appendChild(chip);
+		});
+
 		container.appendChild(contactDiv);
 	});
 }
