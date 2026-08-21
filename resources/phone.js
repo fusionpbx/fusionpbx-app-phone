@@ -2368,12 +2368,6 @@ function cycle_local_video_corner() {
 }
 
 // Contacts data (extension 1001-1005)
-var contacts = [
-	{ extension: '1003', name: 'John' },
-	{ extension: '1004', name: 'Jane' },
-	{ extension: '1005', name: 'Bob' }
-];
-
 // Call history storage
 function get_call_history() {
 	try {
@@ -3403,20 +3397,6 @@ function start_new_call() {
 	}
 }
 
-function show_contacts() {
-	// Toggle: if contacts panel is already open, close it
-	if (document.getElementById('contacts').style.display === 'flex') {
-		hide_all_panels();
-		update_action_bar_state(null);
-		return;
-	}
-
-	hide_all_panels();
-	render_contacts();
-	document.getElementById('contacts').style.display = 'flex';
-	update_action_bar_state('contacts');
-}
-
 function show_history() {
 	// Get the dialpad
 	var history = document.getElementById('history');
@@ -3480,25 +3460,151 @@ function update_action_bar_state(active) {
 	}
 }
 
-// Render contacts list
-function render_contacts() {
+// ============================================================
+// CONTACTS PANEL - AJAX based search and rendering
+// ============================================================
+
+// Build the avatar markup for a contact (round image or icon fallback)
+function contact_avatar_html(contact) {
+	var size = '48px';
+	if (contact.avatar) {
+		var img_url = '../../core/contacts/contact_attachment.php?id=' + encodeURIComponent(contact.avatar) + '&action=download&sid=' + (typeof window !== 'undefined' && window.session_id ? window.session_id : '');
+		return '<div class="contact_avatar" style="width:' + size + ';height:' + size + ';background-image:url(\'' + img_url + '\');"></div>';
+	}
+	return '<div class="contact_avatar contact_avatar_placeholder" style="width:' + size + ';height:' + size + ';"><i class="fas fa-user"></i></div>';
+}
+
+// Render a list of contacts into the contacts_list container
+function render_contact_list(contacts) {
 	var container = document.getElementById('contacts_list');
+	if (!container) { return; }
 	container.innerHTML = '';
 
+	if (!contacts || contacts.length === 0) {
+		container.innerHTML = '<div class="contacts_empty"><i class="fas fa-user-slash"></i><span>No contacts found</span></div>';
+		return;
+	}
+
 	contacts.forEach(function(contact) {
+		var dialable = contact.dialable || contact.extension || contact.phone || '';
+		if (!dialable) {
+			return; // skip contacts with no number to dial
+		}
+
 		var contactDiv = document.createElement('div');
 		contactDiv.className = 'contact_item';
-		contactDiv.onclick = function() { call_contact(contact.extension); };
-		contact_html = '	<div class="contact_icon">';
-		contact_html += '	<i class="fas fa-user"></i>';
-		contact_html += '	</div>';
-		contact_html += '	<div class="contact_info">';
-		contact_html += '		<div class="contact_extension">' + sanitize_string(contact.extension) + '</div>';
-		contact_html += '		<div class="contact_name">' + sanitize_string(contact.name) + '</div>';
-		contact_html += '	</div>';
-		contactDiv.innerHTML = contact_html;
+		contactDiv.setAttribute('data-dialable', dialable);
+		contactDiv.onclick = function() { call_contact(dialable); };
+
+		var avatar_html = contact_avatar_html(contact);
+		var name_html = contact.name ? sanitize_string(contact.name) : '&nbsp;';
+
+		var sub_label = '';
+		if (contact.extension && contact.phone && contact.extension !== contact.phone) {
+			sub_label = sanitize_string(contact.extension) + ' &bull; ' + sanitize_string(contact.phone);
+		}
+		else if (contact.extension) {
+			sub_label = sanitize_string(contact.extension);
+		}
+		else if (contact.phone) {
+			sub_label = sanitize_string(contact.phone);
+		}
+
+		var html = avatar_html;
+		html += '<div class="contact_info">';
+		html += '<div class="contact_name_primary">' + name_html + '</div>';
+		if (sub_label) {
+			html += '<div class="contact_name">' + sub_label + '</div>';
+		}
+		html += '</div>';
+		html += '<div class="contact_dial_icon"><i class="fas fa-phone"></i></div>';
+
+		contactDiv.innerHTML = html;
 		container.appendChild(contactDiv);
 	});
+}
+
+// Fetch contacts from the backend (with optional search term)
+function load_contacts(search) {
+	var container = document.getElementById('contacts_list');
+	if (container) {
+		container.innerHTML = '<div class="contacts_empty"><i class="fas fa-circle-notch fa-spin"></i><span>Loading...</span></div>';
+	}
+
+	var url = 'resources/contacts_search.php?search=' + encodeURIComponent(search || '');
+	fetch(url, { credentials: 'same-origin' })
+		.then(function(response) {
+			if (!response.ok) { throw new Error('HTTP ' + response.status); }
+			return response.json();
+		})
+		.then(function(data) {
+			render_contact_list(data);
+		})
+		.catch(function(err) {
+			console.error('load_contacts error:', err);
+			if (container) {
+				container.innerHTML = '<div class="contacts_empty"><i class="fas fa-exclamation-triangle"></i><span>Failed to load contacts</span></div>';
+			}
+		});
+}
+
+// Debounce helper for the contacts search input
+let contacts_search_timer = null;
+function on_contacts_search_input() {
+	var value = document.getElementById('contacts_search').value;
+	update_contacts_clear_button(value);
+	if (contacts_search_timer) {
+		clearTimeout(contacts_search_timer);
+	}
+	contacts_search_timer = setTimeout(function() {
+		load_contacts(value);
+	}, 300);
+}
+
+function update_contacts_clear_button(value) {
+	var clear_btn = document.getElementById('contacts_search_clear');
+	if (clear_btn) {
+		clear_btn.style.display = value ? 'flex' : 'none';
+	}
+}
+
+function clear_contacts_search() {
+	var search_input = document.getElementById('contacts_search');
+	var clear_btn = document.getElementById('contacts_search_clear');
+	if (search_input) {
+		search_input.value = '';
+		search_input.focus();
+	}
+	if (clear_btn) {
+		clear_btn.style.display = 'none';
+	}
+	if (contacts_search_timer) {
+		clearTimeout(contacts_search_timer);
+		contacts_search_timer = null;
+	}
+	load_contacts('');
+}
+
+function show_contacts() {
+	// Toggle: if contacts panel is already open, close it
+	if (document.getElementById('contacts').style.display === 'flex') {
+		hide_all_panels();
+		update_action_bar_state(null);
+		return;
+	}
+
+	hide_all_panels();
+	document.getElementById('contacts').style.display = 'flex';
+	update_action_bar_state('contacts');
+
+	// Reset the search box and load the full list
+	var search_input = document.getElementById('contacts_search');
+	if (search_input) {
+		search_input.value = '';
+		search_input.focus();
+	}
+	update_contacts_clear_button('');
+	load_contacts('');
 }
 
 // Render call history
@@ -4411,6 +4517,13 @@ document.addEventListener('keydown', function(e) {
 		return;
 	}
 
+	// Let the browser handle Backspace/Delete natively when the contacts search input is focused
+	if (document.activeElement && document.activeElement.id === 'contacts_search') {
+		if (e.key === 'Backspace' || e.key === 'Delete') {
+			return;
+		}
+	}
+
 	// Handle DTMF keypad input when keypad is shown during call
 	if (dtmf_keypad_shown) {
 		console.log('DTMF: Keydown detected - key:', e.key, '| dtmf_keypad_shown:', dtmf_keypad_shown);
@@ -4502,6 +4615,32 @@ document.addEventListener('DOMContentLoaded', function() {
 
 	window.addEventListener('resize', apply_video_fit_layout);
 	apply_video_fit_layout();
+
+	// Wire up the contacts search box
+	var contacts_search = document.getElementById('contacts_search');
+	if (contacts_search) {
+		contacts_search.addEventListener('input', on_contacts_search_input);
+		contacts_search.addEventListener('keydown', function(e) {
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				if (contacts_search_timer) {
+					clearTimeout(contacts_search_timer);
+					contacts_search_timer = null;
+				}
+				load_contacts(contacts_search.value);
+			}
+		});
+	}
+
+	// Wire up the contacts search clear button
+	var contacts_clear_btn = document.getElementById('contacts_search_clear');
+	if (contacts_clear_btn) {
+		contacts_clear_btn.addEventListener('click', function(e) {
+			e.preventDefault();
+			e.stopPropagation();
+			clear_contacts_search();
+		});
+	}
 
 	// Initialize audio device enumeration and populate the dropdown
 	enumerate_audio_devices();

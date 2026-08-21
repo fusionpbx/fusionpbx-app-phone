@@ -182,6 +182,13 @@ echo "		</div>\n";
 
 //define the contacts panel
 echo "	<div class='contacts' id='contacts' style='display: none;'>\n";
+echo "		<div class='contacts_toolbar'>\n";
+echo "			<div class='contacts_search_wrapper'>\n";
+echo "				<i class='fas fa-search contacts_search_icon'></i>\n";
+echo "				<input type='text' id='contacts_search' class='contacts_search' placeholder=\"".$text['label-search']."\" autocomplete='off'>\n";
+echo "				<button type='button' class='contacts_search_clear' id='contacts_search_clear' title='Clear search' style='display: none;'><i class='fas fa-times'></i></button>\n";
+echo "			</div>\n";
+echo "		</div>\n";
 echo "		<div class='contacts_list' id='contacts_list'>\n";
 echo "		</div>\n";
 echo "	</div>\n";
@@ -331,9 +338,9 @@ echo "		</div>\n";
 echo "		<div class='action_item' id='action_new_call' onclick='start_new_call();' style='display: none;'><i class='fas fa-phone'></i>\n";
 echo "			<span class='action_label'>New Call</span>\n";
 echo "		</div>\n";
-echo "		<div class='action_item' id='action_contacts' onclick='show_contacts();' style='display: none;'><i class='fas fa-address-book'></i>\n";
-echo "			<span class='action_label'>Contacts</span>\n";
-echo "		</div>\n";
+	echo "		<div class='action_item' id='action_contacts' onclick='show_contacts();'><i class='fas fa-address-book'></i>\n";
+	echo "			<span class='action_label'>Contacts</span>\n";
+	echo "		</div>\n";
 echo "		<div class='action_item' id='action_history'onclick='show_history();'><i class='fas fa-history'></i>\n";
 echo "			<span class='action_label'>History</span>\n";
 echo "		</div>\n";

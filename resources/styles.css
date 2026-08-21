@@ -800,6 +800,135 @@ body.audio_call_mode #active .dialpad_wrapper {
 	text-overflow: ellipsis;
 }
 
+/* Contacts search toolbar */
+.contacts_toolbar {
+	width: 100%;
+	max-width: 600px;
+	margin: 0 auto 15px auto;
+	padding: 0 10px;
+}
+
+.contacts_search_wrapper {
+	position: relative;
+	display: flex;
+	align-items: center;
+}
+
+.contacts_search_icon {
+	position: absolute;
+	left: 14px;
+	color: #888;
+	font-size: 16px;
+	pointer-events: none;
+}
+
+.contacts_search {
+	width: 100%;
+	box-sizing: border-box;
+	background: #252A32;
+	border: 2px solid #333;
+	border-radius: 24px;
+	padding: 12px 44px 12px 40px;
+	color: #fff;
+	font-size: 16px;
+	font-family: sans-serif;
+	outline: none;
+	transition: border-color 0.2s;
+}
+
+.contacts_search:focus {
+	border-color: #1eba00;
+}
+
+.contacts_search::placeholder {
+	color: #888;
+}
+
+.contacts_search_clear {
+	position: absolute;
+	right: 10px;
+	width: 28px;
+	height: 28px;
+	border: none;
+	background: transparent;
+	color: #888;
+	font-size: 14px;
+	cursor: pointer;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	transition: background 0.15s, color 0.15s;
+	z-index: 2;
+}
+
+.contacts_search_clear:hover {
+	background: rgba(255, 255, 255, 0.1);
+	color: #fff;
+}
+
+.contacts_search_clear:active {
+	background: rgba(255, 255, 255, 0.2);
+}
+
+.contacts_search_clear i {
+	font-size: 12px;
+}
+
+/* Round contact avatar (standard size for a contact list) */
+.contact_avatar {
+	border-radius: 50%;
+	background-color: #1eba00;
+	background-size: cover;
+	background-position: center;
+	background-repeat: no-repeat;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	overflow: hidden;
+}
+
+.contact_avatar i {
+	font-size: 22px;
+	color: #fff;
+}
+
+.contact_name_primary {
+	font-size: 20px;
+	font-weight: bold;
+	margin-bottom: 3px;
+	color: #fff;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.contact_dial_icon {
+	flex-shrink: 0;
+	color: #1eba00;
+	font-size: 18px;
+	padding: 8px;
+	opacity: 0.7;
+}
+
+.contacts_empty {
+	text-align: center;
+	color: #888;
+	padding: 50px 20px;
+	font-size: 16px;
+	font-family: sans-serif;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 12px;
+}
+
+.contacts_empty i {
+	font-size: 36px;
+}
+
 /* History List Styles */
 .history_list {
 	max-width: 600px;
