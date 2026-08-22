@@ -4038,32 +4038,6 @@ function send() {
 	}
 }
 
-function mute_video(destination) {
-	let selected_call = get_selected_call_session();
-	if (!selected_call) { return; }
-
-	if (selected_call.session) {
-		selected_call.session.mute({video: true});
-	}
-	document.getElementById('local_video').style.display = "none";
-	document.getElementById('mute_video').style.display = "none";
-	document.getElementById('unmute_video').style.display = "inline";
-	sync_call_action_controls();
-}
-
-function unmute_video(destination) {
-	let selected_call = get_selected_call_session();
-	if (!selected_call) { return; }
-
-	if (selected_call.session) {
-		selected_call.session.unmute({video: true});
-	}
-	document.getElementById('local_video').style.display = "inline";
-	document.getElementById('mute_video').style.display = "inline";
-	document.getElementById('unmute_video').style.display = "none";
-	sync_call_action_controls();
-}
-
 // ============================================================
 // MULTI-CALL: Blind Transfer (Updated for multi-call)
 // ============================================================

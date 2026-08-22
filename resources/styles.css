@@ -29,11 +29,15 @@
 	--select-option-bg: #1a1a2e;
 	--accent-green: #1eba00;
 	--accent-blue: #1E90FF;
+	--accent-red: #ba0000;
+	--accent-red-hover: #d40000;
+	--accent-missed: #ff4444;
 	--video-bg: #000;
 	--caller-id-bg: rgba(0, 0, 0, 0.8);
 	--overlay-bg: rgba(22, 29, 40, 0.95);
 	--hover-bg: rgba(255, 255, 255, 0.12);
 	--active-bg: rgba(255, 255, 255, 0.15);
+	--focus-ring: 0 0 0 2px var(--accent-green);
 }
 
 html.light {
@@ -75,29 +79,47 @@ html.light {
 	--select-option-bg: #ffffff;
 	--accent-green: #1eba00;
 	--accent-blue: #1E90FF;
+	--accent-red: #ba0000;
+	--accent-red-hover: #d40000;
+	--accent-missed: #ff4444;
 	--video-bg: #1a1a1a;
 	--caller-id-bg: rgba(255, 255, 255, 0.95);
 	--overlay-bg: rgba(240, 242, 245, 0.95);
 	--hover-bg: rgba(0, 0, 0, 0.06);
 	--active-bg: rgba(0, 0, 0, 0.10);
+	--focus-ring: 0 0 0 2px var(--accent-green);
+}
+
+* {
+	box-sizing: border-box;
 }
 
 body {
 	background: var(--bg-main);
-	margin: 5;
+	margin: 0;
+	padding: 0;
 	overflow: hidden;
 	color: var(--text-primary);
+	font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
 }
 
-.inner {
-	position: absolute;
+/* Reset native button chrome so dialpad/action buttons render consistently */
+button {
+	appearance: none;
+	-webkit-appearance: none;
+	font: inherit;
+	letter-spacing: inherit;
+	margin: 0;
+	border: 0;
+	background: transparent;
 }
 
-.buttons{
-	position: fixed;
-	bottom: 0;
-	right: 0;
-	border: 1px solid rgba(255, 255, 255, 0);
+button::-moz-focus-inner {
+	border: 0;
+	padding: 0;
 }
 
 /* Main video container - full screen behind controls */
@@ -359,20 +381,14 @@ video::-webkit-media-controls-start-playback-button {
 	font-size: 10px;
 }
 
-.dialpad_box.audio_call {
-	/*background: #1E90FF;*/
-}
-
 .dialpad_box.audio_call:hover {
-	background: #1E90FF;
-}
-
-.dialpad_box.video_call {
-	/*background: #1E90FF;*/
+	background: var(--accent-blue);
+	color: #fff;
 }
 
 .dialpad_box.video_call:hover {
-	background: #1E90FF;
+	background: var(--accent-blue);
+	color: #fff;
 }
 
 .dialpad_box.delete,
@@ -397,6 +413,123 @@ video::-webkit-media-controls-start-playback-button {
 .dialpad_box.mute:hover,
 .dialpad_box.hold:hover {
 	background: var(--dialpad-box-bg-hover);
+}
+
+/* State-colored buttons (decline/answer/unmute/unhold).
+   These use the accent variables so they stay consistent
+   between dark and light themes. */
+.dialpad_box.decline {
+	background: var(--accent-red);
+}
+
+.dialpad_box.decline:hover {
+	background: var(--accent-red-hover);
+}
+
+.dialpad_box.answer_audio {
+	background: var(--accent-green);
+}
+
+.dialpad_box.answer_audio:hover {
+	filter: brightness(1.1);
+}
+
+.dialpad_box.answer_video {
+	background: var(--accent-blue);
+}
+
+.dialpad_box.answer_video:hover {
+	filter: brightness(1.1);
+}
+
+.dialpad_box.unmute {
+	color: var(--accent-red);
+}
+
+.dialpad_box.unhold {
+	color: var(--accent-green);
+}
+
+/* Colored action buttons should always use white text,
+   even in light mode where --text-primary is dark. */
+.dialpad_box.decline,
+.dialpad_box.decline strong,
+.dialpad_box.decline sup,
+.dialpad_box.decline i,
+.dialpad_box.answer_audio,
+.dialpad_box.answer_audio strong,
+.dialpad_box.answer_audio sup,
+.dialpad_box.answer_audio i,
+.dialpad_box.answer_video,
+.dialpad_box.answer_video strong,
+.dialpad_box.answer_video sup,
+.dialpad_box.answer_video i,
+.dialpad_box.audio_call:hover,
+.dialpad_box.audio_call:hover strong,
+.dialpad_box.audio_call:hover sup,
+.dialpad_box.audio_call:hover i,
+.dialpad_box.video_call:hover,
+.dialpad_box.video_call:hover strong,
+.dialpad_box.video_call:hover sup,
+.dialpad_box.video_call:hover i {
+	color: #fff;
+}
+
+/* Keyboard focus — visible ring on every interactive control
+   without stealing the design. */
+.dialpad_box:focus-visible,
+.action_item:focus-visible,
+.contact_number_chip:focus-visible,
+.contacts_search_clear:focus-visible,
+button:focus-visible,
+a:focus-visible {
+	outline: none;
+	box-shadow: var(--focus-ring);
+}
+
+/* Status color variants — key off the icon class the JS sets */
+.status_icon i {
+	color: var(--accent-green);
+}
+
+.status_icon i.fa-circle-exclamation,
+.status_icon i.fa-exclamation-triangle,
+.status_icon i.fa-triangle-exclamation {
+	color: var(--accent-missed);
+}
+
+.status_icon i.fa-pause,
+.status_icon i.fa-hourglass-half,
+.status_icon i.fa-ellipsis {
+	color: var(--accent-blue);
+}
+
+.status_icon i.fa-phone-slash,
+.status_icon i.fa-ban,
+.status_icon i.fa-xmark {
+	color: var(--accent-red);
+}
+
+/* Reduced motion — respect user preference */
+@media (prefers-reduced-motion: reduce) {
+	.dialpad_box,
+	.action_item,
+	.contact_item,
+	.history_item,
+	.active_calls_panel_item,
+	.message_conversation_item,
+	.contact_number_chip,
+	.toggle-slider,
+	.toggle-slider:before {
+		transition: none !important;
+	}
+
+	.dialpad_box:hover,
+	.dialpad_box:active,
+	.action_item:hover,
+	.action_item:active {
+		transform: none !important;
+	}
 }
 
 strong {
