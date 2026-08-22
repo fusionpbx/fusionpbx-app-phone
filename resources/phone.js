@@ -92,8 +92,7 @@ async function send_call(use_video) {
 
 	// Update status bar
 	var call_type = use_video ? 'Calling Video ' : 'Calling ';
-	document.getElementById('status_text').textContent = call_type + destination;
-	document.querySelector('#status_bar .status_icon i').className = use_video ? 'fas fa-video' : 'fas fa-phone';
+	show_status(call_type + destination, use_video ? 'fas fa-video' : 'fas fa-phone', 'calling');
 
 	set_hangup_visibility(true);
 	if (use_video) {
@@ -1475,9 +1474,79 @@ function start_call_tone(mode) {
 	// play_generated_tone(mode);
 }
 
-function show_status(text, icon_class) {
+function show_status(text, icon_class, state) {
+	var status_bar = document.getElementById('status_bar');
+	if (status_bar && state) {
+		status_bar.setAttribute('data-state', state);
+	}
 	document.getElementById('status_text').textContent = text;
-	document.querySelector('#status_bar .status_icon i').className = icon_class;
+	var icon = document.querySelector('#status_bar .status_icon i');
+	if (icon) {
+		icon.className = icon_class;
+	}
+	update_status_bar_indicators();
+}
+
+// Update the right-hand status chips (active call count, mic mute, registration)
+function update_status_bar_indicators() {
+	try {
+		var count = (typeof get_active_call_count === 'function') ? get_active_call_count() : 0;
+		var countChip = document.getElementById('status_chip_callcount');
+		var countVal = document.getElementById('status_callcount');
+		if (countChip) {
+			countChip.classList.toggle('active', count > 0);
+		}
+		if (countVal) {
+			countVal.textContent = String(count);
+		}
+
+		var muteChip = document.getElementById('status_chip_mute');
+		if (muteChip) {
+			var is_muted = !!(typeof audio_muted !== 'undefined' && audio_muted);
+			muteChip.style.display = is_muted ? 'inline-flex' : 'none';
+		}
+	} catch (e) {
+		console.warn('update_status_bar_indicators failed:', e);
+	}
+}
+
+// Call duration timer in the status bar (replaces the live clock)
+function format_call_duration(ms) {
+	var totalSeconds = Math.floor(ms / 1000);
+	var hours = Math.floor(totalSeconds / 3600);
+	var minutes = Math.floor((totalSeconds % 3600) / 60);
+	var seconds = totalSeconds % 60;
+	if (hours > 0) {
+		return hours + ':' + (minutes < 10 ? '0' : '') + minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+	}
+	return minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+}
+
+var status_clock_timer = null;
+function update_call_duration_display() {
+	var chip = document.getElementById('status_chip_clock');
+	var el = document.getElementById('status_clock');
+	if (!chip || !el) return;
+
+	var selected = get_selected_call_session();
+	if (selected && selected.start_time) {
+		var duration = Date.now() - selected.start_time;
+		el.textContent = format_call_duration(duration);
+		chip.style.display = '';
+	} else {
+		chip.style.display = 'none';
+	}
+}
+
+function start_call_duration_timer() {
+	function tick() {
+		update_call_duration_display();
+	}
+	tick();
+	if (status_clock_timer) {
+		clearInterval(status_clock_timer);
+	}
+	status_clock_timer = setInterval(tick, 1000);
 }
 
 function format_caller_id_for_status(display_name, number) {
@@ -1497,11 +1566,11 @@ function update_active_call_status(use_video, display_name, number, duration_tex
 		if (duration_text) {
 			status_text += ' - ' + duration_text;
 		}
-		show_status(status_text, 'fas fa-video');
+		show_status(status_text, 'fas fa-video', 'in-call');
 		return;
 	}
 
-	show_status('Call in progress', 'fas fa-phone');
+	show_status('Call in progress', 'fas fa-phone', 'in-call');
 }
 
 function sync_call_action_controls() {
@@ -2173,22 +2242,22 @@ function update_idle_status() {
 	// Show Camera Status
 	var camera_status = camera_available ? '' : ' Camera unavailable';
 	if (registration_state === 'registered') {
-		show_status('Ready' + camera_status, 'fas fa-circle');
+		show_status('Ready' + camera_status, 'fas fa-circle', 'ready');
 	}
 	else if (registration_state === 'connecting') {
-		show_status('Connecting' + camera_status, 'fas fa-circle-notch');
+		show_status('Connecting' + camera_status, 'fas fa-circle-notch fa-spin', 'connecting');
 	}
 	else if (registration_state === 'failed') {
-		show_status('Registration failed', 'fas fa-exclamation-circle');
+		show_status('Registration failed', 'fas fa-exclamation-circle', 'failed');
 	}
 	else {
-		show_status('Disconnected', 'fas fa-exclamation-circle');
+		show_status('Disconnected', 'fas fa-exclamation-circle', 'disconnected');
 	}
 }
 
 function show_temporary_status(text, icon_class) {
 	clear_transient_status();
-	show_status(text, icon_class);
+	show_status(text, icon_class, 'transient');
 	transient_status_timeout = setTimeout(function() {
 		transient_status_timeout = null;
 		update_idle_status();
@@ -2268,6 +2337,11 @@ function update_status_bar() {
 
 		// Duration is now shown in the active call switcher, not in the status bar
 		document.getElementById('status_text').innerHTML = caller_info || 'Call in progress';
+		var bar = document.getElementById('status_bar');
+		if (bar) {
+			bar.setAttribute('data-state', 'in-call');
+		}
+		update_status_bar_indicators();
 	} else {
 		update_idle_status();
 	}
@@ -2679,8 +2753,7 @@ user_agent.on('invite', function (s) {
 
 	// Update status bar for incoming call
 	var incoming_type = session.has_video ? 'Incoming Video Call' : 'Incoming Call';
-	document.getElementById('status_text').textContent = incoming_type;
-	document.querySelector('#status_bar .status_icon i').className = session.has_video ? 'fas fa-video' : 'fas fa-phone-volume';
+	show_status(incoming_type, session.has_video ? 'fas fa-video' : 'fas fa-phone-volume', 'ringing');
 
 	// Play the ringtone
 	start_call_tone('incoming');
@@ -4833,6 +4906,10 @@ document.addEventListener('DOMContentLoaded', function() {
 			console.log('call_waiting_toggle: Call waiting set to:', call_waiting_config.enabled);
 		});
 	}
+
+	// Start the call duration timer and refresh the status-bar indicators
+	start_call_duration_timer();
+	update_status_bar_indicators();
 
 	// Apply saved theme and wire up the theme toggle
 	apply_theme(current_theme);

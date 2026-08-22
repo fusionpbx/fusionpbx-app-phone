@@ -800,31 +800,127 @@ sup {
 	top: 0;
 	left: 0;
 	right: 0;
-	height: 38px;
-	background: var(--bg-bar);
+	height: 40px;
+	background: color-mix(in srgb, var(--bg-bar) 82%, transparent);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
 	display: flex;
 	align-items: center;
-	justify-content: center;
-	gap: 15px;
-	/*z-index: 1000;*/
-	padding: 0 20px;
-	font-size: 18px;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 0 16px;
+	font-size: 14px;
 	color: var(--text-primary);
 	font-family: sans-serif;
-	box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+	box-shadow: 0 2px 10px rgba(0,0,0,0.35);
+	border-bottom: 1px solid transparent;
+	border-image: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent-green) 45%, transparent), transparent) 1;
+	z-index: 4000;
 }
 
+.status_zone {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.status_zone_left {
+	flex: 0 0 auto;
+}
+
+.status_zone_center {
+	flex: 1 1 auto;
+	justify-content: center;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	color: var(--text-secondary);
+	font-size: 13px;
+	letter-spacing: 0.3px;
+}
+
+.status_zone_right {
+	flex: 0 0 auto;
+	gap: 6px;
+}
+
+/* Status dot with pulse ring */
 .status_icon {
-	font-size: 14px;
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	font-size: 11px;
 }
 
 .status_icon i {
-	color: #1eba00;
+	color: var(--status-color, #1eba00);
+	line-height: 0;
 }
 
+/* State colors — keyed off the data-state attribute set by JS */
+.status_bar[data-state='ready']        { --status-color: var(--accent-green); }
+.status_bar[data-state='ready'] .status_text { color: var(--text-primary); }
+.status_bar[data-state='connecting']   { --status-color: var(--accent-blue); }
+.status_bar[data-state='failed']       { --status-color: var(--accent-red); }
+.status_bar[data-state='disconnected'] { --status-color: var(--accent-missed); }
+.status_bar[data-state='calling']      { --status-color: var(--accent-blue); }
+.status_bar[data-state='in-call']      { --status-color: var(--accent-green); }
+.status_bar[data-state='ringing']      { --status-color: var(--accent-green); }
+.status_bar[data-state='transient']    { --status-color: var(--accent-blue); }
+
 .status_text {
+	font-weight: 400;
+	letter-spacing: 0.3px;
+	font-size: 13px;
+	color: var(--text-primary);
+}
+
+/* Status chips (right-side indicators) */
+.status_chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	height: 26px;
+	padding: 0 9px;
+	border-radius: 13px;
+	background: var(--hover-bg);
+	border: 1px solid var(--border-subtle);
+	font-size: 12px;
+	color: var(--text-secondary);
+	line-height: 1;
+	white-space: nowrap;
+}
+
+.status_chip i {
+	font-size: 12px;
+}
+
+.status_chip_value {
+	font-variant-numeric: tabular-nums;
 	font-weight: 600;
-	letter-spacing: 0.5px;
+	color: var(--text-primary);
+}
+
+.status_chip_callcount .status_chip_value {
+	min-width: 14px;
+	text-align: center;
+}
+
+.status_chip_mute {
+	color: var(--accent-red);
+	background: color-mix(in srgb, var(--accent-red) 14%, transparent);
+	border-color: color-mix(in srgb, var(--accent-red) 35%, transparent);
+}
+
+.status_chip_callcount.active .status_chip_value {
+	color: var(--accent-green);
+}
+.status_bar[data-state='in-call'] .status_chip_callcount i {
+	color: var(--accent-green);
 }
 
 /* Action Bar Styles */
@@ -920,7 +1016,7 @@ sup {
 
 .action_item.action_item_toggle_active i,
 .action_item.action_item_toggle_active .action_label {
-	color: #9dff90;
+	color: #1eba00;
 }
 
 body.audio_call_mode #active #answer_time,
@@ -2309,8 +2405,21 @@ body.audio_call_mode #active .dialpad_wrapper {
 	/* Adjust status bar */
 	.status_bar {
 		height: 40px;
-		font-size: 16px;
+		font-size: 14px;
 		padding: 0 12px;
+	}
+
+	.status_zone_center {
+		display: none;
+	}
+
+	.status_text {
+		font-size: 11px;
+	}
+
+	.status_chip {
+		height: 24px;
+		padding: 0 7px;
 	}
 }
 
@@ -2514,17 +2623,30 @@ body.audio_call_mode #active .dialpad_wrapper {
 	/* Compact status bar */
 	.status_bar {
 		height: 36px;
-		font-size: 14px;
+		font-size: 13px;
 		padding: 0 8px;
-		gap: 10px;
+		gap: 8px;
 	}
 
-	.status_icon {
-		font-size: 12px;
+	.status_zone_right {
+		gap: 4px;
 	}
 
 	.status_text {
-		font-size: 14px;
+		font-size: 11px;
+		letter-spacing: 0.5px;
+	}
+
+	.status_chip {
+		height: 22px;
+		padding: 0 6px;
+		font-size: 11px;
+		border-radius: 11px;
+	}
+
+	.status_chip_clock .status_chip_value,
+	.status_chip_callcount .status_chip_value {
+		display: none;
 	}
 }
 

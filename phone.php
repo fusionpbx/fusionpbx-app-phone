@@ -142,9 +142,17 @@ echo "\n";
 echo "	</script>\n";
 
 //define the status bar
-echo "	<div class='status_bar' id='status_bar'>\n";
-echo "		<span class='status_icon'><i class='fas fa-circle'></i></span>\n";
-echo "		<span class='status_text' id='status_text'>Ready</span>\n";
+echo "	<div class='status_bar' id='status_bar' data-state='connecting'>\n";
+echo "		<div class='status_zone status_zone_left'>\n";
+echo "			<span class='status_icon' id='status_icon'><i class='fas fa-circle-notch fa-spin'></i></span>\n";
+echo "			<span class='status_text' id='status_text'>Connecting</span>\n";
+echo "		</div>\n";
+echo "		<div class='status_zone status_zone_center' id='status_center'></div>\n";
+echo "		<div class='status_zone status_zone_right'>\n";
+echo "			<span class='status_chip status_chip_callcount' id='status_chip_callcount' title='Active calls' onclick='toggle_active_calls_panel();' style='cursor:pointer;'><i class='fas fa-phone-volume'></i><span id='status_callcount' class='status_chip_value'>0</span></span>\n";
+echo "			<span class='status_chip status_chip_mute' id='status_chip_mute' title='Muted' style='display:none;'><i class='fas fa-microphone-slash'></i></span>\n";
+echo "			<span class='status_chip status_chip_clock' id='status_chip_clock' title='Call duration' style='display:none;'><i class='fas fa-stopwatch'></i><span id='status_clock' class='status_chip_value'>0:00</span></span>\n";
+echo "		</div>\n";
 echo "	</div>\n";
 
 //start the body_content
