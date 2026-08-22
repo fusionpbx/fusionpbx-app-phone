@@ -3686,54 +3686,124 @@ function render_history() {
 	var history = get_call_history();
 
 	if (history.length === 0) {
-		container.innerHTML = '<div style="text-align: center; color: #ccc; padding: 40px; font-size: 16px;">No call history</div>';
+		container.innerHTML =
+			'<div class="history_empty">' +
+			'	<i class="fas fa-history"></i>' +
+			'	<div class="history_empty_title">No Call History</div>' +
+			'	<div class="history_empty_sub">Your recent calls will appear here</div>' +
+			'</div>';
 		return;
 	}
 
+	// Helper: get a date label for grouping
+	function get_date_label(ts) {
+		var d = new Date(ts);
+		var today = new Date();
+		var yesterday = new Date();
+		yesterday.setDate(today.getDate() - 1);
+
+		function sameDay(a, b) {
+			return a.getFullYear() === b.getFullYear() &&
+				   a.getMonth() === b.getMonth() &&
+				   a.getDate() === b.getDate();
+		}
+
+		if (sameDay(d, today)) return 'Today';
+		if (sameDay(d, yesterday)) return 'Yesterday';
+
+		var daysAgo = Math.floor((today - d) / 86400000);
+		if (daysAgo < 7) {
+			return d.toLocaleDateString([], { weekday: 'long', timeZone: time_zone });
+		}
+		return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric', timeZone: time_zone });
+	}
+
+	// Helper: format time display
+	function get_time_display(ts, isToday) {
+		var d = new Date(ts);
+		if (isToday) {
+			return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: time_zone });
+		}
+		return d.toLocaleDateString([], { month: 'short', day: 'numeric', timeZone: time_zone }) +
+			', ' + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: time_zone });
+	}
+
+	// Helper: compact duration
+	function compact_duration(seconds) {
+		if (seconds < 60) return seconds + 's';
+		var m = Math.floor(seconds / 60);
+		var s = seconds % 60;
+		if (m < 60) return m + 'm' + (s > 0 ? ' ' + s + 's' : '');
+		var h = Math.floor(m / 60);
+		m = m % 60;
+		return h + 'h' + (m > 0 ? ' ' + m + 'm' : '');
+	}
+
+	// Group entries by date
+	var groups = {};
+	var group_order = [];
 	history.forEach(function(entry) {
-		var historyDiv = document.createElement('div');
-		historyDiv.className = 'history_item';
-		historyDiv.onclick = function() { call_number(entry.number); };
-
-		var icon_class = 'fa-phone';
-		if (entry.call_type === 'outgoing') {
-			icon_class = 'fa-phone';
-		} else if (entry.call_type === 'incoming') {
-			icon_class = 'fa-phone';
-		} else if (entry.call_type === 'missed') {
-			icon_class = 'fa-phone-slash';
+		var label = get_date_label(entry.timestamp);
+		if (!groups[label]) {
+			groups[label] = [];
+			group_order.push(label);
 		}
+		groups[label].push(entry);
+	});
 
-		var date = new Date(entry.timestamp);
-		var time_str = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-		var ago_str = time_ago_string(entry.timestamp);
+	group_order.forEach(function(dateLabel) {
+		// Date header
+		var header = document.createElement('div');
+		header.className = 'history_date_header';
+		header.textContent = dateLabel;
+		container.appendChild(header);
 
-		// Get time in local timezone
-		var time_str = date.toLocaleTimeString([], {
-			timeZone: time_zone,
-			hour: '2-digit',
-			minute: '2-digit',
-			hour12: true  // true = 12-hour format, false = 24-hour
+		groups[dateLabel].forEach(function(entry) {
+			var item = document.createElement('div');
+			item.className = 'history_item';
+			item.onclick = function(e) {
+				if (e.target.closest('.history_redial_btn')) return;
+				call_number(entry.number);
+			};
+
+			// Icon
+			var icon_class = 'fa-phone';
+			if (entry.call_type === 'outgoing') icon_class = 'fa-arrow-up';
+			else if (entry.call_type === 'incoming') icon_class = 'fa-arrow-down';
+			else if (entry.call_type === 'missed') icon_class = 'fa-phone-slash';
+
+			// Time display
+			var isToday = (dateLabel === 'Today');
+			var time_str = get_time_display(entry.timestamp, isToday);
+
+			// Duration
+			var duration_str = '';
+			if (entry.call_type !== 'missed' && entry.duration > 0) {
+				duration_str = ' \u00B7 ' + compact_duration(entry.duration);
+			}
+
+			// Build HTML
+			var html = '';
+			html += '<div class="history_icon ' + entry.call_type + '">';
+			html += '<i class="fas ' + icon_class + '"></i>';
+			if (entry.is_video) {
+				html += '<span class="history_video_badge"><i class="fas fa-video"></i></span>';
+			}
+			html += '</div>';
+
+			html += '<div class="history_details">';
+			html += '<div class="history_number">' + sanitize_string(entry.number) + '</div>';
+			html += '<div class="history_meta"><span class="history_type_' + entry.call_type + '">' + call_type_name(entry.call_type) + '</span>' + duration_str + '</div>';
+			html += '</div>';
+
+			html += '<div class="history_right">';
+			html += '<span class="history_time">' + time_str + '</span>';
+			html += '<button class="history_redial_btn" title="Redial" aria-label="Redial"><i class="fas fa-phone"></i></button>';
+			html += '</div>';
+
+			item.innerHTML = html;
+			container.appendChild(item);
 		});
-
-		// Format duration if available
-		var duration_str = '';
-		if (entry.call_type !== 'missed' && entry.duration > 0) {
-			duration_str = ' • ' + format_duration(entry.duration);
-		}
-
-		history_html = '	<div class="history_icon ' + entry.call_type + '">';
-		history_html += '	<i class="fas ' + icon_class + '"></i>';
-		history_html += '	</div>';
-		history_html += '	<div class="history_details">';
-		history_html += '		<div class="history_number">' + sanitize_string(entry.number) + '</div>';
-		history_html += '		<div class="history_meta">' + call_type_name(entry.call_type) + duration_str + ' • ' + ago_str + '</div>';
-		history_html += '	</div>';
-		history_html += '	<div class="history_time">';
-		history_html += '		' + time_str;
-		history_html += '	</div>'
-		historyDiv.innerHTML = history_html;
-		container.appendChild(historyDiv);
 	});
 }
 

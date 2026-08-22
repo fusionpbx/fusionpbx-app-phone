@@ -1200,37 +1200,52 @@ body.audio_call_mode #active .dialpad_wrapper {
 .history_list {
 	max-width: 600px;
 	margin: 0 auto;
+	width: 100%;
+}
+
+.history_date_header {
+	font-size: 12px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	color: var(--text-muted);
+	padding: 18px 4px 8px 4px;
+	border-bottom: 1px solid var(--border-subtle);
+	margin-bottom: 12px;
 }
 
 .history_item {
 	background: var(--bg-item);
 	color: var(--text-primary);
-	padding: 18px 15px;
-	margin-bottom: 10px;
-	border-radius: 8px;
+	padding: 14px 16px;
+	margin-bottom: 8px;
+	border-radius: 12px;
 	cursor: pointer;
 	display: flex;
 	align-items: center;
-	gap: 15px;
-	transition: background 0.2s;
+	gap: 14px;
+	transition: background 0.2s, box-shadow 0.2s;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .history_item:hover {
 	background: var(--bg-item-hover);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
 .history_icon {
-	width: 50px;
-	height: 50px;
+	width: 44px;
+	height: 44px;
 	border-radius: 50%;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	flex-shrink: 0;
+	position: relative;
 }
 
 .history_icon i {
-	font-size: 20px;
+	font-size: 18px;
 }
 
 .history_icon.outgoing {
@@ -1245,28 +1260,128 @@ body.audio_call_mode #active .dialpad_wrapper {
 	background: #ff4444;
 }
 
+.history_video_badge {
+	position: absolute;
+	bottom: -2px;
+	right: -2px;
+	width: 18px;
+	height: 18px;
+	background: var(--bg-item);
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: 1.5px solid var(--bg-main);
+}
+
+.history_video_badge i {
+	font-size: 9px;
+	color: var(--accent-blue);
+}
+
 .history_details {
 	flex: 1;
 	min-width: 0;
 }
 
 .history_number {
-	font-size: 20px;
-	font-weight: bold;
-	margin-bottom: 4px;
+	font-size: 17px;
+	font-weight: 600;
+	margin-bottom: 3px;
 }
 
 .history_meta {
-	font-size: 13px;
+	font-size: 12px;
 	color: var(--text-secondary);
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.history_type_outgoing {
+	color: #1eba00;
+	font-weight: 500;
+}
+
+.history_type_incoming {
+	color: #1e90ff;
+	font-weight: 500;
+}
+
+.history_type_missed {
+	color: #ff4444;
+	font-weight: 500;
+}
+
+.history_right {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 4px;
+	flex-shrink: 0;
 }
 
 .history_time {
-	font-size: 20px;
-	font-family: monospace;
-	color: var(--text-tertiary);
-	min-width: 80px;
-	text-align: right;
+	font-size: 12px;
+	color: var(--text-muted);
+	white-space: nowrap;
+}
+
+.history_redial_btn {
+	width: 32px;
+	height: 32px;
+	border: none;
+	background: var(--accent-green);
+	color: #fff;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 0.15s, transform 0.15s;
+	font-size: 14px;
+}
+
+.history_item:hover .history_redial_btn {
+	opacity: 1;
+}
+
+.history_redial_btn:hover {
+	transform: scale(1.1);
+	background: #22cc00;
+}
+
+.history_redial_btn:active {
+	transform: scale(0.95);
+}
+
+/* History empty state */
+.history_empty {
+	text-align: center;
+	color: var(--text-muted);
+	padding: 60px 20px;
+	font-size: 16px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 12px;
+}
+
+.history_empty i {
+	font-size: 48px;
+	opacity: 0.4;
+}
+
+.history_empty_title {
+	font-size: 18px;
+	font-weight: 600;
+	color: var(--text-secondary);
+}
+
+.history_empty_sub {
+	font-size: 14px;
+	color: var(--text-muted);
 }
 
 #messages {
@@ -2552,6 +2667,15 @@ body.audio_call_mode #active .dialpad_wrapper {
 
 	.action_item:active {
 		transform: scale(0.95);
+	}
+
+	/* Always show redial button on touch devices (no hover) */
+	.history_redial_btn {
+		opacity: 0.6;
+	}
+
+	.history_item:active .history_redial_btn {
+		opacity: 1;
 	}
 }
 
