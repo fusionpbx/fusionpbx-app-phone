@@ -1748,19 +1748,37 @@ function toggle_audio_hold_action() {
 }
 
 function toggle_video_mute_action() {
-	if (!session || !active_call_is_video) { return; }
+	// Get the selected call session (supports multi-call)
+	let selected_call = get_selected_call_session();
+	let current_session = (selected_call && selected_call.session) ? selected_call.session : session;
+
+	if (!current_session || !current_session.mediaHandler) { return; }
+
 	var local_video_wrapper = document.getElementById('local_video_wrapper');
 	var local_video = document.getElementById('local_video');
-	if (!local_video_wrapper || !local_video) {
-		return;
+
+	// Determine current video-mute state from the sender tracks
+	var is_video_muted = local_video_wrapper && local_video_wrapper.classList.contains('local_preview_hidden');
+
+	// Toggle: if currently muted -> unmute, else -> mute
+	var new_muted_state = !is_video_muted;
+
+	// Toggle the video sender track(s)
+	if (current_session.mediaHandler.peerConnection && typeof current_session.mediaHandler.peerConnection.getSenders === 'function') {
+		var senders = current_session.mediaHandler.peerConnection.getSenders();
+		for (var i = 0; i < senders.length; i++) {
+			if (senders[i].track && senders[i].track.kind === 'video') {
+				senders[i].track.enabled = !new_muted_state;
+			}
+		}
 	}
 
-	local_video_wrapper.classList.toggle('local_preview_hidden');
-
-	if (local_video_wrapper.classList.contains('local_preview_hidden')) {
-		local_video.style.display = 'none';
-	} else {
-		local_video.style.display = 'inline';
+	// Toggle local preview visibility for visual feedback
+	if (local_video_wrapper) {
+		local_video_wrapper.classList.toggle('local_preview_hidden', new_muted_state);
+	}
+	if (local_video) {
+		local_video.style.display = new_muted_state ? 'none' : 'inline';
 	}
 
 	sync_call_action_controls();
