@@ -3633,9 +3633,9 @@ function render_contact_list(contacts) {
 	}
 
 	contacts.forEach(function(contact) {
-		// Collect the distinct dialable numbers for this contact.
-		// Each number is rendered as its own clickable chip so that the
-		// specific number that is clicked is the one used to place the call.
+		// Collect the numbers to display for this contact.
+		// They are shown for reference only; calls are placed
+		// from the contact details page.
 		var numbers = [];
 		if (contact.extension) {
 			numbers.push(contact.extension);
@@ -3643,16 +3643,12 @@ function render_contact_list(contacts) {
 		if (contact.phone && contact.phone !== contact.extension) {
 			numbers.push(contact.phone);
 		}
-		if (numbers.length === 0) {
-			return; // skip contacts with no number to dial
-		}
-		var dialable = contact.dialable || numbers[0];
 
 		var contactDiv = document.createElement('div');
 		contactDiv.className = 'contact_item';
-		contactDiv.setAttribute('data-dialable', dialable);
-		// Clicking the row (name / avatar) dials the primary number
-		contactDiv.onclick = function() { call_contact(dialable); };
+		contactDiv.setAttribute('data-uuid', contact.uuid);
+		// Clicking the row opens the contact details page
+		contactDiv.onclick = function() { open_contact_details(contact.uuid); };
 
 		var avatar_html = contact_avatar_html(contact);
 		var name_html = contact.name ? sanitize_string(contact.name) : '&nbsp;';
@@ -3660,30 +3656,56 @@ function render_contact_list(contacts) {
 		var html = avatar_html;
 		html += '<div class="contact_info">';
 		html += '<div class="contact_name_primary">' + name_html + '</div>';
-		html += '<div class="contact_numbers"></div>';
+		if (numbers.length > 0) {
+			html += '<div class="contact_numbers">';
+			numbers.forEach(function(number) {
+				html += '<span class="contact_number_text"><i class="fas fa-phone"></i>' + sanitize_string(number) + '</span>';
+			});
+			html += '</div>';
+		}
 		html += '</div>';
-		html += '<div class="contact_dial_icon"><i class="fas fa-phone"></i></div>';
+		html += '<div class="contact_details_icon"><i class="fas fa-chevron-right"></i></div>';
 		contactDiv.innerHTML = html;
-
-		// Build each number as an individually clickable chip
-		var numbers_wrapper = contactDiv.querySelector('.contact_numbers');
-		numbers.forEach(function(number) {
-			var chip = document.createElement('span');
-			chip.className = 'contact_number_chip';
-			chip.setAttribute('data-number', number);
-			chip.innerHTML = '<i class="fas fa-phone"></i>';
-			var label = document.createElement('span');
-			label.textContent = number;
-			chip.appendChild(label);
-			chip.onclick = function(e) {
-				e.stopPropagation();
-				call_contact(number);
-			};
-			numbers_wrapper.appendChild(chip);
-		});
 
 		container.appendChild(contactDiv);
 	});
+}
+
+// Open the contact details page inside the contacts panel (iframe)
+function open_contact_details(uuid) {
+	if (!uuid) { return; }
+	var details = document.getElementById('contacts_details');
+	var toolbar = document.querySelector('#contacts .contacts_toolbar');
+	var list = document.getElementById('contacts_list');
+	var frame = document.getElementById('contact_details_frame');
+	if (!details || !frame) { return; }
+	// Drop focus from the search box so mobile keyboards close
+	var search_input = document.getElementById('contacts_search');
+	if (search_input && document.activeElement === search_input) { search_input.blur(); }
+	if (toolbar) { toolbar.style.display = 'none'; }
+	if (list) { list.style.display = 'none'; }
+	frame.src = 'resources/contact_details.php?id=' + encodeURIComponent(uuid) + '&ts=' + Date.now();
+	details.style.display = 'flex';
+}
+
+// Close the contact details view and return to the contact list
+function close_contact_details() {
+	var details = document.getElementById('contacts_details');
+	if (!details || details.style.display === 'none') { return; }
+	var toolbar = document.querySelector('#contacts .contacts_toolbar');
+	var list = document.getElementById('contacts_list');
+	var frame = document.getElementById('contact_details_frame');
+	details.style.display = 'none';
+	if (frame) { frame.src = 'about:blank'; }
+	if (toolbar) { toolbar.style.display = 'block'; }
+	if (list) { list.style.display = 'block'; }
+	var search_input = document.getElementById('contacts_search');
+	if (search_input) {
+		search_input.value = '';
+		search_input.focus();
+	}
+	update_contacts_clear_button('');
+	load_contacts('');
 }
 
 // Fetch contacts from the backend (with optional search term)
@@ -3757,6 +3779,14 @@ function show_contacts() {
 
 	hide_all_panels();
 	document.getElementById('contacts').style.display = 'flex';
+
+	// Return to the contact list if the details view was open
+	var details_view = document.getElementById('contacts_details');
+	if (details_view && details_view.style.display !== 'none') {
+		details_view.style.display = 'none';
+		var details_frame = document.getElementById('contact_details_frame');
+		if (details_frame) { details_frame.src = 'about:blank'; }
+	}
 	update_action_bar_state('contacts');
 
 	// Reset the search box and load the full list
@@ -4834,6 +4864,10 @@ document.addEventListener('DOMContentLoaded', function() {
 					contacts_search_timer = null;
 				}
 				load_contacts(contacts_search.value);
+			}
+			else if (e.key === 'Escape') {
+				e.preventDefault();
+				close_contact_details();
 			}
 		});
 	}

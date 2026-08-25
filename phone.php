@@ -200,6 +200,17 @@ echo "			</div>\n";
 echo "		</div>\n";
 echo "		<div class='contacts_list' id='contacts_list'>\n";
 echo "		</div>\n";
+
+//define the contact details view (iframe)
+echo "		<div class='contacts_details' id='contacts_details' style='display: none;'>\n";
+echo "			<div class='contacts_details_toolbar'>\n";
+echo "				<button type='button' class='contacts_details_back' id='contacts_details_back' onclick='close_contact_details();' title='Back' aria-label='Back'><i class='fas fa-arrow-left'></i></button>\n";
+echo "				<span class='contacts_details_title'>Contact Details</span>\n";
+echo "			</div>\n";
+echo "			<div class='contacts_details_body'>\n";
+echo "				<iframe id='contact_details_frame' class='contact_details_frame' title='Contact Details' src='about:blank'></iframe>\n";
+echo "			</div>\n";
+echo "		</div>\n";
 echo "	</div>\n";
 
 //define the history panel

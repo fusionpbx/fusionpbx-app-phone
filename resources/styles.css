@@ -2816,3 +2816,332 @@ body.audio_call_mode #active .dialpad_wrapper {
 		transform: none;
 	}
 }
+
+/* ================= Contact Details view (contacts panel) ================= */
+.contacts_details {
+width: 100%;
+max-width: 600px;
+margin: 0 auto;
+height: 100%;
+display: flex;
+flex-direction: column;
+}
+
+.contacts_details_toolbar {
+display: flex;
+align-items: center;
+gap: 10px;
+margin-bottom: 12px;
+padding: 0 2px;
+}
+
+.contacts_details_back {
+width: 38px;
+height: 38px;
+border-radius: 50%;
+background: var(--bg-item);
+border: 1px solid var(--border-mid);
+color: var(--text-primary);
+font-size: 16px;
+cursor: pointer;
+display: flex;
+align-items: center;
+justify-content: center;
+flex-shrink: 0;
+transition: background 0.15s;
+}
+
+.contacts_details_back:hover {
+background: var(--hover-bg);
+}
+
+.contacts_details_back:active {
+background: var(--active-bg);
+}
+
+.contacts_details_title {
+font-size: 16px;
+font-weight: 600;
+color: var(--text-primary);
+}
+
+.contacts_details_body {
+flex: 1;
+min-height: 0;
+background: var(--bg-main);
+border: 1px solid var(--border-mid);
+border-radius: 12px;
+overflow: hidden;
+}
+
+.contact_details_frame {
+display: block;
+width: 100%;
+height: 100%;
+border: none;
+background: var(--bg-main);
+}
+
+/* Plain (non-interactive) number display in the contact list */
+.contact_number_text {
+display: inline-flex;
+align-items: center;
+gap: 6px;
+background: var(--bg-input-field);
+border: 1px solid var(--border-mid);
+border-radius: 16px;
+padding: 5px 12px;
+font-size: 14px;
+color: var(--text-secondary);
+}
+
+.contact_number_text i {
+font-size: 12px;
+color: var(--text-muted);
+}
+
+/* Chevron on the right of a contact row (opens the details page) */
+.contact_details_icon {
+flex-shrink: 0;
+color: var(--text-muted);
+font-size: 16px;
+padding: 8px;
+opacity: 0.8;
+}
+
+/* ================= Contact Details page (contact_details.php) ================= */
+body.contact_detail_body {
+overflow-y: auto;
+background: var(--bg-main);
+}
+
+.contact_detail_page {
+max-width: 640px;
+margin: 0 auto;
+padding: 16px 16px 32px 16px;
+}
+
+.contact_detail_header {
+display: flex;
+align-items: center;
+gap: 14px;
+padding: 6px 2px 16px 2px;
+border-bottom: 1px solid var(--border-mid);
+margin-bottom: 18px;
+}
+
+.contact_detail_back {
+width: 38px;
+height: 38px;
+border-radius: 50%;
+background: var(--bg-item);
+border: 1px solid var(--border-mid);
+color: var(--text-primary);
+font-size: 16px;
+cursor: pointer;
+display: flex;
+align-items: center;
+justify-content: center;
+flex-shrink: 0;
+transition: background 0.15s;
+}
+
+.contact_detail_back:hover {
+background: var(--hover-bg);
+}
+
+.contact_detail_back:active {
+background: var(--active-bg);
+}
+
+.contact_detail_avatar {
+width: 64px;
+height: 64px;
+border-radius: 50%;
+background-color: #1eba00;
+background-size: cover;
+background-position: center;
+background-repeat: no-repeat;
+display: flex;
+align-items: center;
+justify-content: center;
+flex-shrink: 0;
+overflow: hidden;
+}
+
+.contact_detail_avatar_initials {
+background-color: #A8D8B9;
+color: #202124;
+font-size: 24px;
+font-weight: 600;
+font-family: sans-serif;
+text-transform: uppercase;
+line-height: 1;
+}
+
+.contact_detail_identity {
+min-width: 0;
+}
+
+.contact_detail_name {
+font-size: 22px;
+font-weight: 700;
+color: var(--text-primary);
+overflow: hidden;
+white-space: nowrap;
+text-overflow: ellipsis;
+}
+
+.contact_detail_org {
+font-size: 15px;
+color: var(--text-secondary);
+overflow: hidden;
+white-space: nowrap;
+text-overflow: ellipsis;
+}
+
+.contact_detail_sub {
+font-size: 13px;
+color: var(--text-muted);
+}
+
+.contact_detail_section {
+margin-bottom: 22px;
+}
+
+.contact_detail_section_title {
+font-size: 12px;
+font-weight: 600;
+text-transform: uppercase;
+letter-spacing: 0.08em;
+color: var(--text-muted);
+margin-bottom: 10px;
+}
+
+.contact_detail_section_title i {
+margin-right: 7px;
+color: #1eba00;
+}
+
+.contact_detail_item {
+display: flex;
+align-items: center;
+justify-content: space-between;
+gap: 10px;
+flex-wrap: wrap;
+background: var(--bg-item);
+border: 1px solid var(--border-mid);
+border-radius: 10px;
+padding: 12px 14px;
+margin-bottom: 8px;
+}
+
+.contact_detail_item_main {
+min-width: 0;
+flex: 1 1 auto;
+}
+
+.contact_detail_item_label {
+font-size: 12px;
+color: var(--text-muted);
+margin-bottom: 3px;
+text-transform: capitalize;
+}
+
+.contact_detail_item_label i {
+font-size: 11px;
+margin-left: 5px;
+vertical-align: middle;
+}
+
+.contact_detail_item_value {
+font-size: 16px;
+color: var(--text-primary);
+word-break: break-word;
+}
+
+.contact_detail_item_value a {
+color: var(--accent-blue);
+text-decoration: none;
+}
+
+.contact_detail_item_value a:hover {
+text-decoration: underline;
+}
+
+.contact_detail_call_btn {
+display: inline-flex;
+align-items: center;
+gap: 8px;
+background: #1eba00;
+color: #fff;
+border: none;
+border-radius: 20px;
+padding: 10px 18px;
+font-size: 13px;
+font-weight: 600;
+letter-spacing: 0.05em;
+cursor: pointer;
+flex-shrink: 0;
+transition: filter 0.15s;
+}
+
+.contact_detail_call_btn:hover {
+filter: brightness(1.12);
+}
+
+.contact_detail_call_btn:active {
+filter: brightness(0.95);
+}
+
+.contact_detail_primary {
+color: #f5c518;
+}
+
+.contact_detail_speed_dial {
+margin-left: 10px;
+font-size: 13px;
+color: var(--text-secondary);
+}
+
+.contact_detail_speed_dial i {
+color: #f5c518;
+margin-right: 3px;
+}
+
+.contact_detail_note {
+white-space: pre-wrap;
+}
+
+.contact_detail_error {
+display: flex;
+flex-direction: column;
+align-items: center;
+gap: 14px;
+padding: 60px 20px;
+color: var(--text-muted);
+font-family: sans-serif;
+}
+
+.contact_detail_error i {
+font-size: 42px;
+}
+
+.contact_detail_error_title {
+font-size: 18px;
+color: var(--text-secondary);
+}
+
+.contact_detail_back_btn {
+background: var(--bg-item);
+border: 1px solid var(--border-mid);
+color: var(--text-primary);
+border-radius: 20px;
+padding: 10px 22px;
+font-size: 14px;
+cursor: pointer;
+}
+
+.contact_detail_back_btn:hover {
+background: var(--hover-bg);
+}
