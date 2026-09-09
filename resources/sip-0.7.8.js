@@ -9709,6 +9709,15 @@ UA.prototype.loadConfig = function(configuration) {
     }
   }
 
+  // WebRTC/browser endpoints have no reachable public IP:port (they sit behind NAT
+  // and are reached over the WebSocket), so the Via/Contact host is a placeholder
+  // that must never resolve (RFC 6761 reserved ".invalid" TLD). Use a fixed,
+  // descriptive host instead of a random token so CDRs/logs are readable.
+  // Set to a specific string via hackIpInContact if you ever need an exact host.
+  if (!settings.hackIpInContact) {
+    settings.viaHost = 'webrtc.invalid';
+  }
+
   // Contact transport parameter
   if (settings.hackWssInTransport) {
     settings.contactTransport = 'wss';
@@ -9717,7 +9726,7 @@ UA.prototype.loadConfig = function(configuration) {
   this.contact = {
     pub_gruu: null,
     temp_gruu: null,
-    uri: new SIP.URI('sip', SIP.Utils.createRandomToken(8), settings.viaHost, null, {transport: settings.contactTransport}),
+    uri: new SIP.URI('sip', settings.uri.user || SIP.Utils.createRandomToken(8), settings.viaHost, null, {transport: settings.contactTransport}),
     toString: function(options){
       options = options || {};
 
