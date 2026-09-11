@@ -125,12 +125,14 @@ button::-moz-focus-inner {
 /* Main video container - full screen behind controls */
 .video_container {
 	position: fixed;
+	top: 0;
 	left: 0;
 	right: 0;
-	bottom: 38px;
+	bottom: 0;
 	background: #000;
 	display: none;
 	z-index: 1000;
+	overflow: hidden;
 }
 
 /* Remote video wrapper - enables hover detection for hangup button */
