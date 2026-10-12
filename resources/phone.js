@@ -3923,6 +3923,15 @@ function render_history() {
 			html += '</div>';
 
 			item.innerHTML = html;
+
+			// Make the redial button (right icon) also dial the number
+			var redial_btn = item.querySelector('.history_redial_btn');
+			if (redial_btn) {
+				redial_btn.onclick = function(e) {
+					e.stopPropagation();
+					call_number(entry.number);
+				};
+			}
 			container.appendChild(item);
 		});
 	});
