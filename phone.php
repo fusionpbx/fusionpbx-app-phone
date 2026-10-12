@@ -49,7 +49,7 @@ $domain_uuid = $_SESSION["domain_uuid"];
 //add the settings object
 $settings = new settings(["domain_uuid" => $domain_uuid, "user_uuid" => $user_uuid]);
 $theme_title = $settings->get('theme', 'title', '');
-$search_enabled = $settings->get('phone', 'search_enabled', 'true');
+$search_enabled = $settings->get('phone', 'search_enabled', 'false');
 $search_domain = $settings->get('phone', 'search_domain', $_SESSION['domain_name']);
 $search_path = $settings->get('phone', 'search_path', '/core/contacts/contacts.php');
 $search_parameter = $settings->get('phone', 'search_parameter', 'search');
