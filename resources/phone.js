@@ -730,6 +730,15 @@ let original_video_track = null;  // Store original camera video track for resto
 let screen_share_sender = null;  // Store the RTCRtpSender used for screen share replacement
 let audio_muted = false;
 
+// Screen share quality settings - tuned so on-screen TEXT stays readable:
+// - 1080p capture: keeps small text sharp on HiDPI/4K displays (no lossy downscale to 720p)
+// - Low frame rate: screen content is mostly static, so fewer frames let each frame
+//   carry far more encoder bits than a 30fps camera stream
+// - High bitrate cap: the single most impactful factor for text sharpness
+const SCREEN_SHARE_MAX_BITRATE = 8000000;  // 8 Mbps for the screen share video sender
+const SCREEN_SHARE_FRAME_RATE = { ideal: 10 };
+const CAMERA_MAX_BITRATE = 1500000;  // Normal cap restored on the video sender after sharing ends
+
 // Tab audio variables for screen sharing
 let tab_audio_stream = null;  // Store the tab audio stream
 let tab_audio_track_id = null;  // Store the tab audio track ID
@@ -1853,12 +1862,14 @@ async function start_screen_share() {
 
 		// Get screen share stream WITH audio
 		// Chrome will show the "Share tab audio" checkbox when video is enabled
+		// 1080p + low frame rate: on-screen text is far more readable when the encoder
+		// spends more bits per frame (screen content is mostly static, 10 fps is plenty)
 		screen_share_stream = await navigator.mediaDevices.getDisplayMedia({
 			video: {
 				cursor: "if-supported",
-				width: { ideal: 1280 },
-				height: { ideal: 720 },
-				frameRate: { ideal: 30 }
+				width: { ideal: 1920 },
+				height: { ideal: 1080 },
+				frameRate: SCREEN_SHARE_FRAME_RATE
 			},
 			audio: true
 		});
@@ -1873,6 +1884,39 @@ async function start_screen_share() {
 
 		// Get the screen share video track
 		var screen_share_video_track = screen_share_stream.getVideoTracks()[0];
+
+		// Optimize the screen share track for TEXT readability:
+		// - maxBitsPerSecond: high encoder bitrate so fine detail (small text) survives
+		// - frameRate: low fps so each frame gets more bits
+		// - contentHint: 'detail' tells the encoder to optimize for fine detail/text
+		//   instead of motion (supported by Chromium; feature-detected, skipped on Firefox)
+		(function apply_screen_share_quality(track) {
+			var quality_constraints = {
+				maxBitsPerSecond: SCREEN_SHARE_MAX_BITRATE,
+				frameRate: SCREEN_SHARE_FRAME_RATE
+			};
+			if (typeof track.getCapabilities === 'function') {
+				try {
+					var caps = track.getCapabilities();
+					if (caps && caps.contentHint) {
+						quality_constraints.contentHint = 'detail';
+					}
+				} catch (cap_err) {
+					// Ignore capability lookup errors, fall back to basic constraints
+				}
+			}
+			if (typeof track.applyConstraints !== 'function') {
+				return;
+			}
+			track.applyConstraints(quality_constraints).catch(function(err) {
+				console.warn('apply_screen_share_quality: Browser rejected quality constraints, retrying without contentHint:', err);
+				if (quality_constraints.contentHint) {
+					delete quality_constraints.contentHint;
+					track.applyConstraints(quality_constraints).catch(function() {});
+				}
+			});
+			console.log('apply_screen_share_quality: Applied screen share quality (bitrate: ' + SCREEN_SHARE_MAX_BITRATE + ', fps: 10, contentHint: ' + (quality_constraints.contentHint || 'n/a') + ')');
+		})(screen_share_video_track);
 
 		// Check if tab audio was captured
 		var tab_audio_track = null;
@@ -1973,6 +2017,27 @@ async function start_screen_share() {
 						// Add the screen share video track to the local stream
 						session.mediaHandler.localStream.addTrack(screen_share_video_track);
 						console.log('start_screen_share: Added screen share video track to local stream');
+					}
+
+					// Raise the sender bitrate cap for the high-detail screen share
+					// (this sender previously carried the low-bitrate camera track)
+					if (typeof camera_sender.setParameters === 'function') {
+						try {
+							var sender_params = camera_sender.getParameters();
+							if (sender_params) {
+								if (sender_params.encodings && sender_params.encodings.length > 0) {
+									sender_params.encodings.forEach(function(encoding) {
+										encoding.maxBitrate = SCREEN_SHARE_MAX_BITRATE;
+									});
+								} else {
+									sender_params.maxBitrate = SCREEN_SHARE_MAX_BITRATE;
+								}
+								camera_sender.setParameters(sender_params);
+								console.log('start_screen_share: Raised sender maxBitrate to ' + (SCREEN_SHARE_MAX_BITRATE / 1000000) + ' Mbps for screen share');
+							}
+						} catch (sender_params_err) {
+							console.warn('start_screen_share: Failed to raise sender maxBitrate:', sender_params_err);
+						}
 					}
 				}).catch(function(err) {
 					console.error('start_screen_share: Error replacing track:', err);
@@ -2114,6 +2179,27 @@ async function stop_screen_share() {
 			console.log('stop_screen_share: Restored camera track successfully');
 		} catch (err) {
 			console.error('stop_screen_share: Error restoring camera track:', err);
+		}
+
+		// Lower the sender bitrate cap back to camera-appropriate levels now that
+		// the screen share (which needed a high bitrate for text readability) has ended
+		if (typeof sender.setParameters === 'function') {
+			try {
+				var restore_params = sender.getParameters();
+				if (restore_params) {
+					if (restore_params.encodings && restore_params.encodings.length > 0) {
+						restore_params.encodings.forEach(function(encoding) {
+							encoding.maxBitrate = CAMERA_MAX_BITRATE;
+						});
+					} else {
+						restore_params.maxBitrate = CAMERA_MAX_BITRATE;
+					}
+					sender.setParameters(restore_params);
+					console.log('stop_screen_share: Restored sender maxBitrate to ' + (CAMERA_MAX_BITRATE / 1000000) + ' Mbps for camera');
+				}
+			} catch (bitrate_err) {
+				console.warn('stop_screen_share: Failed to restore sender maxBitrate:', bitrate_err);
+			}
 		}
 	} else if (!restore_track) {
 		console.error('stop_screen_share: No camera track available to restore');
