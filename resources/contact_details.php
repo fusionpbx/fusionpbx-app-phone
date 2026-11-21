@@ -63,6 +63,30 @@
 		$sql .= "and (domain_uuid = :domain_uuid or domain_uuid is null) ";
 		$parameters['contact_uuid'] = $contact_uuid;
 		$parameters['domain_uuid'] = $_SESSION['domain_uuid'];
+		if (!permission_exists('contact_domain_view')) {
+			//only contacts assigned to the current user's group(s) or to the current user
+			$sql_where_or = [];
+			foreach ($_SESSION['groups'] ?? [] as $index => $group_data) {
+				if (is_uuid($group_data['group_uuid'] ?? null)) {
+					$sql_where_or[] = "group_uuid = :group_uuid_".$index;
+					$parameters['group_uuid_'.$index] = $group_data['group_uuid'];
+				}
+			}
+			$sql .= "and ( ";
+			if (!empty($sql_where_or)) {
+				$sql .= "	contact_uuid in ( ";
+				$sql .= "		select contact_uuid from v_contact_groups ";
+				$sql .= "		where domain_uuid = :domain_uuid ";
+				$sql .= "		and ( ".implode(' or ', $sql_where_or)." ) ";
+				$sql .= "	) ";
+				$sql .= "	or ";
+			}
+			$sql .= "	contact_uuid in ( ";
+			$sql .= "		select contact_uuid from v_contact_users where user_uuid = :user_uuid and domain_uuid = :domain_uuid ";
+			$sql .= "	) ";
+			$sql .= ") ";
+			$parameters['user_uuid'] = $_SESSION['user_uuid'];
+		}
 		$contact = $database->select($sql, $parameters, 'row');
 		unset($sql, $parameters);
 	}
@@ -354,6 +378,10 @@ if (empty($contact_attachment_uuid)) {
 			$url_label = (string) ($url_row['url_label'] ?? '');
 			if ($url_label !== '' && $url_label === strtolower($url_label)) {
 				$url_label = ucwords($url_label);
+			}
+			//allow only http/https links to prevent script injection from stored data
+			if (!preg_match('#^https?://#i', $url_address)) {
+				continue;
 			}
 			$url_display = str_replace(['http://', 'https://'], '', $url_address);
 			echo "			<div class='contact_detail_item'>\n";

@@ -3,6 +3,18 @@
 	FusionPBX Web Phone
 	Ringback Sound List Endpoint
 */
+
+// Include files
+require_once dirname(__DIR__, 3) . "/resources/require.php";
+require_once "resources/check_auth.php";
+
+// Check permissions
+if (!permission_exists('phone_view')) {
+    header('Content-Type: application/json');
+    echo "[]";
+    exit;
+}
+
 header('Content-Type: application/json');
 
 $ringback_dir = __DIR__ . '/sounds/ringback';
@@ -26,17 +38,17 @@ if (is_dir($ringback_dir)) {
     foreach (scandir($ringback_dir) as $file) {
         // Skip hidden files and directories
         if ($file[0] === '.') continue;
-        
+
         $info = pathinfo($file);
         $ext = strtolower($info['extension']);
-        
+
         // Only include allowed file types
         if (in_array($ext, $allowed_exts)) {
             $filename = strtolower($info['filename']);
-            
+
             // Use friendly name if available, otherwise generate from filename
             $label = isset($sound_names[$filename]) ? $sound_names[$filename] : ucfirst(str_replace('-', ' ', $filename));
-            
+
             $sounds[] = [
                 'value' => $file,
                 'text' => $label

@@ -124,18 +124,27 @@ echo "	<audio id='remote_audio' autoplay style='display:none;'></audio>\n";
 
 //audio or video objects need to be initialized before phone.js
 echo "	<script language='JavaScript' type='text/javascript'>\n";
-echo "	const time_zone = '".$settings->get('domain', 'time_zone')."';\n";
+echo "	const time_zone = ".json_encode((string) $settings->get('domain', 'time_zone'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)."\n";
 echo "\n";
 
 // Dashboard search configuration
 echo "	const dashboard_enabled = " . (!empty($search_enabled) && $search_enabled == 'true' ? 'true' : 'false') . ";\n";
-echo "	const dashboard_url_base = 'https://" . $search_domain . "/" . $search_path . "?" . $search_parameter . "=';\n";
-echo "	const dashboard_target = '" . $search_target . "';\n";
+echo "	const dashboard_url_base = " . json_encode('https://' . $search_domain . '/' . $search_path . '?' . $search_parameter . '=', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ";\n";
+echo "	const dashboard_target = " . json_encode((string) $search_target, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ";\n";
 if (!empty($search_width) && !empty($search_height)) {
-	echo "	const window_parameters = 'width=" . $search_width . ",height=" . $search_height . "';\n";
+	echo "	const window_parameters = " . json_encode('width=' . $search_width . ',height=' . $search_height, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ";\n";
 } else {
 	echo "	const window_parameters = '';\n";
 }
+
+//SIP configuration (kept here so that resources/phone.js stays free of server side code)
+echo "	const sip_domain = " . json_encode((string) ($domain_name ?? ''), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ";\n";
+echo "	const sip_uri = " . json_encode((string) (($user_extension ?? '') . "@" . ($domain_name ?? '')), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ";\n";
+echo "	const sip_ws_servers = " . json_encode('wss://' . ($domain_name ?? '') . ':7443', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ";\n";
+echo "	const sip_authorization_user = " . json_encode((string) ($user_extension ?? ''), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ";\n";
+echo "	const sip_password = " . json_encode(base64_encode((string) ($user_password ?? '')), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ";\n";
+echo "	const sip_display_name = " . json_encode((string) ($user_extension ?? ''), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ";\n";
+echo "	const contacts_search_url_base = " . json_encode('https://' . ($domain_name ?? '') . '/core/contacts/contacts.php?search=', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ";\n";
 echo "\n";
 require 'resources/phone.js';
 echo "\n";

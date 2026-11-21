@@ -29,7 +29,7 @@
 	require_once "resources/check_auth.php";
 
 //check permissions
-	if (!permission_exists('phone_view')) {
+	if (!permission_exists('phone_view') || !permission_exists('contact_view')) {
 		header('Content-Type: application/json');
 		echo "[]";
 		exit;
@@ -58,33 +58,33 @@
 	$parameters['domain_uuid'] = $_SESSION['domain_uuid'];
 
 //narrow by groups / user if not allowed to view the whole domain
-	// if (!permission_exists('contact_domain_view')) {
-	// 	$user_group_uuids = [];
-	// 	foreach ($_SESSION['groups'] as $group_data) {
-	// 		$user_group_uuids[] = $group_data['group_uuid'];
-	// 	}
-	// 	$user_group_uuids[] = $_SESSION["user_uuid"];
-	// 	$sql .= "and ( ";
-	// 	$sql .= "c.contact_uuid in ( ";
-	// 	$sql .= "	select contact_uuid from v_contact_groups where ";
-	// 	$sql_where_or = [];
-	// 	foreach ($user_group_uuids as $index => $user_group_uuid) {
-	// 		if (is_uuid($user_group_uuid)) {
-	// 			$sql_where_or[] = "group_uuid = :group_uuid_".$index;
-	// 			$parameters['group_uuid_'.$index] = $user_group_uuid;
-	// 		}
-	// 	}
-	// 	if (!empty($sql_where_or)) {
-	// 		$sql .= " ( ".implode(' or ', $sql_where_or)." ) ";
-	// 	}
-	// 	$sql .= "		and domain_uuid = :domain_uuid ";
-	// 	$sql .= "	) ";
-	// 	$sql .= "	or c.contact_uuid in ( ";
-	// 	$sql .= "		select contact_uuid from v_contact_users where user_uuid = :user_uuid and domain_uuid = :domain_uuid ";
-	// 	$sql .= "	) ";
-	// 	$sql .= ") ";
-	// 	$parameters['user_uuid'] = $_SESSION['user_uuid'];
-	// }
+	if (!permission_exists('contact_domain_view')) {
+		$user_group_uuids = [];
+		foreach ($_SESSION['groups'] as $group_data) {
+			$user_group_uuids[] = $group_data['group_uuid'];
+		}
+		$user_group_uuids[] = $_SESSION["user_uuid"];
+		$sql .= "and ( ";
+		$sql .= "c.contact_uuid in ( ";
+		$sql .= "	select contact_uuid from v_contact_groups where ";
+		$sql_where_or = [];
+		foreach ($user_group_uuids as $index => $user_group_uuid) {
+			if (is_uuid($user_group_uuid)) {
+				$sql_where_or[] = "group_uuid = :group_uuid_".$index;
+				$parameters['group_uuid_'.$index] = $user_group_uuid;
+			}
+		}
+		if (!empty($sql_where_or)) {
+			$sql .= " ( ".implode(' or ', $sql_where_or)." ) ";
+		}
+		$sql .= "		and domain_uuid = :domain_uuid ";
+		$sql .= "	) ";
+		$sql .= "	or c.contact_uuid in ( ";
+		$sql .= "		select contact_uuid from v_contact_users where user_uuid = :user_uuid and domain_uuid = :domain_uuid ";
+		$sql .= "	) ";
+		$sql .= ") ";
+		$parameters['user_uuid'] = $_SESSION['user_uuid'];
+	}
 
 //search filtering
 	if (!empty($search)) {
